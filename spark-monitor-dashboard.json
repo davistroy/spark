@@ -1,0 +1,396 @@
+{
+  "dashboard": {
+    "uid": "spark-monitor",
+    "title": "DGX Spark - Inference Monitor",
+    "refresh": "10s",
+    "tags": ["spark", "inference", "dgx"],
+    "time": {"from": "now-1h", "to": "now"},
+    "timezone": "browser",
+    "panels": [
+      {
+        "collapsed": false,
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+        "id": 100,
+        "title": "System Overview",
+        "type": "row"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 60}, {"color": "red", "value": 80}]},
+            "unit": "celsius"
+          }
+        },
+        "gridPos": {"h": 4, "w": 3, "x": 0, "y": 1},
+        "id": 1,
+        "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}, "showThresholdLabels": false, "showThresholdMarkers": true},
+        "targets": [{"expr": "gpu_temperature_celsius", "refId": "A"}],
+        "title": "GPU Temperature",
+        "type": "gauge"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "max": 100,
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 70}, {"color": "red", "value": 90}]},
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 4, "w": 3, "x": 3, "y": 1},
+        "id": 2,
+        "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}, "showThresholdLabels": false, "showThresholdMarkers": true},
+        "targets": [{"expr": "gpu_utilization_percent", "refId": "A"}],
+        "title": "GPU Utilization",
+        "type": "gauge"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 15}, {"color": "red", "value": 20}]},
+            "unit": "watt"
+          }
+        },
+        "gridPos": {"h": 4, "w": 3, "x": 6, "y": 1},
+        "id": 3,
+        "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}, "showThresholdLabels": false, "showThresholdMarkers": true},
+        "targets": [{"expr": "gpu_power_draw_watts", "refId": "A"}],
+        "title": "GPU Power",
+        "type": "gauge"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "decbytes"}
+        },
+        "gridPos": {"h": 4, "w": 5, "x": 9, "y": 1},
+        "id": 4,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "node_memory_MemTotal_bytes{job=\"spark-node\"} - node_memory_MemAvailable_bytes{job=\"spark-node\"}", "legendFormat": "Used", "refId": "A"},
+          {"expr": "node_memory_MemAvailable_bytes{job=\"spark-node\"}", "legendFormat": "Available", "refId": "B"}
+        ],
+        "title": "System Memory",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "percentunit"}
+        },
+        "gridPos": {"h": 4, "w": 4, "x": 14, "y": 1},
+        "id": 5,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\",job=\"spark-node\"}[1m]))", "legendFormat": "CPU Usage", "refId": "A"}
+        ],
+        "title": "CPU Usage",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "decbytes"}
+        },
+        "gridPos": {"h": 4, "w": 5, "x": 18, "y": 1},
+        "id": 6,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "(node_memory_SwapTotal_bytes{job=\"spark-node\"} - node_memory_SwapFree_bytes{job=\"spark-node\"})", "legendFormat": "Swap Used", "refId": "A"}
+        ],
+        "title": "Swap Usage",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+        "id": 101,
+        "title": "LLM - qwen3.5-35b (:8000)",
+        "type": "row"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}
+          }
+        },
+        "gridPos": {"h": 4, "w": 3, "x": 0, "y": 6},
+        "id": 10,
+        "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"]}},
+        "targets": [{"expr": "vllm:num_requests_running{model_name=\"qwen3.5-35b\"}", "refId": "A"}],
+        "title": "Running",
+        "type": "stat"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "orange", "value": 1}, {"color": "red", "value": 10}]}
+          }
+        },
+        "gridPos": {"h": 4, "w": 3, "x": 3, "y": 6},
+        "id": 11,
+        "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"]}},
+        "targets": [{"expr": "vllm:num_requests_waiting{model_name=\"qwen3.5-35b\"}", "refId": "A"}],
+        "title": "Waiting",
+        "type": "stat"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "max": 1,
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 0.7}, {"color": "red", "value": 0.9}]},
+            "unit": "percentunit"
+          }
+        },
+        "gridPos": {"h": 4, "w": 4, "x": 6, "y": 6},
+        "id": 12,
+        "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}, "showThresholdLabels": false, "showThresholdMarkers": true},
+        "targets": [{"expr": "vllm:kv_cache_usage_perc{model_name=\"qwen3.5-35b\"}", "refId": "A"}],
+        "title": "KV Cache Usage",
+        "type": "gauge"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "tok/s"}
+        },
+        "gridPos": {"h": 4, "w": 7, "x": 10, "y": 6},
+        "id": 13,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "rate(vllm:prompt_tokens_total{model_name=\"qwen3.5-35b\"}[1m])", "legendFormat": "Prompt tok/s", "refId": "A"},
+          {"expr": "rate(vllm:generation_tokens_total{model_name=\"qwen3.5-35b\"}[1m])", "legendFormat": "Gen tok/s", "refId": "B"}
+        ],
+        "title": "Token Throughput",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "s"}
+        },
+        "gridPos": {"h": 4, "w": 7, "x": 17, "y": 6},
+        "id": 14,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "histogram_quantile(0.5, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "TTFT p50", "refId": "A"},
+          {"expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "TTFT p95", "refId": "B"},
+          {"expr": "histogram_quantile(0.5, rate(vllm:inter_token_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "ITL p50", "refId": "C"},
+          {"expr": "histogram_quantile(0.95, rate(vllm:inter_token_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "ITL p95", "refId": "D"}
+        ],
+        "title": "Latency",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "s"}
+        },
+        "gridPos": {"h": 4, "w": 12, "x": 0, "y": 10},
+        "id": 15,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "histogram_quantile(0.5, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "p50", "refId": "A"},
+          {"expr": "histogram_quantile(0.95, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "p95", "refId": "B"},
+          {"expr": "histogram_quantile(0.99, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "p99", "refId": "C"}
+        ],
+        "title": "E2E Request Latency",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 10},
+        "id": 16,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "rate(vllm:request_success_total{model_name=\"qwen3.5-35b\"}[5m])", "legendFormat": "Success/s", "refId": "A"},
+          {"expr": "rate(vllm:num_preemptions_total{model_name=\"qwen3.5-35b\"}[5m])", "legendFormat": "Preemptions/s", "refId": "B"}
+        ],
+        "title": "Requests & Preemptions",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+        "id": 102,
+        "title": "Embedding - qwen3-embedding-4b (:8001)",
+        "type": "row"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 5}, {"color": "red", "value": 20}]}
+          }
+        },
+        "gridPos": {"h": 4, "w": 3, "x": 0, "y": 15},
+        "id": 20,
+        "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"]}},
+        "targets": [{"expr": "vllm:num_requests_running{model_name=\"qwen3-embedding-4b\"}", "refId": "A"}],
+        "title": "Running",
+        "type": "stat"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "orange", "value": 1}, {"color": "red", "value": 10}]}
+          }
+        },
+        "gridPos": {"h": 4, "w": 3, "x": 3, "y": 15},
+        "id": 21,
+        "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"]}},
+        "targets": [{"expr": "vllm:num_requests_waiting{model_name=\"qwen3-embedding-4b\"}", "refId": "A"}],
+        "title": "Waiting",
+        "type": "stat"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "tok/s"}
+        },
+        "gridPos": {"h": 4, "w": 9, "x": 6, "y": 15},
+        "id": 22,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "rate(vllm:prompt_tokens_total{model_name=\"qwen3-embedding-4b\"}[1m])", "legendFormat": "Tokens/s", "refId": "A"}
+        ],
+        "title": "Embedding Throughput",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "s"}
+        },
+        "gridPos": {"h": 4, "w": 9, "x": 15, "y": 15},
+        "id": 23,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "histogram_quantile(0.5, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3-embedding-4b\"}[5m]))", "legendFormat": "p50", "refId": "A"},
+          {"expr": "histogram_quantile(0.95, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3-embedding-4b\"}[5m]))", "legendFormat": "p95", "refId": "B"}
+        ],
+        "title": "Embedding Latency",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 19},
+        "id": 103,
+        "title": "GPU & System Trends",
+        "type": "row"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "celsius"}
+        },
+        "gridPos": {"h": 5, "w": 8, "x": 0, "y": 20},
+        "id": 30,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "gpu_temperature_celsius", "legendFormat": "GPU Temp", "refId": "A"}
+        ],
+        "title": "GPU Temperature Over Time",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "percent"}
+        },
+        "gridPos": {"h": 5, "w": 8, "x": 8, "y": 20},
+        "id": 31,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "gpu_utilization_percent", "legendFormat": "GPU %", "refId": "A"}
+        ],
+        "title": "GPU Utilization Over Time",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "watt"}
+        },
+        "gridPos": {"h": 5, "w": 8, "x": 16, "y": 20},
+        "id": 32,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "gpu_power_draw_watts", "legendFormat": "Power Draw", "refId": "A"}
+        ],
+        "title": "GPU Power Over Time",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "percentunit"}
+        },
+        "gridPos": {"h": 5, "w": 12, "x": 0, "y": 25},
+        "id": 33,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "vllm:kv_cache_usage_perc{model_name=\"qwen3.5-35b\"}", "legendFormat": "LLM KV Cache", "refId": "A"}
+        ],
+        "title": "KV Cache Usage Over Time",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "gridPos": {"h": 5, "w": 12, "x": 12, "y": 25},
+        "id": 34,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "vllm:num_requests_running{model_name=\"qwen3.5-35b\"}", "legendFormat": "LLM Running", "refId": "A"},
+          {"expr": "vllm:num_requests_waiting{model_name=\"qwen3.5-35b\"}", "legendFormat": "LLM Waiting", "refId": "B"},
+          {"expr": "vllm:num_requests_running{model_name=\"qwen3-embedding-4b\"}", "legendFormat": "Embed Running", "refId": "C"}
+        ],
+        "title": "Active Requests Over Time",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "decbytes"}
+        },
+        "gridPos": {"h": 5, "w": 12, "x": 0, "y": 30},
+        "id": 35,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "process_resident_memory_bytes{job=\"vllm-llm\"}", "legendFormat": "LLM (qwen3.5-35b)", "refId": "A"},
+          {"expr": "process_resident_memory_bytes{job=\"vllm-embed\"}", "legendFormat": "Embed (qwen3-embed-4b)", "refId": "B"}
+        ],
+        "title": "Container Process Memory (RSS)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {"uid": "PBFA97CFB590B2093"},
+        "fieldConfig": {
+          "defaults": {"unit": "decbytes"}
+        },
+        "gridPos": {"h": 5, "w": 12, "x": 12, "y": 30},
+        "id": 36,
+        "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+        "targets": [
+          {"expr": "node_memory_SwapTotal_bytes{job=\"spark-node\"} - node_memory_SwapFree_bytes{job=\"spark-node\"}", "legendFormat": "Swap Used", "refId": "A"},
+          {"expr": "node_memory_MemAvailable_bytes{job=\"spark-node\"}", "legendFormat": "Available", "refId": "B"},
+          {"expr": "node_memory_Cached_bytes{job=\"spark-node\"}", "legendFormat": "Page Cache", "refId": "C"}
+        ],
+        "title": "System Memory Breakdown",
+        "type": "timeseries"
+      }
+    ]
+  },
+  "folderUid": "dfhdwahqbii9sc",
+  "overwrite": true
+}

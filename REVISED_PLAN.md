@@ -107,7 +107,7 @@ docker run -d --name qwen35 --restart unless-stopped \
   --gpus all --ipc host --shm-size 64gb -p 8000:8000 \
   -e VLLM_FLASHINFER_MOE_BACKEND=latency \
   -e VLLM_TEST_FORCE_FP8_MARLIN=1 \
-  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/<user>/.cache/huggingface:/root/.cache/huggingface \
   -v /home/claude/.cache/triton:/root/.triton \
   vllm-custom:sm121-v2 \
   Qwen/Qwen3.5-35B-A3B \

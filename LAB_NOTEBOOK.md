@@ -300,7 +300,7 @@ docker run -d --name qwen35-hellohal \
   -e GPU_MEMORY_UTIL=0.65 \
   -e MAX_MODEL_LEN=32768 \
   -e NVIDIA_REQUIRE_CUDA="" \
-  -v /home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.5-35B-A3B/snapshots/LATEST:/models/Qwen3.5-35B-A3B \
+  -v /home/<user>/.cache/huggingface/hub/models--Qwen--Qwen3.5-35B-A3B/snapshots/LATEST:/models/Qwen3.5-35B-A3B \
   hellohal2064/vllm-qwen3.5-gb10:latest \
   --swap-space 1
 ```
@@ -1119,8 +1119,8 @@ All four items completed:
 
 **To check results in morning:**
 ```bash
-ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net "cat /home/claude/ab-test-results.md"
-ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net "cat /home/claude/pipeline-monitor.log"
+ssh claude@<spark-host> "cat /home/claude/ab-test-results.md"
+ssh claude@<spark-host> "cat /home/claude/pipeline-monitor.log"
 ```
 
 **Observation:** qwen35 container restarted at ~11:55 EDT (during SM121/SM120 Docker builds). Success counter reset from 8,060 to 0. Pipeline recovered automatically via `--restart unless-stopped`. Likely cause: memory pressure from two large Docker builds (~32 GB images) running on the same system. Container has been healthy since restart (3,872+ requests completed by 14:55 EDT, 8 concurrent running).

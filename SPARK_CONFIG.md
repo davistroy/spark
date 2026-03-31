@@ -25,27 +25,27 @@
 
 | Interface | Address | Notes |
 |-----------|---------|-------|
-| Wi-Fi (`wlP9s9`) | `192.168.10.32/24` | Local LAN |
-| Tailscale | `100.124.10.120` | Tailnet: `tale-mamba.ts.net` |
-| Tailscale DNS | `spark.tale-mamba.ts.net` | Also reachable as `spark.k4jda.net` |
+| Wi-Fi (`wlP9s9`) | `<spark-lan-ip>/24` | Local LAN |
+| Tailscale | `<spark-tailscale-ip>` | Tailnet: `<tailnet>` |
+| Tailscale DNS | `<spark-tailscale-dns>` | Also reachable as `<spark-host>` |
 | Docker bridge | `172.17.0.1/16` | Default bridge network |
 
 ### Tailscale setup
-Tailscale is installed and running. The machine is registered as `spark` in the `tale-mamba.ts.net` tailnet.
+Tailscale is installed and running. The machine is registered as `spark` in the `<tailnet>` tailnet.
 
 ## 3. User Account
 
 | Property | Value |
 |----------|-------|
-| Username | `davistroy` |
+| Username | `<user>` |
 | SSH key | ed25519, public key in `~/.ssh/authorized_keys` |
 | Sudo | Requires password (no passwordless sudo) |
-| SSH access | `ssh -i ~/.ssh/id_ed25519 davistroy@192.168.10.32` |
+| SSH access | `ssh <user>@<spark-lan-ip>` |
 
 ## 4. Directory Layout
 
 ```
-/home/davistroy/
+/home/<user>/
 ├── spark-vllm-docker/       # vLLM custom build system (Dockerfile, launch scripts, patches)
 │   ├── Dockerfile            # Multi-stage build: FlashInfer + vLLM from source for sm_121
 │   ├── launch-cluster.sh     # Multi-node vLLM launcher (used in solo mode here)
@@ -89,7 +89,7 @@ The primary LLM serving the Qwen3.5-35B mixture-of-experts model with FP8 quanti
 - **Network mode:** `host` (binds directly to host port 8000, no port mapping needed)
 - **Max context length:** 8192 tokens
 - **GPU memory utilization:** 0.75
-- **API endpoint:** `http://192.168.10.32:8000/v1`
+- **API endpoint:** `http://<spark-lan-ip>:8000/v1`
 
 ```bash
 docker run -d \
@@ -99,7 +99,7 @@ docker run -d \
   --ipc host \
   --network host \
   --shm-size 16g \
-  -v /home/davistroy/hf_cache/hub:/root/.cache/huggingface/hub:ro \
+  -v /home/<user>/hf_cache/hub:/root/.cache/huggingface/hub:ro \
   vllm-node:latest \
   vllm serve Qwen/Qwen3.5-35B-A3B-FP8 \
     --port 8000 \
@@ -137,7 +137,7 @@ Embedding model for vector search / RAG pipelines.
 - **GPU memory utilization:** 0.08
 - **Embedding dimension:** 2560
 - **Max sequence length:** 40960 tokens (vLLM default for this model)
-- **API endpoint:** `http://192.168.10.32:8001/v1`
+- **API endpoint:** `http://<spark-lan-ip>:8001/v1`
 
 ```bash
 docker run -d \
@@ -146,7 +146,7 @@ docker run -d \
   --gpus all \
   --ipc host \
   -p 8001:8001 \
-  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface:ro \
+  -v /home/<user>/.cache/huggingface:/root/.cache/huggingface:ro \
   vllm/vllm-openai:cu130-nightly \
     --model Qwen/Qwen3-Embedding-4B \
     --served-model-name qwen3-embedding-4b \
@@ -170,7 +170,7 @@ Custom NER service using GLiNER for domain-specific entity extraction.
 - **Image:** `gliner-ner:latest` (custom build)
 - **Model:** `urchade/gliner_large-v2.1` (~900M params, ~2 GB VRAM)
 - **Network mode:** `bridge`
-- **API endpoint:** `http://192.168.10.32:8002/v1/ner`
+- **API endpoint:** `http://<spark-lan-ip>:8002/v1/ner`
 - **Health check:** `GET /health`
 
 ```bash
@@ -179,7 +179,7 @@ docker run -d \
   --restart unless-stopped \
   --gpus all \
   -p 8002:8002 \
-  -v /home/davistroy/gliner-env/hf-cache:/root/.cache/huggingface \
+  -v /home/<user>/gliner-env/hf-cache:/root/.cache/huggingface \
   -e GLINER_MODEL=urchade/gliner_large-v2.1 \
   -e GLINER_DEVICE=cuda \
   gliner-ner:latest
@@ -192,7 +192,7 @@ docker run -d \
 
 ### 6.4 LiteLLM Proxy (Optional)
 
-LiteLLM proxy configuration exists at `/home/davistroy/litellm/config.yaml` but may not be running as a container currently. Config routes to the local qwen35 instance:
+LiteLLM proxy configuration exists at `/home/<user>/litellm/config.yaml` but may not be running as a container currently. Config routes to the local qwen35 instance:
 
 ```yaml
 model_list:
@@ -200,10 +200,10 @@ model_list:
     litellm_params:
       model: openai/qwen3.5-35b
       api_base: http://localhost:8000/v1
-      api_key: dummy
+      api_key: <your-api-key>
 
 general_settings:
-  master_key: sk-litellm-master-key
+  master_key: <your-master-key>
 
 litellm_settings:
   drop_params: true
@@ -233,7 +233,7 @@ curl -s http://localhost:8002/health     # gliner
 
 The `vllm-node:latest` image is built from source to support the GB10 Blackwell GPU (sm_121). Standard vLLM Docker images do not include sm_121 kernels.
 
-**Build system:** `/home/davistroy/spark-vllm-docker/`
+**Build system:** `/home/<user>/spark-vllm-docker/`
 
 The Dockerfile is a multi-stage build:
 1. **Base:** `nvcr.io/nvidia/pytorch:26.01-py3`
@@ -243,7 +243,7 @@ The Dockerfile is a multi-stage build:
 
 **To rebuild:**
 ```bash
-cd /home/davistroy/spark-vllm-docker
+cd /home/<user>/spark-vllm-docker
 # Check build-and-copy.sh for the standard build command
 docker build -t vllm-node:latest .
 ```
@@ -263,7 +263,7 @@ docker build -t vllm-node:latest .
 ## 9. Building the GLiNER Image
 
 ```bash
-cd /home/davistroy/gliner-server
+cd /home/<user>/gliner-server
 docker build -t gliner-ner:latest .
 ```
 
@@ -294,7 +294,7 @@ CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8002", "--workers"
 
 ## 10. GLiNER Server Code
 
-The file `/home/davistroy/gliner-server/server.py` implements:
+The file `/home/<user>/gliner-server/server.py` implements:
 
 - **POST `/v1/ner`** — Entity extraction
   - Input: `{"texts": [...], "labels": [...], "threshold": 0.5, "flat_ner": true}`
@@ -321,7 +321,7 @@ With the current 3-container configuration:
 
 These are hard-won lessons. Do not ignore them.
 
-1. **HF cache ownership:** `/home/davistroy/.cache/huggingface` is root-owned (from vLLM docker volume mounts). Non-root processes must use a separate cache dir or set `HF_HOME` to a user-writable location. The GLiNER container uses `/home/davistroy/gliner-env/hf-cache` for this reason.
+1. **HF cache ownership:** `/home/<user>/.cache/huggingface` is root-owned (from vLLM docker volume mounts). Non-root processes must use a separate cache dir or set `HF_HOME` to a user-writable location. The GLiNER container uses `/home/<user>/gliner-env/hf-cache` for this reason.
 
 2. **PyTorch CUDA on GB10:** Only cu130 nightly works. cu126 lacks sm_121 support entirely. cu128 detects the GPU but NVRTC JIT fails at inference.
 
@@ -343,27 +343,27 @@ These are hard-won lessons. Do not ignore them.
 
 ```bash
 # LLM — Chat completions
-curl http://192.168.10.32:8000/v1/chat/completions \
+curl http://<spark-lan-ip>:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen3.5-35b","messages":[{"role":"user","content":"Hello"}]}'
 
 # LLM — List models
-curl http://192.168.10.32:8000/v1/models
+curl http://<spark-lan-ip>:8000/v1/models
 
 # Embeddings
-curl http://192.168.10.32:8001/v1/embeddings \
+curl http://<spark-lan-ip>:8001/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen3-embedding-4b","input":"Hello world"}'
 
 # NER
-curl -X POST http://192.168.10.32:8002/v1/ner \
+curl -X POST http://<spark-lan-ip>:8002/v1/ner \
   -H "Content-Type: application/json" \
   -d '{"texts":["John Smith reported a fryer error code E24"],"labels":["PERSON","EQUIPMENT","ERROR_CODE"],"threshold":0.5}'
 
 # Health checks
-curl http://192.168.10.32:8000/health
-curl http://192.168.10.32:8001/health
-curl http://192.168.10.32:8002/health
+curl http://<spark-lan-ip>:8000/health
+curl http://<spark-lan-ip>:8001/health
+curl http://<spark-lan-ip>:8002/health
 ```
 
 ## 14. Disaster Recovery Checklist
@@ -372,8 +372,8 @@ To rebuild from scratch:
 
 1. **Install Ubuntu 24.04** with NVIDIA kernel (`6.17.0-1008-nvidia` or later)
 2. **Install Docker** (29.x+), ensure `--gpus all` works
-3. **Install Tailscale**, join `tale-mamba.ts.net`, set hostname to `spark`
-4. **Create user** `davistroy`, add SSH ed25519 public key
+3. **Install Tailscale**, join `<tailnet>`, set hostname to `spark`
+4. **Create user** `<user>`, add SSH ed25519 public key
 5. **Create directories:**
    ```bash
    mkdir -p ~/spark-vllm-docker ~/gliner-server ~/gliner-env/hf-cache ~/hf_cache/hub ~/litellm

@@ -12,7 +12,7 @@ Before making any changes, capture current state so you can compare after.
 
 ```bash
 # Run on Spark — save baseline snapshot
-ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net
+ssh claude@<spark-host>
 
 # Memory baseline
 free -h > /tmp/baseline_memory.txt
@@ -209,7 +209,7 @@ This replaces the current gauge with a time-series so you can see KV cache usage
 
 ### Procedure
 
-1. **Before plugging in:** Set a DHCP reservation on your router for MAC `fc:9d:05:13:27:f0` if you want a predictable IP
+1. **Before plugging in:** Set a DHCP reservation on your router for MAC `<ethernet-mac>` if you want a predictable IP
 2. Plug in the ethernet cable
 3. Verify both interfaces are up: `nmcli device status`
 4. Verify routing: `ip route` — ethernet should have lower metric

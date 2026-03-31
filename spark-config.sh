@@ -14,8 +14,8 @@
 set -euo pipefail
 
 CONFIG_DIR="/home/claude/spark-configs"
-HOMESERVER_BACKUP="claude@homeserver.k4jda.net:/mnt/user/appdata/spark-configs"
-SSH_KEY="/home/claude/.ssh/id_claude_code"
+HOMESERVER_BACKUP="${SPARK_BACKUP_DEST:?Set SPARK_BACKUP_DEST environment variable}"
+SSH_KEY="${SPARK_SSH_KEY:-$HOME/.ssh/id_ed25519}"
 
 # Colors
 RED='\033[0;31m'
@@ -274,7 +274,7 @@ _capture_models() {
 import json, os, glob
 
 models = []
-hf_cache = "/home/davistroy/.cache/huggingface/hub"
+hf_cache = "/home/<user>/.cache/huggingface/hub"
 if os.path.exists(hf_cache):
     for d in os.listdir(hf_cache):
         if d.startswith("models--"):
@@ -294,7 +294,7 @@ if os.path.exists(hf_cache):
             })
 
 # GLiNER has its own cache
-gliner_cache = "/home/davistroy/gliner-env/hf-cache/hub"
+gliner_cache = "/home/<user>/gliner-env/hf-cache/hub"
 if os.path.exists(gliner_cache):
     for d in os.listdir(gliner_cache):
         if d.startswith("models--"):

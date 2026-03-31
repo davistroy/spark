@@ -135,22 +135,22 @@ max_over_time(vllm:num_requests_running{model_name="qwen3-embedding-4b"}[24h])
 # (Run from any machine that can reach homeserver:9090)
 
 # KV cache peak
-curl -s 'http://homeserver.k4jda.net:9090/api/v1/query?query=max_over_time(vllm:kv_cache_usage_perc{model_name="qwen3.5-35b"}[24h])'
+curl -s 'http://<prometheus-host>:9090/api/v1/query?query=max_over_time(vllm:kv_cache_usage_perc{model_name="qwen3.5-35b"}[24h])'
 
 # Preemptions
-curl -s 'http://homeserver.k4jda.net:9090/api/v1/query?query=vllm:num_preemptions_total{model_name="qwen3.5-35b"}'
+curl -s 'http://<prometheus-host>:9090/api/v1/query?query=vllm:num_preemptions_total{model_name="qwen3.5-35b"}'
 
 # Peak concurrency
-curl -s 'http://homeserver.k4jda.net:9090/api/v1/query?query=max_over_time(vllm:num_requests_running{model_name="qwen3.5-35b"}[24h])'
+curl -s 'http://<prometheus-host>:9090/api/v1/query?query=max_over_time(vllm:num_requests_running{model_name="qwen3.5-35b"}[24h])'
 
 # Waiting requests
-curl -s 'http://homeserver.k4jda.net:9090/api/v1/query?query=max_over_time(vllm:num_requests_waiting{model_name="qwen3.5-35b"}[24h])'
+curl -s 'http://<prometheus-host>:9090/api/v1/query?query=max_over_time(vllm:num_requests_waiting{model_name="qwen3.5-35b"}[24h])'
 
 # Swap
-curl -s 'http://homeserver.k4jda.net:9090/api/v1/query?query=(node_memory_SwapTotal_bytes{job="spark-node"}-node_memory_SwapFree_bytes{job="spark-node"})/1073741824'
+curl -s 'http://<prometheus-host>:9090/api/v1/query?query=(node_memory_SwapTotal_bytes{job="spark-node"}-node_memory_SwapFree_bytes{job="spark-node"})/1073741824'
 
 # GPU peak temp
-curl -s 'http://homeserver.k4jda.net:9090/api/v1/query?query=max_over_time(gpu_temperature_celsius[24h])'
+curl -s 'http://<prometheus-host>:9090/api/v1/query?query=max_over_time(gpu_temperature_celsius[24h])'
 ```
 
 ### Output
@@ -399,7 +399,7 @@ docker run -d \
   -p 8000:8000 \
   -e VLLM_FLASHINFER_MOE_BACKEND=latency \
   -e VLLM_TEST_FORCE_FP8_MARLIN=1 \
-  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/<user>/.cache/huggingface:/root/.cache/huggingface \
   -v /home/claude/.cache/triton:/root/.triton \
   vllm/vllm-openai:cu130-nightly \
   Qwen/Qwen3.5-35B-A3B \
@@ -449,7 +449,7 @@ docker run -d \
   --ipc host \
   -p 8001:8001 \
   -e VLLM_SERVER_DEV_MODE=1 \
-  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/<user>/.cache/huggingface:/root/.cache/huggingface \
   vllm/vllm-openai:cu130-nightly \
   Qwen/Qwen3-Embedding-4B \
     --served-model-name qwen3-embedding-4b \
@@ -558,7 +558,7 @@ docker run -d \
   -p 8000:8000 \
   -e VLLM_FLASHINFER_MOE_BACKEND=latency \
   -e VLLM_TEST_FORCE_FP8_MARLIN=1 \
-  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/<user>/.cache/huggingface:/root/.cache/huggingface \
   -v /home/claude/.cache/triton:/root/.triton \
   -v /home/claude/triton-custom/triton:/usr/local/lib/python3.12/dist-packages/triton \
   vllm/vllm-openai:cu130-nightly \
@@ -718,7 +718,7 @@ If DCGM works, add to Prometheus config on homeserver:
 ```yaml
   - job_name: "spark-dcgm"
     static_configs:
-      - targets: ["spark.k4jda.net:9401"]
+      - targets: ["<spark-host>:9401"]
 ```
 
 ### Rollback
@@ -739,36 +739,36 @@ Plugging in the ethernet cable without a static IP causes a full network outage 
 
 ### Prerequisites
 
-This requires the `davistroy` user with interactive sudo (the `claude` user cannot run `nmcli` with sudo). Run these commands from the Spark console or as davistroy via SSH.
+This requires the primary user with interactive sudo (the `claude` user cannot run `nmcli` with sudo). Run these commands from the Spark console or as the primary user via SSH.
 
 ### Procedure
 
 ```bash
-# 1. Configure static IP for ethernet (192.168.10.33, keep WiFi on .32)
+# 1. Configure static IP for ethernet (<spark-lan-ip>, keep WiFi on .32)
 sudo nmcli connection modify "Wired connection 3" \
   ipv4.method manual \
-  ipv4.addresses "192.168.10.33/24" \
-  ipv4.gateway "192.168.10.1" \
-  ipv4.dns "192.168.10.1" \
+  ipv4.addresses "<spark-lan-ip>/24" \
+  ipv4.gateway "<gateway-ip>" \
+  ipv4.dns "<gateway-ip>" \
   connection.autoconnect-priority 0
 
 # 2. Verify the config was saved
 nmcli connection show "Wired connection 3" | grep -E "(ipv4.method|ipv4.addresses|ipv4.gateway|ipv4.dns|autoconnect)"
-# Expected: method=manual, addresses=192.168.10.33/24, gateway=192.168.10.1
+# Expected: method=manual, addresses=<spark-lan-ip>/24, gateway=<gateway-ip>
 
 # 3. NOW plug in the ethernet cable
 
 # 4. Verify both interfaces are up
 nmcli device status
-# Expected: wlP9s9=connected (UBNT), enP7s7=connected (Wired connection 3)
+# Expected: wlP9s9=connected (<wifi-ssid>), enP7s7=connected (Wired connection 3)
 
 # 5. Verify routing (ethernet should have lower metric = preferred)
 ip route
 # Expected: two default routes — ethernet at metric ~100, WiFi at metric 600
 
 # 6. Verify both IPs respond
-ping -c 2 192.168.10.32  # WiFi
-ping -c 2 192.168.10.33  # Ethernet
+ping -c 2 <spark-lan-ip>  # WiFi
+ping -c 2 <spark-lan-ip>  # Ethernet
 
 # 7. Verify Tailscale
 tailscale status
@@ -778,9 +778,9 @@ tailscale status
 
 ```bash
 # All three paths should work
-ssh davistroy@192.168.10.32 echo "WiFi OK"
-ssh davistroy@192.168.10.33 echo "Ethernet OK"
-ssh davistroy@spark.k4jda.net echo "Tailscale OK"
+ssh <user>@<spark-lan-ip> echo "WiFi OK"
+ssh <user>@<spark-lan-ip> echo "Ethernet OK"
+ssh <user>@<spark-host> echo "Tailscale OK"
 ```
 
 ### Rollback (if ethernet causes problems)
@@ -796,9 +796,9 @@ sudo nmcli connection modify "Wired connection 3" connection.autoconnect no
 
 | Interface | IP | Purpose | Metric |
 |-----------|-----|---------|--------|
-| wlP9s9 (WiFi) | 192.168.10.32 | Current primary, SSID "UBNT" | 600 |
-| enP7s7 (Ethernet) | 192.168.10.33 | New primary (lower latency) | ~100 |
-| tailscale0 | 100.124.10.120 | Overlay, works on either | N/A |
+| wlP9s9 (WiFi) | <spark-lan-ip> | Current primary, SSID "<wifi-ssid>" | 600 |
+| enP7s7 (Ethernet) | <spark-lan-ip> | New primary (lower latency) | ~100 |
+| tailscale0 | <spark-tailscale-ip> | Overlay, works on either | N/A |
 
 ---
 
@@ -918,12 +918,12 @@ curl -s http://localhost:8003/api/v1/collections | python3 -m json.tool | head -
 curl -s http://localhost:7474/db/neo4j/tx/commit \
   -H "Content-Type: application/json" \
   -d '{"statements":[{"statement":"MATCH (n) RETURN count(n) AS nodeCount"}]}' \
-  -u neo4j:pipeline-knowledge-graph
+  -u neo4j:<password>
 
 curl -s http://localhost:7474/db/neo4j/tx/commit \
   -H "Content-Type: application/json" \
   -d '{"statements":[{"statement":"MATCH (n)-[r]->(m) RETURN type(r), count(r) ORDER BY count(r) DESC LIMIT 10"}]}' \
-  -u neo4j:pipeline-knowledge-graph
+  -u neo4j:<password>
 
 # 7. Run LLM inference simultaneously (simulates real pipeline load)
 for i in $(seq 1 10); do
@@ -1191,8 +1191,8 @@ Take a new snapshot:
 
 # Backup to homeserver (relay through workstation — no direct Spark→homeserver SSH):
 # From workstation:
-scp -i ~/.ssh/id_claude_code -r claude@spark.k4jda.net:/home/claude/spark-configs/<name> /tmp/<name>
-scp -i ~/.ssh/id_claude_code -r /tmp/<name> claude@homeserver.k4jda.net:/mnt/user/appdata/spark-configs/
+scp -r claude@<spark-host>:/home/claude/spark-configs/<name> /tmp/<name>
+scp -r /tmp/<name> claude@<homeserver-host>:/mnt/user/appdata/spark-configs/
 
 # Disaster recovery — pull from homeserver:
 # Reverse the scp commands above

@@ -1178,4 +1178,178 @@ ssh claude@<spark-host> "cat /home/claude/pipeline-monitor.log"
 
 ---
 
+## Entry 011 — Forum Thread Analysis: Community Response to SM121 Build Guide (2026-04-01)
+
+**Context:** Posted the SM121 .so injection build guide to NVIDIA Developer Forums on 2026-03-30. Thread received engagement from community members and the `spark-vllm-docker` maintainer (eugr). This entry analyzes the responses and their implications for our optimization roadmap.
+
+**Thread:** https://forums.developer.nvidia.com/t/dgx-spark-13-49-tok-s-with-qwen3-5-35b-native-sm121-kernel-build-guide/365083
+
+### Thread Summary
+
+| Post | Author | Content |
+|------|--------|---------|
+| 1 | troy.e.davis | SM121 build guide — 13.3 → 48.6 tok/s via .so injection |
+| 2 | coder543 | Asked how this compares to eugr/spark-vllm-docker |
+| 3 | troy.e.davis | Explained dependency drift and version coupling risks of full-rebuild approach |
+| 4 | jl121 | Referenced Spark-Arena: Qwen3.5-30B-A3B FP8 tg128/c1 at 50.75 tok/s |
+| 5 | wentbackward | Endorsement: "nothing under 100GB can touch it" |
+| 6 | eugr | Substantive pushback on dependency drift/version coupling criticisms |
+
+### eugr's Response — Key Points
+
+eugr (maintainer of `spark-vllm-docker`) addressed the two criticisms from Post 3:
+
+1. **Dependency drift handled.** Two image variants: transformers 4.x (default) and 5.x (`--tf5` flag). Recipe launcher (`run-recipe.sh`) auto-selects proper image. The naive `pip install .` scenario I described isn't what their pipeline does.
+
+2. **Version coupling solved by CI/CD.** Nightly builds from vLLM main with regression tests (solo and cluster-wide). Wheels published on GitHub if tests pass. Users get latest tested version automatically — no manual rebuild per base update.
+
+3. **Performance data from latest nightly (v0.18.3.dev17, 2026-03-31):**
+
+| Model | Test | Throughput | Peak |
+|-------|------|-----------|------|
+| Qwen3.5-35B-A3B-FP8 | pp2048 | 4240.97 tok/s | 621.23 tok/s |
+| Qwen3.5-35B-A3B-FP8 | tg32 | **52.85 ± 0.04 tok/s** | 54.57 tok/s |
+
+Quick-start: `git clone eugr/spark-vllm-docker && ./run-recipe.sh recipes/qwen3.5-35b-a3b-fp8.yaml --setup --solo`
+
+### Performance Comparison
+
+| Source | vLLM Version | Single-Request tok/s | Notes |
+|--------|-------------|---------------------|-------|
+| Our .so injection | v0.17.0rc1 (Mar 6) | 48.6 | 52 sm_120 cubins |
+| Spark-Arena (jl121) | Unknown | 50.75 | tg128/c1 benchmark |
+| eugr nightly | v0.18.3.dev17 (Mar 31) | 52.85 | Full rebuild + CI/CD |
+
+**Gap: ~4.25 tok/s (8.7%).** Both approaches produce sm_120 cubins — the performance delta is from ~3 months of vLLM improvements in the base code, not kernel quality.
+
+### Critical Finding: v0.18.x Regression Appears Fixed
+
+Our research from 2026-03-28 (`vllm-research-2026-03-28.md`) flagged v0.18.0+ as broken for Qwen3.5 (GitHub issue #37749). eugr is running **v0.18.3.dev17 (March 31)** successfully at 52.85 tok/s.
+
+This means either:
+- The regression was fixed in a recent commit
+- eugr's tf4/tf5 image selection works around it
+- Their regression tests catch and skip broken nightlies
+
+**Impact:** The LATER_PLAN guidance "avoid v0.18.x" needs re-evaluation. v0.18.x may now be a viable upgrade path.
+
+### Approach Comparison
+
+| Dimension | Our .so Injection | eugr Full Rebuild CI/CD |
+|-----------|-------------------|------------------------|
+| Transparency | 2 files changed, pristine base | Full rebuild, opaque deps |
+| Trust model | End-to-end self-controlled | Third-party CI/CD pipeline |
+| Base image fidelity | Stock Python env preserved | Rebuilt, potentially divergent |
+| Maintenance burden | Manual rebuild per base update | Automated nightly |
+| Version currency | Stuck on v0.17.0rc1 | Always latest tested nightly |
+| Performance | 48.6 tok/s | 52.85 tok/s |
+
+### Assessment
+
+1. **Our engineering approach is sound.** The .so injection technique is cleaner and more transparent. eugr's response doesn't invalidate it — it shows their pipeline is more sophisticated than a naive full rebuild (which was what we originally tested and documented in Entry 003).
+
+2. **The real gap is base version age, not technique.** Both produce sm_120 cubins. The ~4 tok/s delta comes from 3 months of vLLM scheduler, FlashInfer, and runtime improvements between v0.17.0rc1 and v0.18.3.dev17.
+
+3. **Hybrid approach is the next move.** Apply our .so injection technique to a newer base image. The Dockerfile and CMake patch are proven — just update the base image tag and match the source commit. Gets us the transparency we want + the newer vLLM performance gains.
+
+4. **eugr's images are worth evaluating** as a lower-maintenance option if the trust model is acceptable. The recipe-based launcher and nightly regression testing are genuinely useful infrastructure.
+
+### Action Items
+
+- [ ] Verify GitHub issue #37749 (v0.18.x Qwen3.5 regression) — check if closed or has recent fix commits
+- [ ] If regression fixed: test .so injection against a recent cu130-nightly base (v0.18.2+)
+- [ ] Evaluate eugr's `run-recipe.sh` pipeline as alternative maintenance path
+- [ ] Update LATER_PLAN risk assessment for v0.18.x if regression confirmed fixed
+- [ ] Consider forum reply acknowledging eugr's CI/CD maturity + noting injection technique works with any base image including theirs
+
+---
+
+## Entry 012 — Gemma 4 Research and A/B Experiment Plan (2026-04-03)
+
+**Context:** Google DeepMind released Gemma 4 under Apache 2.0 on 2026-04-02. Four model sizes: E2B, E4B, 26B-A4B (MoE), 31B (dense). Community immediately began running on DGX Spark with day-1 benchmarks appearing within hours. Researched feasibility of Gemma 4 as replacement or complement to our Qwen3.5-35B-A3B.
+
+### Models Evaluated
+
+| Model | Architecture | Total/Active Params | Relevance |
+|-------|-------------|-------------------|-----------|
+| Gemma 4 26B-A4B-it | MoE (128 experts, 8+1 active) | 26B / 3.8B | Direct throughput competitor to Qwen3.5 |
+| Gemma 4 31B-it | Dense | 31B / 31B | Quality play — #3 on Arena AI text leaderboard |
+
+### Community Benchmark Data (Day 1, 2026-04-02)
+
+Source: WilliamD on NVIDIA Developer Forums, `llm-benchy v0.3.5`, `vllm/vllm-openai:gemma4-cu130` image.
+
+| Model | Quant | Decode tok/s | TTFT pp128 | TTFT pp2048 | GPU Mem |
+|-------|-------|-------------|------------|-------------|---------|
+| Gemma 4 31B | BF16 | 3.7 | 547 ms | 1929 ms | ~63 GB |
+| Gemma 4 31B | AWQ int8 | 6.5 | 490 ms | 4761 ms | ~85 GB |
+| Gemma 4 31B | AWQ int4 | 10.6 | 247 ms | 2533 ms | ~85 GB |
+| Gemma 4 26B-A4B | BF16 | 23.7 | 371 ms | 672 ms | ~86 GB |
+| **Qwen3.5-35B-A3B** | **FP8** | **48.6** | **—** | **—** | **~85 GB** |
+
+The 26B-A4B MoE is the clear winner within the Gemma family. Later community references cite 45-60 tok/s for optimized configs (unverified on our hardware).
+
+### Quality Benchmarks (Model Cards)
+
+| Benchmark | Qwen3.5 (reported) | Gemma 26B-A4B | Gemma 31B |
+|-----------|--------------------|----|-----|
+| GPQA Diamond | ~85.8% | 82.3% | — |
+| AIME 2026 | — | 88.3% | 89.2% |
+| LiveCodeBench | — | 77.1% | — |
+| Arena AI Text Rank | — | — | #3 overall |
+
+Consensus: roughly a tie on quality, with Qwen slightly ahead on reasoning and Gemma slightly ahead on coding.
+
+### Key Technical Findings
+
+1. **Official Docker image:** `vllm/vllm-openai:gemma4-cu130` — ARM64 native, purpose-built for Gemma 4
+2. **TRITON_ATTN auto-forced** — Gemma 4 has heterogeneous head dimensions, vLLM detects and handles this
+3. **Tool calling broken at launch** — `Gemma4ToolParser.__init__()` takes wrong args (vLLM #38837, since fixed)
+4. **`--load-format safetensors` required** — `fastsafetensors` not compatible
+5. **NVFP4 on SM121 is a hard unknown** — SM121 lacks `cvt.e2m1x2` instruction; NVIDIA lists `nvidia/Gemma-4-31B-IT-NVFP4` as "supported" on Spark, but may fail on our hardware
+6. **Power delivery throttling** — multiple forum confirmations that Spark silently throttles. faparacior went from 36.6 → full speed by power cycling (USB-C + brick unplug). Must power cycle before all benchmarks
+7. **eugr has recipes ready:** `./run-recipe.sh gemma4-26b-a4b --solo`
+8. **Multimodal native** — vision, video (60s @ 1fps), audio. Qwen runs `--language-model-only`. Gemma 4 adds modalities without model swap
+
+### Forum Corrections to Our Prior Assumptions
+
+- **SM120 is NOT datacenter Blackwell.** Our community post stated this incorrectly — LLM-propagated misinformation. SM120 and SM121 are both consumer/edge Blackwell, not datacenter variants.
+- **SM120 and SM121 both have 99KB shared memory** — the "228KB" claim circulating in some docs and PRs is incorrect (confirmed by FlashInfer maintainers via eugr)
+
+### Experiment Plan Created
+
+Wrote `GEMMA4_EXPERIMENT_PLAN.md` with 7 phases:
+- Phase 0: Pre-stage images + weights (~131 GB new downloads)
+- Phase 1: Power cycle + fresh Qwen3.5 baseline
+- Phase 2: Gemma 26B-A4B throughput (BF16, FP8, eugr's recipe)
+- Phase 3: Gemma 31B throughput (NVFP4, AWQ int4, BF16 sanity check)
+- Phase 4: Quality A/B — pipeline-specific + general capability, all 3 models
+- Phase 5: Tool calling deep dive
+- Phase 6: Concurrency profile for the winner
+- Phase 7: Restore production
+
+Dedicated maintenance window required. ~5 hours execution time.
+
+### Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Test both 26B-A4B and 31B | MoE for throughput parity, dense for quality ceiling |
+| Include NVFP4 despite SM121 risk | NVIDIA lists it as supported; must verify empirically |
+| Power cycle before benchmarks | Forum-confirmed throttling bug invalidates numbers without it |
+| Pipeline-specific AND general quality tests | Need both "can it replace Qwen" and "how does it compare broadly" |
+| Pre-stage all downloads before window | Don't burn experiment time on 130 GB of downloads |
+
+### Action Items
+
+- [ ] Accept Gemma 4 license on HuggingFace for the davistroy account
+- [ ] Pre-stage: pull `vllm/vllm-openai:gemma4-cu130` image
+- [ ] Pre-stage: download all model weights (26B-A4B, 31B, 31B-NVFP4)
+- [ ] Clone/update eugr's spark-vllm-docker, verify gemma4 recipe exists
+- [ ] Write benchmark scripts and quality test prompt files
+- [ ] Schedule maintenance window for experiment execution
+- [ ] Update forum post to correct SM120 datacenter claim
+
+---
+
 *Entries continue below as experiments are executed.*

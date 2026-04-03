@@ -1352,4 +1352,159 @@ Dedicated maintenance window required. ~5 hours execution time.
 
 ---
 
+## Entry 013 — Ethernet Troubleshooting: Switch MAC Table Corruption (2026-04-03)
+
+**Date:** 2026-04-03 ~13:00–18:00 UTC
+**Operator:** Claude Code + Troy Davis (interactive sudo)
+**Status:** RESOLVED
+**Impact:** No impact to running services (all testing via Tailscale SSH while ethernet was down)
+
+### Problem Statement
+
+Ethernet cable plugged into DGX Spark (enP7s7, 192.168.10.33) on a Ubiquiti USW Pro 24 managed switch connected to UDM-SE gateway. Interface shows UP at 1 Gbps but zero IP connectivity — can't reach any device (gateway, workstation, homeserver).
+
+### Diagnostic Timeline
+
+#### Phase 1: Basic Connectivity (13:00–13:30 UTC)
+
+| Test | Result |
+|------|--------|
+| Spark WiFi → Gateway (.1) | ✅ works |
+| Spark Ethernet → Gateway (.1) | ❌ 100% loss |
+| Spark WiFi → Workstation (.212) | ✅ works (when forced via `-I wlP9s9`) |
+| Workstation → Spark WiFi (.32) | ❌ timeout (asymmetric routing) |
+| Workstation → Spark Ethernet (.33) | ❌ "Destination host unreachable" |
+
+**Root cause of WiFi breakage:** Dual-homed (WiFi .32 + Ethernet .33 on same subnet). Ethernet route had metric 100 (lower = preferred), WiFi metric 600. Kernel routed ALL LAN responses via ethernet (which was broken), including replies to WiFi-originated traffic.
+
+**Fix:** Added `route-metric=700` to NM config for "Wired connection 3" in both `/run/` and `/etc/NetworkManager/system-connections/`. Required removing auto-generated NM profiles and stop/starting NM. Stale metric-100 routes persisted across NM restarts until user manually ran `sudo ip route del 192.168.10.0/24 dev enP7s7 metric 100`.
+
+#### Phase 2: Switch Investigation (13:30–15:00 UTC)
+
+Inspected UniFi controller via Chrome browser automation:
+- **Port 17 config:** Active, Default VLAN (1) 192.168.10.0/24, Allow All tagged, no port isolation, no storm control — **all correct**
+- **Port stats:** Tx 3.12 MB (switch→Spark), Rx 1.56 MB (Spark→switch) — **traffic IS flowing bidirectionally through the switch**
+- **Anomaly: Spark MAC (fc:9d:05:13:27:f0) appeared on 5 ports** (6, 15, 16, 17, 23) — from previous cable moves. Port 16 had Native VLAN "None" (the others had Default)
+- **Firewall/policy rules:** No rules blocking LAN-to-LAN traffic
+- **Client entry:** Not blocked, status "Excellent", 24h activity only 2.34 KB
+
+Tried from controller: disabled STP on port 17 → no effect.
+
+#### Phase 3: Spark-Side Investigation (15:00–16:30 UTC)
+
+| Check | Finding |
+|-------|---------|
+| `arp_ignore=1, arp_announce=2` on enP7s7 | Relaxed to 0/0 — no effect |
+| NIC offloads (tx-checksum, TSO, GSO, GRO) | Disabled all — no effect |
+| NIC driver | `r8127` v11.014.00 (Realtek out-of-tree) |
+| NIC error stats | `rx_mac_missed: 20336` — high, but not root cause |
+| `ip_forward=1` | Enabled (by Docker) — not the issue |
+| FORWARD iptables policy | DROP (Docker default) — doesn't affect host-destined traffic |
+| Speed forced to 100 Mbps | Still fails — not GbE PHY issue |
+
+#### Phase 4: tcpdump — The Breakthrough (16:30–17:00 UTC)
+
+Ran tcpdump in Docker container (`nicolaka/netshoot`, `--network host`, `--cap-add NET_RAW`):
+
+```
+# Spark sends ICMP to gateway — SENT, no reply:
+fc:9d:05:13:27:f0 > 70:a7:41:ab:62:7b, ICMP echo request
+
+# Workstation sends broadcast ARP for Spark — RECEIVED:
+10:91:d1:45:b4:6f > ff:ff:ff:ff:ff:ff, ARP Request who-has 192.168.10.33
+
+# Spark sends ARP reply — SENT, workstation never gets it (re-asks 3x):
+fc:9d:05:13:27:f0 > 10:91:d1:45:b4:6f, ARP Reply 192.168.10.33 is-at fc:9d:05:13:27:f0
+
+# Gateway broadcasts arrive on ethernet — RECEIVED:
+70:a7:41:ab:62:7b > ff:ff:ff:ff:ff:ff, ARP Request who-has 192.168.10.65
+```
+
+**Pattern:** Broadcasts TO Spark work. ALL unicast FROM Spark vanishes — never reaches any destination. Even broadcast ARPs from the Spark get no response from the gateway.
+
+#### Phase 5: Port & Cable Elimination (17:00–17:30 UTC)
+
+| Change | Result |
+|--------|--------|
+| Moved to Port 7 | ❌ Same failure |
+| New cable + Port 10 | ❌ Same failure |
+
+Not the port. Not the cable.
+
+#### Phase 6: MAC Spoofing — Definitive Test (17:30 UTC)
+
+```bash
+sudo docker run --rm --network host --cap-add NET_ADMIN --cap-add NET_RAW nicolaka/netshoot bash -c '
+  ip link set enP7s7 down
+  ip link set enP7s7 address 02:ab:cd:ef:00:01
+  ip link set enP7s7 up
+  sleep 3
+  ping -c 3 -I enP7s7 192.168.10.1
+  ip link set enP7s7 down
+  ip link set enP7s7 address fc:9d:05:13:27:f0
+  ip link set enP7s7 up
+'
+```
+
+**Result: 3/3 pings with spoofed MAC!** The NIC works. The cable works. The switch works. **The switch was blocking frames specifically from MAC fc:9d:05:13:27:f0.**
+
+#### Phase 7: Resolution (17:30–18:00 UTC)
+
+1. **Removed "spark 27:f0" client** from UniFi controller (cleared controller-side state)
+2. **User ran `sudo ip link set enP7s7 down && sleep 3 && sudo ip link set enP7s7 up`** (forced fresh link negotiation)
+3. Brief connectivity (2/4 pings) then blocked again — switch re-learned stale MAC entries
+4. **Rebooted USW Pro 24** from controller ("Restart" under device settings) — clears hardware MAC table
+5. After ~90s reboot: **full connectivity restored** — 0% loss, 0.1ms to gateway
+
+### Root Cause
+
+**Switch hardware MAC table corruption from MAC flapping across multiple ports.**
+
+The Spark's ethernet MAC (fc:9d:05:13:27:f0) had been plugged into 5 different switch ports over time (6, 15, 16, 17, 23). The USW Pro 24's MAC address table retained stale entries associating this MAC with multiple ports. When the Spark was connected to a new port, the switch detected "MAC flapping" (same MAC on multiple ports = potential loop) and silently dropped all frames from this MAC.
+
+This behavior persisted even after:
+- Changing ports (stale entries followed the MAC, not the port)
+- Changing cables
+- Removing the client from the UniFi controller (only clears software DB, not hardware ASIC)
+- Disabling STP on the port
+
+Only a **full switch reboot** cleared the hardware MAC table and resolved the issue.
+
+### Evidence Chain
+
+1. tcpdump proved frames left the NIC correctly (L2 headers correct)
+2. Switch RX counter confirmed frames entered the switch
+3. But frames never reached any destination (even broadcast ARPs from Spark got no response)
+4. MAC spoofing proved the block was MAC-specific, not NIC/cable/port
+5. Client removal + interface bounce gave brief connectivity (stale entries cleared momentarily)
+6. Switch reboot gave permanent fix (hardware MAC table fully cleared)
+
+### Configuration Applied
+
+| Setting | Value | File |
+|---------|-------|------|
+| Ethernet route metric | 700 (WiFi=600 takes priority) | NM "Wired connection 3" in `/run/` and `/etc/` |
+| ARP settings | `arp_ignore=1, arp_announce=2` (restored) | sysctl |
+| TX offloads | Re-enabled (were not the issue) | ethtool |
+| STP on Port 10 | Disabled during testing — **needs re-enabling** | UniFi controller |
+| Switch port | Port 10 on USW Pro 24 | Physical |
+
+### Operational Rules Added
+
+- **Stick to ONE switch port for the Spark.** Moving the cable between ports creates stale MAC entries that the switch firmware doesn't properly age out. If you must change ports, reboot the switch afterward.
+- **MAC spoofing via Docker is a powerful diagnostic.** `docker run --network host --cap-add NET_ADMIN nicolaka/netshoot` can change MAC, run tcpdump, and test L2 — all without sudo for `ip` or `tcpdump` on the host.
+- **UniFi client removal only clears the controller DB, not switch ASIC state.** A switch reboot is needed to clear hardware MAC table corruption.
+- **Dual-homing (WiFi + Ethernet on same subnet) requires careful route metrics.** The lower-metric interface MUST be the working one, or set ethernet metric higher than WiFi to prevent broken ethernet from also breaking WiFi.
+
+### Remaining TODO
+
+- [ ] Re-enable STP on Port 10 (disabled during testing)
+- [ ] Re-enable TX offloads persistently (currently applied via ethtool, will revert on reboot)
+- [ ] Fix NM to use "Wired connection 3" profile instead of auto-generated one
+- [ ] Accept SSH host key for 192.168.10.33
+- [ ] Verify Docker services (vLLM, etc.) are reachable on ethernet IP
+- [ ] Consider DHCP reservation for Spark wired MAC to signal it as a known device to UniFi
+
+---
+
 *Entries continue below as experiments are executed.*

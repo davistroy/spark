@@ -2621,6 +2621,105 @@ Plan generated as `IMPLEMENT_SPARK_IMPROVEMENTS.md` with 4 phases:
 - Recommend executing Phase 1 first (flag changes only, ~30 min including benchmarks)
 - Phase 1 expected outcome: 53.5 → ~75 tok/s single-request
 
+### Entry 027 — Phase 1 Execution: Flag Optimizations (2026-04-13)
+**Date:** 2026-04-13 09:30-14:15 UTC
+**Operator:** Claude Code (implement-plan)
+**Status:** EXPERIMENT — reverted to original config after failures
+
+#### Experiment: MTP=2 + FLASHINFER + Prefix Caching (all three flags)
+
+**Docker run diff from original:**
+```diff
++ --attention-backend FLASHINFER
++ --enable-prefix-caching
++ --max-num-batched-tokens 4096
++ --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+```
+
+**First attempt crashed** — `AssertionError: In Mamba cache align mode, block_size (2128) must be <= max_num_batched_tokens (2048)`. Fix: added `--max-num-batched-tokens 4096`. Container restarted 3 times before fix.
+
+**Root cause of block_size issue:** Qwen3.5 is a hybrid architecture with Mamba layers. When prefix caching is enabled, vLLM v0.19.0 forces "Mamba cache align mode" which sets attention_block_size = 2128 tokens (aligned to mamba_page_size). This exceeds the default max_num_batched_tokens of 2048. **Learning: any Mamba/hybrid model with prefix caching on v0.19.0 requires `--max-num-batched-tokens >= 2128`.**
+
+**Second attempt (with fix) — startup confirmed all features:**
+- MTP: Qwen3_5MoeMTP architecture loaded, drafter weights shared with target model (embedding + lm_head), 34.16 GiB model load (vs ~30 GiB without MTP)
+- FLASHINFER: `Using AttentionBackendEnum.FLASHINFER backend`
+- Prefix caching: enabled, Mamba cache mode 'align' (experimental)
+- FP8: TRITON MoE + CutlassFP8ScaledMMLinearKernel (same as before)
+- Chunked prefill: enabled (v0.19.0 default)
+- KV blocks: num_gpu_blocks=0 overridden to 512
+
+**Benchmark results (MTP=2 + FLASHINFER + prefix caching):**
+| Metric | Value | Baseline | Delta |
+|--------|-------|----------|-------|
+| c1 tok/s (median, thinking mode) | 26.9 | 53.5 (Entry 022) | **-50%** |
+| c1 tok/s (best single run) | 52.0 | 53.5 | -3% |
+| c1 tok/s (no-think run) | 45.2 | — | — |
+| c4 aggregate tok/s | 90.4 | 140.4 | **-36%** |
+| MTP acceptance rate | 69.9% | N/A | — |
+| MTP draft acceptance position 0 | 80.7% | N/A | — |
+| MTP draft acceptance position 1 | 59.2% | N/A | — |
+| Tool calling | PASS | PASS | No regression |
+
+**MTP conclusion:** Acceptance rate is healthy (70%) but the MTP verification overhead exceeds the bandwidth savings on GB10 unified memory. The drafter model consumed ~4 GiB that would otherwise go to KV cache (79466 MiB vs 81002 MiB without MTP). High variance (26.9 to 52.0 across 4 runs) suggests intermittent overhead spikes. **MTP is a net negative on GB10 with v0.19.0 cu130.**
+
+#### Experiment: FLASHINFER + Prefix Caching (no MTP)
+
+**Following Phase 1 Gate contingency: removed --speculative-config, kept other flags.**
+
+| Metric | Value | Original | Delta |
+|--------|-------|----------|-------|
+| c1 tok/s (median) | 48.3 | 48.5 | -0.4% |
+| c4 aggregate tok/s | 130.4 | — | — |
+| GPU memory (qwen35) | 82764 MiB | 81082 MiB | +1.6% |
+| num_gpu_blocks | 512 (override) | 512 (override) | Same |
+
+**Conclusion:** No measurable improvement. Prefix caching adds negligible overhead but also no benefit at this traffic level. The Mamba align mode doesn't help or hurt single-request throughput.
+
+#### Experiment: FLASHINFER explicit only (no prefix caching, no MTP)
+
+| Metric | Value | Original | Delta |
+|--------|-------|----------|-------|
+| c1 tok/s (median) | 48.7 | 48.5 | +0.4% |
+| GPU memory (qwen35) | 80762 MiB | 81082 MiB | -0.3% |
+| num_gpu_blocks | 512 (override) | 512 (override) | Same |
+
+**Conclusion:** Explicit FLASHINFER is noise-level identical to auto-select. Expected — v0.19.0 already auto-selects FLASHINFER for this config.
+
+#### Control: Original config (exact revert)
+
+| Metric | Value | Entry 022 baseline |
+|--------|-------|--------------------|
+| c1 tok/s (median) | 48.5 | 53.5 |
+| GPU memory (qwen35) | 81082 MiB | 81002 MiB |
+| num_gpu_blocks | 512 (override) | 2466 |
+
+**Critical finding: The 53.5 tok/s baseline from Entry 022 is NOT reproducible today.** Current stable performance is ~48.5 tok/s. Possible explanations:
+1. Entry 022 was post-power-cycle (GPU kernel caches in pristine state)
+2. Entry 022 may have used different prompts or thinking mode (reasoning tokens may generate faster)
+3. The system has accumulated 39 hours of uptime — thermal state, memory fragmentation, or cache pollution may differ
+
+#### Discovery: num_gpu_blocks=0 override
+
+**All four configs tested today show `num_gpu_blocks=0 with num_gpu_blocks_override=512`.** This is fundamentally different from the 2466 blocks reported in earlier entries. The vLLM block calculator returns 0 available blocks, and a 512-block minimum is applied as a safety net. This may be a v0.19.0 behavior with the Qwen3.5 hybrid architecture, or it may be specific to the current GPU memory state. Further investigation needed.
+
+#### Final State
+
+System reverted to original known-working config (no FLASHINFER explicit, no prefix caching, no MTP). Container running, healthy, 48.5 tok/s.
+
+#### Key Learnings
+
+1. **MTP=2 does NOT work on GB10 with v0.19.0 cu130.** Community results (70-81 tok/s) are on eugr's cu132 build with FlashInfer 0.6.7 precompiled cubins. MTP may require the cu132 runtime to be beneficial.
+2. **Mamba hybrid models + prefix caching require `--max-num-batched-tokens >= 2128`** on v0.19.0. Without this, vLLM crashes with a block_size assertion error.
+3. **The cu132 build (Phase 3) should be attempted BEFORE re-trying MTP.** The optimization hierarchy is: base runtime → flags, not flags → runtime.
+4. **All v0.19.0 configs show num_gpu_blocks=0 → 512 override.** This needs investigation — may be limiting concurrent request capacity.
+5. **Benchmark methodology matters.** Different prompts, thinking mode, and warmup states produce 25-52 tok/s variance. Standardize on: thinking disabled, 256 max_tokens, warmup run, 3-run median.
+
+#### Recommendations (revised from IMPLEMENT_SPARK_IMPROVEMENTS.md)
+1. **Skip to Phase 3:** Test eugr's cu132 build (0.19.1rc1.dev219 + FlashInfer 0.6.7 precompiled cubins)
+2. **Then re-test MTP=2 on cu132** — the community results suggest MTP works on their runtime
+3. **Investigate num_gpu_blocks=0** — this may be a v0.19.0 bug or Qwen3.5-specific behavior
+4. **Power-cycle before next benchmark session** to establish clean baseline
+
 #### Baseline Values Changed
 - `arena_top_overall_tok_s`: 60.51 → 73.33 (Qwen3-Coder-Next-int4-AutoRound, single-node)
 - `forum_last_checked_date`: 2026-04-10 → 2026-04-11

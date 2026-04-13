@@ -1,10 +1,12 @@
 # Implementation Plan: DGX Spark Performance Improvements
 
 **Created:** 2026-04-13
+**Updated:** 2026-04-13 (Phase 1 completed — all flag optimizations failed on cu130)
 **Source:** Spark Recon Entry 025 (2026-04-13) + Ultra-Plan investigation
-**Baseline:** 53.5 tok/s single-request, vLLM v0.19.0, cu130, gpu-memory-utilization 0.65
-**Target:** ~75 tok/s single-request (+40%), improved concurrent throughput
+**Baseline:** 48.5 tok/s single-request (corrected from 53.5 — see LAB_NOTEBOOK Entry 027), vLLM v0.19.0, cu130, gpu-memory-utilization 0.65
+**Target:** ~75 tok/s single-request, improved concurrent throughput
 **System:** DGX Spark (GB10, SM121, 128 GB unified memory)
+**Status:** Phase 1 FAILED — MTP degrades performance on cu130, FLASHINFER/prefix caching have zero effect. **Recommend skipping to Phase 3 (cu132 build).**
 
 ---
 

@@ -2720,6 +2720,71 @@ System reverted to original known-working config (no FLASHINFER explicit, no pre
 3. **Investigate num_gpu_blocks=0** — this may be a v0.19.0 bug or Qwen3.5-specific behavior
 4. **Power-cycle before next benchmark session** to establish clean baseline
 
+### Entry 028 — Phase 3: cu132 Image Build and Benchmark (2026-04-13)
+**Date:** 2026-04-13 10:20-15:00 UTC
+**Operator:** Claude Code (implement-plan)
+**Status:** EXPERIMENT — cu132 tested, not adopted
+
+#### Image Build
+
+Built `vllm-cu132-test:latest` (26.1 GB) using eugr's prebuilt wheels:
+- vLLM 0.19.1rc1.dev219+cu132 (460 MB wheel)
+- FlashInfer 0.6.7 precompiled SM121 cubins (558 MB cubin + 237 MB jit_cache + 9 MB python)
+- Base: `nvidia/cuda:13.2.0-devel-ubuntu24.04`
+- PyTorch 2.11.0 from cu130 stable index (same as eugr's Dockerfile)
+- Skipped custom NCCL mesh support (single-node, not needed)
+
+**Build issues:**
+1. First attempt: hung SSH connection (killed)
+2. Second attempt: failed — wheel filenames were renamed during download, stripping Python compatibility tags (`-py3-none-any` etc). `uv pip install` rejected them.
+3. Third attempt: restored original filenames. Success. ~15 min with cached base image layers.
+
+#### cu132 Container Verification
+
+- **vLLM version:** 0.19.1rc1.dev219+g72ff142c3.d20260412
+- **CUDA:** 13.2.0 (container), 13.0 (PyTorch runtime)
+- **FlashInfer:** autotuning enabled (`enable_flashinfer_autotune=True`), autotune ran on startup
+- **Backends:** TRITON MoE, CutlassFP8, FLASHINFER attention (auto-selected)
+- **GPU memory:** 80586 MiB (vs 81082 cu130 — slightly less)
+- **num_gpu_blocks:** 0 → 512 override (same issue as cu130)
+- **Restart count:** 0
+
+#### Benchmark Results
+
+| Metric | cu130 (v0.19.0) | cu132 (v0.19.1rc1.dev219) | Delta |
+|--------|-----------------|--------------------------|-------|
+| c1 tok/s run 1 | 48.5 | 47.5 | -2.1% |
+| c1 tok/s run 2 | 48.6 | 49.6 | +2.1% |
+| c1 tok/s run 3 | 48.6 | 49.7 | +2.3% |
+| **c1 median** | **48.6** | **49.6** | **+2.1%** |
+| c4 aggregate | 130.4 | 132.9 | +1.9% |
+
+**Verdict: cu132 provides +2% improvement — well below the 5% adoption threshold.** The cu132 CUDA toolkit and FlashInfer 0.6.7 precompiled cubins do NOT explain the community's 70-81 tok/s results.
+
+#### Root Cause Analysis: Why 48.5 tok/s, Not 70-81?
+
+After testing MTP=2, FLASHINFER explicit, prefix caching, AND cu132, none produced meaningful improvement. The community results (70-81 tok/s) remain unexplained by any single flag or runtime change. Possible remaining factors:
+
+1. **num_gpu_blocks=0 override to 512** — this is present in ALL configurations tested (cu130 and cu132). The vLLM block calculator returns 0 available blocks, suggesting the model weights consume all GPU memory at 0.65 utilization. The 512 override is a minimum safety net. Previous config had 2466 blocks. This needs investigation.
+
+2. **Community uses `run-recipe.py`** — eugr's recipe runner may set additional env vars, kernel optimizations, or memory management flags not visible in the docker run command.
+
+3. **Community uses different measurement methodology** — Arena benchmarks may use different token lengths, prompt types, or timing methods than our curl-based approach.
+
+4. **Power-cycle state** — the 53.5 tok/s from Entry 022 was post-power-cycle. Today's testing was at 39+ hours uptime with other containers running.
+
+5. **`load-format fastsafetensors`** — community configs use this flag which we haven't tested. May affect model loading but not steady-state throughput.
+
+#### Decision
+
+**cu132 NOT adopted for production.** Reverted to original cu130 config. cu132 image retained on disk for future testing with recipe-based configurations.
+
+#### Recommended Next Steps
+1. **Investigate num_gpu_blocks=0** — this may be the primary performance limiter
+2. **Try eugr's full recipe runner** (`run-recipe.py`) with a Qwen3.5 recipe instead of manual docker run
+3. **Power-cycle the Spark** and re-benchmark to see if 53.5 is achievable again
+4. **Post on the NVIDIA forum** asking joshua.dale.warner for the exact recipe used to achieve 70-81 tok/s
+
 #### Baseline Values Changed
 - `arena_top_overall_tok_s`: 60.51 → 73.33 (Qwen3-Coder-Next-int4-AutoRound, single-node)
 - `forum_last_checked_date`: 2026-04-10 → 2026-04-11

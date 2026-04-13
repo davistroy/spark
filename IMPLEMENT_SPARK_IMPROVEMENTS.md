@@ -295,19 +295,19 @@ Same as Work Item 1.8 — update all config docs with new gpu-memory-utilization
 
 ### Work Item 3.1: Build or pull cu132 image
 
-Option A — use eugr's prebuilt wheels:
-```bash
-# Download wheels from eugr/spark-vllm-docker releases
-# Build custom image incorporating cu132 vLLM + FlashInfer 0.6.7
-```
+**Approach taken:** Minimal Dockerfile using eugr's prebuilt wheels (avoids multi-hour from-source build).
 
-Option B — build from spark-vllm-docker Dockerfile:
-```bash
-cd /home/davistroy/spark-vllm-docker
-git pull
-# Review Dockerfile changes
-# Build with cu132 target
-```
+Downloaded 4 prebuilt wheels from `eugr/spark-vllm-docker` GitHub releases:
+- `vllm-0.19.1rc1.dev219+cu132` (460 MB) — vLLM compiled for CUDA 13.2, SM121
+- `flashinfer_cubin-0.6.7` (558 MB) — precompiled SM121 attention kernels
+- `flashinfer_jit_cache-0.6.7` (237 MB) — JIT cache for FlashInfer
+- `flashinfer_python-0.6.7` (9 MB) — FlashInfer Python bindings
+
+Built `vllm-cu132-test:latest` from `nvidia/cuda:13.2.0-devel-ubuntu24.04` base with:
+- PyTorch 2.11.0 (cu130 stable index, same as eugr)
+- Prebuilt vLLM + FlashInfer wheels
+- ray[default], fastsafetensors, nvidia-nvshmem-cu13
+- Skipped custom NCCL (single-node, not needed)
 
 **Acceptance criteria:** Image built/pulled successfully. Size reasonable (< 30 GB).
 

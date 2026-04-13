@@ -80,16 +80,19 @@ Tailscale is installed and running. The machine is registered as `spark` in the 
 
 ### 6.1 qwen35 — LLM Inference (Port 8000)
 
-The primary LLM serving the Qwen3.5-35B mixture-of-experts model with FP8 quantization.
+The primary LLM serving the Qwen3.5-35B mixture-of-experts model with on-the-fly FP8 quantization.
 
 **Key details:**
-- **Image:** `vllm-node:latest` (custom-built vLLM with FlashInfer for sm_121)
-- **Model:** `Qwen/Qwen3.5-35B-A3B-FP8` (pre-quantized FP8 checkpoint)
+- **Image:** `vllm/vllm-openai:v0.19.0-aarch64-cu130` (stock vLLM v0.19.0, ARM64)
+- **Model:** `Qwen/Qwen3.5-35B-A3B` (on-the-fly FP8 quantization)
 - **Served as:** `qwen3.5-35b`
-- **Network mode:** `host` (binds directly to host port 8000, no port mapping needed)
-- **Max context length:** 8192 tokens
-- **GPU memory utilization:** 0.75
-- **API endpoint:** `http://<spark-lan-ip>:8000/v1`
+- **Max context length:** 32768 tokens
+- **GPU memory utilization:** 0.65
+- **MoE backend:** TRITON (auto-selected)
+- **FP8 kernel:** CutlassFP8ScaledMMLinearKernel (native SM121 support)
+- **Attention backend:** FLASHINFER
+- **Async scheduling:** Enabled (v0.19.0 default)
+- **API endpoint:** `http://192.168.10.32:8000/v1` (WiFi) or `http://192.168.10.33:8000/v1` (Ethernet)
 
 ```bash
 docker run -d \
@@ -97,33 +100,37 @@ docker run -d \
   --restart unless-stopped \
   --gpus all \
   --ipc host \
-  --network host \
-  --shm-size 16g \
-  -v /home/<user>/hf_cache/hub:/root/.cache/huggingface/hub:ro \
-  vllm-node:latest \
-  vllm serve Qwen/Qwen3.5-35B-A3B-FP8 \
+  --shm-size 64gb \
+  -p 8000:8000 \
+  -e VLLM_FLASHINFER_MOE_BACKEND=latency \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/claude/.cache/triton:/root/.triton \
+  vllm/vllm-openai:v0.19.0-aarch64-cu130 \
+  Qwen/Qwen3.5-35B-A3B \
+    --served-model-name qwen3.5-35b \
     --port 8000 \
     --host 0.0.0.0 \
-    --served-model-name qwen3.5-35b \
-    --max-model-len 8192 \
-    --gpu-memory-utilization 0.75 \
+    --max-model-len 32768 \
+    --gpu-memory-utilization 0.65 \
+    --quantization fp8 \
     --kv-cache-dtype fp8 \
-    --enable-prefix-caching \
-    --max-num-batched-tokens 4192 \
-    --max-num-seqs 64 \
-    --enable-chunked-prefill \
-    --structured-outputs-config '{"backend":"xgrammar"}' \
-    --default-chat-template-kwargs '{"enable_thinking":false}' \
-    --load-format fastsafetensors \
-    --disable-log-stats
+    --reasoning-parser qwen3 \
+    --language-model-only \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder
 ```
 
 **Notes:**
-- Uses host networking (no `-p` port mapping)
-- HF cache mounted read-only
-- `--enforce-eager` NOT set in current config (was previously needed; may have been resolved in the custom vLLM build)
-- Model load time: ~90 seconds
-- Pre-quantized FP8 model used instead of on-the-fly quantization
+- Upgraded from `vllm-custom:sm121-inject` (v0.17.0rc1) on 2026-04-11
+- v0.19.0 includes native SM121 CMake fix (#38126) — no more custom .so injection needed
+- TRITON MoE auto-selected over Marlin (tuned via PR #37340, +28% aggregate throughput)
+- CUTLASS FP8 kernel has native SM121 support (no "no native FP8" warning)
+- `VLLM_TEST_FORCE_FP8_MARLIN=1` removed — auto-select is faster on v0.19.0
+- `--no-async-scheduling` removed — async scheduling enabled by default
+- Pre-quantized `Qwen3.5-35B-A3B-FP8` model hangs on v0.19.0 — do NOT use
+- Triton cache persisted via volume mount; first startup after image change takes ~240s (kernel compilation)
+- Subsequent restarts use cached kernels (~90s)
+- Rollback image: `vllm-custom:sm121-inject` (still on disk)
 
 ### 6.2 qwen3-embed — Embedding Model (Port 8001)
 

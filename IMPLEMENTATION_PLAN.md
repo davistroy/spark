@@ -104,8 +104,8 @@ Qwen3.6-35B-A3B uses the identical GDN hybrid architecture as Qwen3.5 (`model_ty
 
 **Critical constraint:** `--served-model-name qwen3.5-35b` is hardcoded in 6+ downstream consumers (contact-center-lab config, CFA scripts, Grafana dashboard). Must preserve during experiment.
 
-### Work Item 1.1: Download Qwen3.6 weights (non-disruptive)
-**Status: PENDING**
+### Work Item 1.1: Download Qwen3.6 weights (non-disruptive) ✅ Completed 2026-04-23
+**Status: COMPLETE 2026-04-23** — 67 GB, 40 blobs (26 safetensor shards + config/tokenizer files) downloaded to `/home/claude/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B/`, moved to `/home/davistroy/.cache/huggingface/hub/`, and `chown -R root:root` applied. Snapshot hash `53c43178507d69762986fbfa314f6e8d4d859409`. Ready for container swap (Work Item 1.2 integrity check).
 
 ```bash
 ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net \

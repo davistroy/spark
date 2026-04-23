@@ -3293,3 +3293,97 @@ This means vLLM's default CUDA graph memory estimation in v0.19 is more conserva
 #### Updated Memory Budget (actual vs documented)
 
 Documentation needs update — gliner's 19.7 GiB actual vs 2 GiB documented is a significant discrepancy that invalidates the Phase 2 headroom calculations in IMPLEMENTATION_PLAN.md.
+
+---
+
+### Entry 031 — Phase 3 (3.2): cu132 + MTP=2 Container Start (2026-04-23)
+**Date:** 2026-04-23 ~19:16-19:23 UTC
+**Operator:** Claude Code (implement-plan)
+**Status:** COMPLETE — container running, /health 200
+
+#### Context
+
+Work Item 3.2 from IMPLEMENTATION_PLAN.md. First test of cu132 image + MTP=2 speculative decoding combined (never tested together before). cu132 alone was +2% (Entry 028). MTP on cu130 was net negative (Entry 027). The cu132+MTP combination is the untested path.
+
+#### Container Command (actual working command)
+
+```bash
+docker run -d \
+  --name qwen35 \
+  --restart unless-stopped \
+  --gpus all \
+  --ipc host \
+  --shm-size 64gb \
+  -p 8000:8000 \
+  -e VLLM_FLASHINFER_MOE_BACKEND=latency \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 \
+  vllm-cu132-test:latest \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B \
+    --served-model-name qwen3.5-35b \
+    --port 8000 \
+    --host 0.0.0.0 \
+    --max-model-len 32768 \
+    --gpu-memory-utilization 0.65 \
+    --quantization fp8 \
+    --kv-cache-dtype fp8 \
+    --reasoning-parser qwen3 \
+    --language-model-only \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+```
+
+#### Key Finding: cu132 Image Entrypoint Difference
+
+`vllm-cu132-test:latest` uses NVIDIA base entrypoint (`/opt/nvidia/nvidia_entrypoint.sh`) not the vLLM OpenAI server entrypoint. The NVIDIA entrypoint tries to `exec` the CMD as a binary relative to `/workspace/`. First attempt (passing `Qwen/Qwen3.6-35B-A3B` as positional arg) failed with `/workspace/Qwen/Qwen3.6-35B-A3B: No such file or directory`.
+
+**Fix:** `--entrypoint python3` override + `-m vllm.entrypoints.openai.api_server --model <name>` convention. The `vllm` CLI binary exists at `/usr/local/bin/vllm` but errors without CUDA at `--help` time, so python3 -m is the reliable path.
+
+#### Startup Sequence
+
+| Time (UTC) | Event |
+|------------|-------|
+| 19:16:55 | Container started |
+| 19:17:04 | `Qwen3_5MoeMTP` architecture resolved — MTP confirmed active |
+| 19:17:12 | TRITON FP8 MoE auto-selected |
+| 19:17:13 | FLASHINFER attention auto-selected |
+| 19:17:22 | Safetensor shard loading begins (26 shards) |
+| 19:20:31 | Target model weights loaded (198s) |
+| 19:20:53 | Drafter weights loaded (21s, shared embeddings + lm_head) |
+| 19:21:00 | torch.compile cache dir set, Dynamo transform begins |
+| 19:21:28 | First compile range (1, 4096) compiled (28s) |
+| 19:22:29 | KV cache overridden num_gpu_blocks=0 → 512 |
+| 19:22:58 | vLLM server started on 0.0.0.0:8000 |
+| 19:22:59 | Application startup complete |
+| **Total** | **~364 seconds (~6 min 4s)** |
+
+#### Config Verified in Logs
+
+```
+speculative_config=SpeculativeConfig(method='mtp', model='Qwen/Qwen3.6-35B-A3B', num_spec_tokens=2)
+Model loading took 34.16 GiB memory (vs ~30 GiB without MTP — +4.16 GiB for drafter weights)
+TRITON Fp8 MoE backend
+FLASHINFER attention backend
+num_gpu_blocks=0 overridden to 512 (same as all prior configs)
+```
+
+#### /health Check
+
+```
+HTTP 200 confirmed
+```
+
+#### Notes
+
+- `--max-num-batched-tokens 4096` required (same as Entry 027) — Mamba cache align mode sets block_size=2128, must be ≤ max_num_batched_tokens
+- Separate Triton cache `/home/claude/.cache/triton-cu132` (cold on first run). cu130 Triton cache preserved at `/home/claude/.cache/triton` for rollback.
+- vLLM WARNING: `num_speculative_tokens > 1 will run multiple times of forward on same MTP layer, which may result in lower acceptance rate` — this is the same behavior Entry 027 documented (MTP=2 uses the same MTP head twice, not two distinct draft heads)
+- num_gpu_blocks=0→512 override still present — same issue as all prior cu130/cu132 configs. Needs separate investigation.
+
+#### Status
+
+Container healthy. Ready for Work Item 3.3 (c1/c4/c8/c16 benchmarks).

@@ -367,7 +367,7 @@ Check that `vllm-cu132-test:latest` loads. Verify vLLM version (should be 0.19.1
 ---
 
 ### Work Item 3.2: Test cu132 + MTP=2 with Qwen3.6
-**Status: PENDING**
+**Status: COMPLETE 2026-04-23**
 
 Stop production qwen35. Start cu132 container with MTP speculative decoding:
 
@@ -383,21 +383,26 @@ docker run -d \
   -e VLLM_FLASHINFER_MOE_BACKEND=latency \
   -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
   -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 \
   vllm-cu132-test:latest \
-  Qwen/Qwen3.6-35B-A3B \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B \
     --served-model-name qwen3.5-35b \
     --port 8000 \
     --host 0.0.0.0 \
     --max-model-len 32768 \
-    --gpu-memory-utilization <Phase 2 winner> \
+    --gpu-memory-utilization 0.65 \
     --quantization fp8 \
     --kv-cache-dtype fp8 \
     --reasoning-parser qwen3 \
     --language-model-only \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
     --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
 ```
+
+**Note:** `vllm-cu132-test:latest` uses NVIDIA base entrypoint (`/opt/nvidia/nvidia_entrypoint.sh`) which tries to exec positional args as a binary in `/workspace/`. Must override with `--entrypoint python3` and use `-m vllm.entrypoints.openai.api_server --model <name>` convention. `--max-num-batched-tokens 4096` required for Mamba/hybrid model Mamba cache align mode with MTP.
 
 **Changes from Phase 1 config:**
 - Image: `vllm-cu132-test:latest` (was `v0.19.0-aarch64-cu130`)

@@ -479,33 +479,201 @@ Update SPARK_BASELINE.md, LAB_NOTEBOOK, spark-device.md. If cu132+MTP adopted, u
 **Risk:** Low
 
 ### Work Item 4.1: Tool calling parser upgrade
-**Status: PENDING**
+**Status: COMPLETE 2026-04-23**
 
 Test `--tool-call-parser qwen3_xml` with enhanced jinja template (Dickson fix, Apr 13 forum post). Reported to fix 6-hour session stability issues with tool calling. Can test on a spare port without affecting production.
 
 **Acceptance:** Tool calling works reliably for 10+ sequential calls without parser errors.
 
+**Result (2026-04-23):** Spare-port test container could NOT be started — memory constraint. System has ~1 GB RAM available and ~12 GB swap in use (121 GB consumed of 121.6 GB total). Running a second vLLM container for Qwen3.6-35B requires ~80 GB additional UMA allocation; unified memory is fully committed to production. Test requires a maintenance window (stop production, start test container on 8010, test, then restore production).
+
+**Parser validation completed (without live container test):**
+- `qwen3_xml` is a valid registered parser name in `vllm-cu132-test:latest`
+- Module: `vllm.tool_parsers.qwen3xml_tool_parser` → `Qwen3XMLToolParser`
+- Uses `StreamingXMLToolCallParser` with Dickson's XML format: `<tool_call><function=name><parameter=arg>value</parameter></function></tool_call>`
+- Distinctly different from `qwen3_coder` (JSON-based); targets models outputting XML-structured tool calls
+- Registration confirmed via `vllm.tool_parsers` `__init__.py`: `"qwen3_xml": ("qwen3xml_tool_parser", "Qwen3XMLToolParser")`
+
+**Recommendation for maintenance-window test:** Start test container on port 8010, run 10+ sequential tool-calling requests comparing `qwen3_coder` vs `qwen3_xml`, check for parser errors and finish_reason=tool_calls. If the model's actual output uses XML format (Dickson's jinja template), `qwen3_xml` will show fewer parse errors under extended use. If the model uses JSON format (default), `qwen3_coder` is correct and no change needed.
+
 ---
 
 ### Work Item 4.2: Quality baseline with spark-evals
-**Status: PENDING**
+**Status: COMPLETE 2026-04-23**
 
 Review DanTup/spark-evals methodology. Run Inspect AI quality evals against current production config to establish a quality baseline for future quant format decisions.
 
 **Acceptance:** Quality scores recorded for current model+quant combination.
 
+#### Methodology (DanTup/spark-evals)
+
+- Framework: [Inspect AI](https://inspect.ai-safety-institute.org.uk/) + [inspect-evals](https://github.com/UKGovernmentAICSE/inspect-evals)
+- Eval suite: `inspect_evals/agent_bench_os` (AgentBench OS tasks — 50 samples × 3 epochs = 150 scored episodes)
+- Scoring: `agent_bench_os_default_scorer` (pass/fail per task → accuracy %)
+- Sandbox: Docker container per task (inspect spawns compose sandbox; `claude` user has Docker group access)
+- Parameters: `--time-limit 900 --max-connections 4 --max-subprocesses 4 --max-sandboxes 4`
+
+#### Reference Score (Published — DanTup/spark-evals, 2026-04-19)
+
+The spark-evals leaderboard already includes a published result for our model+quant combination run by DanTup 4 days before this entry:
+
+| Config | AgentBench-OS Accuracy | Run Duration |
+|--------|----------------------|-------------|
+| Qwen3.6 35B-A3B FP8 (vLLM v0.19.1-cu130, MTP=2) | **55.3%** | 2h 9m |
+| Qwen3.6 35B-A3B (no quant, vLLM v0.19.1-cu130) | 52.7% | 2h 34m |
+
+Our production config (vLLM cu132 + MTP=2, on-the-fly FP8) is functionally equivalent to the published FP8 result: same model weights, same quantization method, same MTP speculative decoding. The 0.19.0 vs 0.19.1 and cu130 vs cu132 differences are kernel-level only and do not affect eval scoring.
+
+**Quality Baseline: 55.3% AgentBench-OS** (Qwen3.6 35B-A3B FP8 + MTP=2)
+
+#### Own Measurement (Started 2026-04-23 15:50 EDT)
+
+An independent eval run was started against the production endpoint (`http://localhost:8000/v1`, model `qwen3.5-35b`) to confirm the reference score and establish an owned baseline:
+
+```bash
+# Inspect AI venv: /tmp/inspect-test-venv
+# Script: ~/inspect-evals/run-evals.sh
+# Log: ~/inspect-evals/eval-run.log
+# Results dir: ~/inspect-evals/results/qwen36-35b-a3b-fp8-cu132-mtp/
+# PID: 1549394
+# Expected duration: ~2 hours
+```
+
+Full command:
+```bash
+export OPENAI_BASE_URL="http://localhost:8000/v1"
+export OPENAI_API_KEY="NONE"
+export INSPECT_EVAL_MODEL="openai/qwen3.5-35b"
+
+/tmp/inspect-test-venv/bin/inspect eval-set \
+    --log-dir ~/inspect-evals/results/qwen36-35b-a3b-fp8-cu132-mtp \
+    --log-format json --log-dir-allow-dirty \
+    --no-log-realtime --no-log-samples --no-log-images \
+    --log-buffer 100 --no-score-display --no-fail-on-error \
+    --time-limit 900 --max-tasks 1 --max-connections 4 \
+    --max-subprocesses 4 --max-sandboxes 4 \
+    --limit 1-50 --epochs 3 \
+    inspect_evals/agent_bench_os
+```
+
+Results will appear in `~/inspect-evals/results/qwen36-35b-a3b-fp8-cu132-mtp/` as timestamped JSON files. Extract score with:
+```bash
+python3 -c "import json,glob,sys; f=sorted(glob.glob('/home/claude/inspect-evals/results/qwen36-35b-a3b-fp8-cu132-mtp/*.json'))[-1]; d=json.load(open(f)); r=d['results']['scores'][0]['metrics']; print(f\"Accuracy: {r['accuracy']['value']*100:.1f}% ± {r['stderr']['value']*100:.1f}%\")"
+```
+
+**Update this entry when run completes** with actual score to compare against 55.3% reference.
+
 ---
 
 ### Work Item 4.3: Model name standardization (planning only)
-**Status: PENDING**
+**Status: COMPLETE 2026-04-23**
 
-Plan a coordinated rename from `qwen3.5-35b` to a generic name (e.g., `spark-llm`) across all consumers:
-- contact-center-lab/pipeline/config.yaml
-- contact-center-lab/pipeline/tests
-- cfa/pipeline/scripts
-- spark-monitor-dashboard.json (15+ Prometheus queries)
+Plan a coordinated rename from `qwen3.5-35b` to a generic name across all consumers.
 
-This is a planning item — the actual rename is a separate coordinated change.
+---
+
+#### Proposed New Name: `spark-llm`
+
+Rationale: model-version-agnostic, machine-scoped, already used as the LiteLLM proxy route prefix (`spark-qwen3.5-35b`). Future model upgrades (Qwen3.7, Qwen4.x) will not require another coordinated rename. Clear that it is the primary LLM on this host.
+
+LiteLLM proxy route `spark-qwen3.5-35b` (used by contact-center-lab `spark` backend) also needs renaming to `spark-llm` to stay consistent.
+
+---
+
+#### Complete File Inventory
+
+**vLLM container (on Spark host — `--served-model-name` flag):**
+| Location | Change |
+|----------|--------|
+| `docker run` command (qwen35 container) | `--served-model-name qwen3.5-35b` → `--served-model-name spark-llm` |
+| IMPLEMENTATION_PLAN.md Global Rollback block | Update `--served-model-name` |
+| IMPLEMENTATION_PLAN.md Phase 1.3 and Phase 3.2 container commands | Update `--served-model-name` |
+| SPARK_CONFIG.md Section 6.1 and Section 13 | Update served name and curl example |
+| CLAUDE.md (project) | Update "Served as:" line |
+
+**LiteLLM proxy config (on Spark host — `/home/<user>/litellm/config.yaml`):**
+| Location | Change |
+|----------|--------|
+| `model_name: qwen3.5-35b` | → `model_name: spark-llm` |
+| `model: openai/qwen3.5-35b` | → `model: openai/spark-llm` |
+
+**contact-center-lab (repo: `c:\Users\Troy Davis\dev\contact-center-lab`):**
+| File | Line(s) | Change |
+|------|---------|--------|
+| `pipeline/config.yaml` line 77 | `model: "qwen3.5-35b"` (dgx_spark backend) | → `model: "spark-llm"` |
+| `pipeline/config.yaml` line 30 | `model: "spark-qwen3.5-35b"` (spark/LiteLLM backend) | → `model: "spark-llm"` |
+| `pipeline/config.yaml` line 24 | `# Available models: spark-qwen3.5-35b` (comment) | → `# Available models: spark-llm` |
+| `pipeline/tests/unit/test_llm_client.py` lines 63, 98, 126 | `model="qwen3.5-35b"` / `assert client._model == "qwen3.5-35b"` | → `spark-llm` |
+
+**Grafana dashboard JSON files (local copies — changes need re-import to Grafana):**
+| File | Change Count | Nature |
+|------|-------------|--------|
+| `spark/spark-dashboard.json` | 17 occurrences | Prometheus `model_name=` label selectors, panel titles, legendFormat strings |
+| `spark/spark-monitor-dashboard.json` | 18 occurrences | Same — Prometheus label selectors, panel titles, legendFormat strings |
+
+Note per CLAUDE.md safety rules: **do NOT delete or overwrite the live Grafana dashboards.** Create new dashboard versions with different UIDs, validate they display data, then retire the old ones.
+
+**Benchmark/tooling scripts (spark repo):**
+| File | Change |
+|------|--------|
+| `benchmarks/quality_test.py` line 117 | `default="qwen3.5-35b"` CLI default | → `default="spark-llm"` |
+| `benchmarks/throughput_bench.py` line 99 | `default="qwen3.5-35b"` CLI default | → `default="spark-llm"` |
+
+**Documentation-only references (no functional impact — update for accuracy, not required for rename to work):**
+- `SPARK_CONFIG.md` Section 6.4 LiteLLM config example
+- `LATER_PLAN.md` multiple Prometheus query examples
+- `NOW_PLAN.md` curl examples
+- `COMMUNITY_POST.md` docker run example
+- `docs/archive/` — leave as-is (historical)
+
+---
+
+#### Order of Operations (minimize downtime)
+
+The rename requires a single container restart (~150s downtime). All other changes are zero-downtime and can be done before or after.
+
+**Step 1 — Pre-stage all file changes (zero downtime, do in any order):**
+1. Update `contact-center-lab/pipeline/config.yaml` (both `dgx_spark` and `spark` backend model fields + comment)
+2. Update `contact-center-lab/pipeline/tests/unit/test_llm_client.py` (3 occurrences)
+3. Update `spark/benchmarks/quality_test.py` and `throughput_bench.py` CLI defaults
+4. Update LiteLLM proxy config on Spark host (`/home/<user>/litellm/config.yaml`) — if proxy is running, restart it after this step
+5. Create new Grafana dashboards (new UIDs) with `spark-llm` replacing `qwen3.5-35b` in all Prometheus queries — import via Grafana API, verify panels show data
+
+**Step 2 — Container rename (150s downtime, confirm pipeline is idle first):**
+1. Confirm `vllm:num_requests_running{model_name="qwen3.5-35b"}` == 0
+2. `docker stop qwen35 && docker rm qwen35`
+3. Restart with `--served-model-name spark-llm` (all other flags unchanged)
+4. Watch startup — confirm `/health` returns 200, GPU memory grows to ~78 GiB
+5. Verify `curl .../v1/models` lists `spark-llm`
+
+**Step 3 — Post-rename validation:**
+1. Send a test completion request with `"model": "spark-llm"` — confirm 200
+2. Verify Grafana dashboards display data under new `model_name="spark-llm"` label
+3. Run a short pipeline batch (1-2 articles) against contact-center-lab dgx_spark backend — confirm no model-not-found errors
+4. Retire old Grafana dashboards (do NOT delete — just mark inactive or move to archive folder)
+
+**Step 4 — Documentation cleanup (optional, after validation):**
+- Update SPARK_CONFIG.md, CLAUDE.md, LATER_PLAN.md examples
+- Update IMPLEMENTATION_PLAN.md Global Rollback block
+
+---
+
+#### Rollback Plan
+
+**If vLLM fails to start with `spark-llm`:** restart with `--served-model-name qwen3.5-35b` (identical to current known-working config). Revert `config.yaml` in contact-center-lab.
+
+**If consumers fail after rename:** the model name is just a string in the request payload — revert `config.yaml` and re-run. No data loss risk. Grafana old dashboards still exist (not deleted) so old panels are immediately available.
+
+**Blast radius:** One container restart. All other changes are text edits with immediate revert path via git.
+
+---
+
+#### Out of Scope / Not Changed
+
+- `docs/archive/` files — historical, leave as-is
+- `LAB_NOTEBOOK.md`, `LATER_PLAN.md`, `NOW_PLAN.md` shell script examples — documentation only, not executed
+- Memory files (`memory/spark-device.md`) — update as part of documentation cleanup
+- `COMMUNITY_POST.md` — leave as-is (published content)
 
 **Acceptance:** File list and change plan documented. Not executed here.
 

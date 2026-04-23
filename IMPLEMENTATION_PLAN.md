@@ -176,23 +176,25 @@ Monitor startup: watch for Triton cache hits (warm = ~150s) vs recompilation (co
 
 ---
 
-### Work Item 1.4: Throughput benchmark (c1, c4, c8)
-**Status: PENDING**
+### Work Item 1.4: Throughput benchmark (c1, c4, c8) — Completed 2026-04-23
+**Status: COMPLETE 2026-04-23**
 
 Run identical methodology to Entry 022 (post-power-cycle clean benchmark).
 
-| Metric | Baseline (Qwen3.5) | Pass Criterion |
-|--------|-------------------|----------------|
-| c1 tok/s | 53.5 | >= 50 (within 5%) |
-| c4 aggregate | 140.4 | >= 126 (within 10%) |
-| c8 aggregate | 216.0 | >= 194 (within 10%) |
+| Metric | Baseline (Qwen3.5) | Qwen3.6 Result | Delta | Pass Criterion | Result |
+|--------|-------------------|----------------|-------|----------------|--------|
+| c1 tok/s | 53.5 | 42.5 | -20.6% | >= 50 (within 5%) | **FAIL** |
+| c4 aggregate | 140.4 | 140.7 | +0.2% | >= 126 (within 10%) | PASS |
+| c8 aggregate | 216.0 | 178.2 | -17.5% | >= 194 (within 10%) | **FAIL** |
 
-**Acceptance:** All three pass criteria met.
+**Acceptance:** All three pass criteria met. — **NOT MET** (c1 and c8 fail).
+
+**Notes (2026-04-23):** Benchmarked via `throughput_bench.py` (3 runs each, 600 tokens, same prompt as Entry 022). c4 aggregate holds steady (+0.2%) but c1 per-request and c8 aggregate are both ~17-21% below baseline. This is a significant throughput regression at single-request and high-concurrency levels. Proceed to Work Item 1.6 (adopt/rollback gate) — c1 and c8 fail the pass criteria; rollback to Qwen3.5 should be evaluated unless quality gains justify the throughput loss.
 
 ---
 
-### Work Item 1.5: Quality smoke test
-**Status: PENDING**
+### Work Item 1.5: Quality smoke test — Completed 2026-04-23
+**Status: COMPLETE 2026-04-23**
 
 5 representative prompts:
 1. JSON compliance — structured output with required fields
@@ -200,6 +202,18 @@ Run identical methodology to Entry 022 (post-power-cycle clean benchmark).
 3. Reasoning — chain-of-thought with `<think>` block
 4. Tool calling — function call via `qwen3_coder` parser
 5. Long-form generation — technical writing quality
+
+**Results (2026-04-23, Qwen3.6-35B-A3B on vLLM v0.19.0-cu130):**
+
+| # | Category | Result | Notes |
+|---|----------|--------|-------|
+| 1 | JSON output | PASS | Valid JSON object, all 3 required keys (name, age, hobbies), hobbies exactly 3 strings. 36 completion tokens. |
+| 2 | Instruction following | PASS | All 4 constraints met: numbered 1-3, all items ≤8 words (well under 20), present-tense verbs (Boosts/Enhances/Improves), no forbidden words. |
+| 3 | Reasoning | PASS | Correct answer 5:00 PM. Full step-by-step work + verification. Thinking chain active and coherent. |
+| 4 | Tool calling | PASS | `get_current_weather` selected, valid JSON args `{location: "Boston, MA", unit: "fahrenheit"}`, finish_reason `tool_calls`. |
+| 5 | Long-form | PASS | 294 words (>200 required), all 4 technical points covered (Q/K/V roles, score computation, scaling factor, multi-head intuition), coherent and accurate. |
+
+**Note:** `enable_thinking` must be passed at the request top level (not inside `extra_body`). Placing it in `extra_body.chat_template_kwargs` does not suppress thinking and causes token exhaustion on short budgets.
 
 **Acceptance:** No structural regressions (broken JSON, missed instructions, malformed tool calls). Minor wording differences acceptable.
 

@@ -3124,3 +3124,53 @@ Uptime: 9 days
 
 #### No Changes Made to Spark
 Investigation only. Model weights not yet downloaded.
+
+---
+
+### Entry 034 — Qwen3.6 Throughput Benchmark (c1, c4, c8) (2026-04-23)
+**Date:** 2026-04-23
+**Operator:** Claude Code (remote SSH to Spark)
+**Status:** COMPLETE — results mixed, pass criteria NOT fully met
+
+#### Objective
+Establish throughput baseline for Qwen3.6-35B-A3B running under the same config as Qwen3.5. Compare against Entry 022 baseline (53.5/140.4/216.0 tok/s at c1/c4/c8).
+
+#### Setup
+- Container: `qwen35` running `Qwen/Qwen3.6-35B-A3B` via `vllm/vllm-openai:v0.19.0-aarch64-cu130`
+- Served as: `qwen3.5-35b`
+- All flags identical to Qwen3.5 production config
+- Tool: `throughput_bench.py` (3 runs each, 600 tokens, prompt: "Count from 1 to 600 one per line. Output only numbers.")
+- System state: idle (0 requests running), Spark online
+
+#### Results
+
+| Metric | Baseline (Qwen3.5, Entry 022) | Qwen3.6 Result | Delta | Pass Criterion | Status |
+|--------|-------------------------------|----------------|-------|----------------|--------|
+| c1 per-req tok/s | 53.5 | 42.5 | -20.6% | >= 50 | **FAIL** |
+| c4 aggregate tok/s | 140.4 | 140.7 | +0.2% | >= 126 | PASS |
+| c8 aggregate tok/s | 216.0 | 178.2 | -17.5% | >= 194 | **FAIL** |
+
+Raw numbers from benchmark run:
+```
+c 1: per-req=  42.5 tok/s  aggregate=  42.5 tok/s  batch_time=14.4s  (3 runs)
+c 4: per-req=  35.2 tok/s  aggregate= 140.7 tok/s  batch_time=17.5s  (3 runs)
+c 8: per-req=  22.3 tok/s  aggregate= 178.2 tok/s  batch_time=27.7s  (3 runs)
+```
+
+#### Analysis
+
+c4 aggregate is rock-solid (+0.2%) — identical throughput under batch load. The regression is concentrated in single-request latency and high-concurrency aggregate:
+
+- **c1 (-20.6%):** Single-request throughput is ~11 tok/s slower. Qwen3.6 weights are ~5 GB larger (vision encoder in the checkpoint adds memory load overhead even though `--language-model-only` skips the vision path at inference). Possible explanations: (1) larger model file → more GPU memory consumed for non-active vision weights → slight KV cache pressure; (2) Qwen3.6 text generation path may have minor changes. Note: prior experiments showed 53.5 tok/s was a post-power-cycle pristine state. If Qwen3.5 were benchmarked now, it might show ~48-50 tok/s (Entry 027 context: "53.5 tok/s baseline from Entry 022 is NOT reproducible today").
+- **c8 (-17.5%):** Same root cause — at 8 concurrent requests, the pressure amplifies. If memory bandwidth is tighter, the slope from c4 → c8 degrades more sharply.
+
+#### Pass Criteria Assessment
+
+Two of three criteria fail. Per Work Item 1.6 gate:
+- c1 < 50 → FAIL criterion
+- c8 < 194 → FAIL criterion
+
+However, the quality improvement in Qwen3.6 (SWE-bench +8pts, AIME26 reasoning) may justify the throughput trade-off for the pipeline use case. This is a decision gate for Work Item 1.6 — user judgment required on quality vs throughput trade-off before adopt/rollback.
+
+#### Next Step
+Work Item 1.5 (quality smoke test) to assess whether quality gains justify throughput regression. Then Work Item 1.6 adopt/rollback gate.

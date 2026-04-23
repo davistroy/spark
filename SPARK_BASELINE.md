@@ -1,24 +1,24 @@
 # Spark Performance Baseline
 
-Last updated: 2026-04-13
+Last updated: 2026-04-23
 Last recon: 2026-04-15 (Entry 030)
 
 ## Current Config
 | Field | Value |
 |-------|-------|
 | image | vllm/vllm-openai:v0.19.0-aarch64-cu130 |
-| model | Qwen/Qwen3.5-35B-A3B (on-the-fly FP8) |
+| model | Qwen/Qwen3.6-35B-A3B (on-the-fly FP8) — adopted 2026-04-23, snapshot 53c43178507d69762986fbfa314f6e8d4d859409 |
 | vllm_version | v0.19.0 |
 | moe_backend | TRITON (auto-selected) |
 | fp8_kernel | CutlassFP8ScaledMMLinearKernel |
 | attention_backend | FLASHINFER |
 | async_scheduling | Enabled |
 | chunked_prefill | Enabled |
-| single_request_tok_s | 53.5 (clean, post-power-cycle) |
-| c4_aggregate_tok_s | 140.4 |
-| c8_aggregate_tok_s | 216.0 |
-| c16_aggregate_tok_s | 303.1 |
-| startup_time | ~150s (warm Triton cache) |
+| single_request_tok_s | 42.5 (Qwen3.6, 2026-04-23 benchmark) |
+| c4_aggregate_tok_s | 140.7 |
+| c8_aggregate_tok_s | 178.2 |
+| c16_aggregate_tok_s | — (not re-benchmarked) |
+| startup_time | 187s (warm Triton cache) |
 
 ## Previous Config (rollback target)
 | Field | Value |
@@ -64,7 +64,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 |-------|-------|
 | vllm_last_checked_version | v0.17.1 |
 | vllm_latest_observed | v0.19.0 (2026-04-03, HIGH priority — Qwen3.5 FP8 optimizations + SM120/121 support) |
-| qwen_current_model | Qwen/Qwen3.5-35B-A3B |
+| qwen_current_model | Qwen/Qwen3.6-35B-A3B (adopted 2026-04-23) |
 
 ## spark-vllm-docker Tracking
 | Field | Value |

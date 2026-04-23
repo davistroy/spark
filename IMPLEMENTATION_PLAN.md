@@ -244,8 +244,8 @@ Run identical methodology to Entry 022 (post-power-cycle clean benchmark).
 
 ---
 
-### Work Item 1.7: Update documentation (adopt path only)
-**Status: PENDING**
+### Work Item 1.7: Update documentation (adopt path only) — Completed 2026-04-23
+**Status: COMPLETE 2026-04-23**
 
 - **SPARK_BASELINE.md:** model field, benchmark numbers, version tracking
 - **LAB_NOTEBOOK.md:** full experiment entry (download, swap, benchmarks, quality, decision)

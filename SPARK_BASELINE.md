@@ -1,7 +1,7 @@
 # Spark Performance Baseline
 
 Last updated: 2026-04-13
-Last recon: 2026-04-13 (Entry 025)
+Last recon: 2026-04-15 (Entry 030)
 
 ## Current Config
 | Field | Value |
@@ -69,13 +69,13 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 ## spark-vllm-docker Tracking
 | Field | Value |
 |-------|-------|
-| svd_last_checked_date | 2026-04-13 (eugr/spark-vllm-docker — v0.19.1rc1.dev219+cu132, FlashInfer 0.6.7, Qwen3.5-397B recipe added) |
+| svd_last_checked_date | 2026-04-15 (eugr/spark-vllm-docker — v0.19.1rc1.dev241+cu132, FlashInfer 0.6.7, InstantTensor added) |
 
 ## Forum Tracking
 | Field | Value |
 |-------|-------|
-| forum_last_checked_date | 2026-04-13 |
-| forum_posts_since_041 | 11 topics since Apr 11 (MTP=2 optimizations, MiniMax M2.7, Qwen3.5-122B 51tok/s, spark-evals) |
+| forum_last_checked_date | 2026-04-15 |
+| forum_posts_since_041 | 5 new posts since Apr 13 (DFlash LLM discussion, Gemma-4 guide, Qwen3.5 tool-calling fix, vLLM preference thread) |
 
 ## Gemma 4 Reference Numbers (2026-04-11, Entries 020-021)
 | Model | Quant | c1 tok/s | c8 agg | c16 agg | Notes |
@@ -115,3 +115,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 - FlashInfer PR #2913 GDC fix: included in vLLM 0.19.0 — no longer a blocker
 - Qwen4 monitor: no announcement as of 2026-04-10, prediction markets suggest before July 2026
 - Forum stream loading + gather-free Triton decode techniques: may be relevant for multi-request scenarios (c16, c32)
+- **[RESOLVED]** DFlash LLM (diffusion-based speculative decoding): NOT ACTIONABLE — requires gpu_memory_utilization ≤0.60 (ours is 0.65), FP8 untested, realistic gains 5-10% on reasoning workloads. Community: "not that good most of the time."
+- **[NEW]** Qwen3.5 tool calling fix: `--tool-call-parser qwen3_xml` + enhanced jinja template. 6-hour sessions confirmed working. Test at next maintenance window. (Dickson, Apr 13)
+- **[NEW]** Gemma 4 NVFP4 at 45 tok/s (vs our 38.9 FP8): delta explained by NVFP4 quantization, not config. Guided JSON still untested. Revisit when vLLM #39130 fixes structured output.
+- **[NEW]** InstantTensor added to eugr/spark-vllm-docker (Apr 14) — operator fusion library, monitor for perf claims

@@ -2789,3 +2789,338 @@ After testing MTP=2, FLASHINFER explicit, prefix caching, AND cu132, none produc
 - `arena_top_overall_tok_s`: 60.51 → 73.33 (Qwen3-Coder-Next-int4-AutoRound, single-node)
 - `forum_last_checked_date`: 2026-04-10 → 2026-04-11
 - `svd_last_checked_date`: 2026-04-10 → 2026-04-11
+
+---
+
+### Entry 029 — Spark Recon Check 1: Arena Leaderboard (2026-04-15)
+
+**Date:** 2026-04-15 01:15 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Leaderboard Scan (tg128, concurrency 1, single-node)
+
+**Filtered results:**
+- Total single-node entries: 33
+- FP8 quantized single-node entries: 12
+- FP8 Qwen3.5 entries: 11
+
+**Top FP8 Qwen3.5 single-node entry:**
+- **Rank 14:** Huihui-Qwen3.5-35B-A3B-abliterated (vLLM)
+- **Creator:** Artyom (NVIDIA forums)
+- **Throughput:** 52.32 tok/s (tg128, c1)
+- **Delta vs baseline 53.5:** -2.2% (within noise, below threshold)
+- **Quantization:** FP8 on-the-fly
+- **Key config:**
+  - Model: huihui-ai/Huihui-Qwen3.5-35B-A3B-abliterated
+  - gpu_memory_utilization: 0.7
+  - max_model_len: 262144
+  - max_num_batched_tokens: 32768
+  - attention_backend: flashinfer
+  - enable_prefix_caching: true
+  - kv_cache_dtype: fp8
+  - load_format: fastsafetensors
+  - distributed_executor_backend: ray
+
+**Other notable FP8 Qwen3.5 entries:**
+- Rank 15: Qwen3.5-35B-A3B-FP8 — 50.75 tok/s (pre-quantized checkpoint)
+- Rank 17: Qwen3.5-35B-A3B-Claude-4.6-Opus-Reasoning-Distilled — 50.38 tok/s
+- Ranks 18-26: Various Qwen3.5-35B-A3B-FP8 variants ranging 49.99 to 45.30 tok/s
+
+**Top overall single-node entry:**
+- **Rank 1:** Qwen3.5-0.8B (sglang, BF16)
+- **Throughput:** 106.69 tok/s
+- **Note:** Smaller 0.8B model, not directly comparable to 35B. For 35B variants:
+  - Rank 3: Qwen3-Coder-Next-int4-AutoRound (INT4) — 73.33 tok/s
+  - Rank 9: gpt-oss-120b (MXFP4) — 58.82 tok/s
+
+#### Analysis
+
+**No 10%+ jump detected.** The top FP8 Qwen3.5 at 52.32 tok/s is actually slightly below our baseline 53.5 tok/s (post-power-cycle clean). Baseline note of "70-81 tok/s with MTP=2" from previous observations is not currently visible in Arena leaderboard, suggesting either:
+1. Those entries have expired or were removed
+2. Different benchmark conditions (possibly batch tests, not single-request)
+3. Possible observation period (that baseline may have been from a different test harness)
+
+**Pre-quantized FP8 confirmed worse:** The pre-quantized Qwen3.5-35B-A3B-FP8 at 50.75 tok/s underperforms on-the-fly FP8 (52.32 tok/s), consistent with baseline note.
+
+**No new high-performing contenders:** All top entries remain:
+- Qwen3-Coder-Next-int4-AutoRound (INT4) as best performer at 73.33 tok/s
+- gpt-oss-120b (MXFP4, requires dual DGX) as next option
+- No new models or quantization methods with >10% improvement over current 53.5 tok/s
+
+#### Cross-Arena Observations
+- Artyom's config uses `load_format: fastsafetensors` and ray distributed executor — worth testing in future optimization cycle
+- Community-reported 70-81 tok/s may have been from:
+  - Different workload (batch vs single-request)
+  - Earlier snapshot of Arena leaderboard
+  - MTP=2 speculative decoding (noted separately in baseline as "optimization priority")
+
+#### Recommendations
+1. **No immediate action:** Current 53.5 tok/s remains competitive vs visible Arena entries
+2. **Worth investigating (lower priority):**
+   - load_format: fastsafetensors vs default
+   - ray distributed_executor_backend vs default
+   - These changes are low-risk config tweaks for future A/B test
+3. **Monitor for:** MTP=2 speculative decoding recipes (separate optimization track from current baseline)
+
+#### Status: NO ACTION NEEDED
+- Arena landscape unchanged
+- Current config within expected range
+- Next recon: 1 week
+
+---
+
+### Entry 030 — Spark Recon (2026-04-15)
+**Date:** 2026-04-15 15:00 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Check
+- Top FP8 Qwen3.5 (single-node): 52.32 tok/s (Huihui-Qwen3.5-35B-A3B-abliterated by Artyom) — -2.2% from baseline 53.5 tok/s
+- Top overall (single-node, 35B+): 73.33 tok/s (Qwen3-Coder-Next-int4-AutoRound, INT4)
+- Top overall (all sizes): 106.69 tok/s (Qwen3.5-0.8B, sglang, BF16 — not comparable)
+- Previous "70-81 tok/s FP8+MTP=2" entries not visible in current leaderboard snapshot
+- NO CHANGE — current config remains competitive
+
+#### vLLM Release Check
+- Latest: v0.19.0 (2026-04-03) — already running
+- Classification: NO NEW RELEASE
+- No releases newer than v0.19.0 detected
+- DeepGEMM E8M0 accuracy fix for Blackwell was in v0.18.1 (superseded by v0.19.0)
+- Gemma 4 support present in v0.19.0 (grammar/guided decoding status unclear)
+
+#### spark-vllm-docker Check
+- Repo: eugr/spark-vllm-docker (nickyu42 still 404)
+- vLLM wheel advanced: dev219 → dev241 (same 0.19.1rc1 branch, +22 dev commits)
+- FlashInfer: unchanged at 0.6.7
+- New dependency: InstantTensor added to runtime (2026-04-14) — operator fusion library
+- README updated (2026-04-15)
+- No new container image tags or recipes beyond baseline
+
+#### Qwen Model Check
+- Qwen3.6-Plus: still closed-source, API-only. No HuggingFace weights as of April 15.
+- No Qwen4 announcements found
+- No new Qwen3.5-35B-A3B variants or fine-tunes
+- Qwen3-Coder-Next remains on Arena but no new model drops
+
+#### NVIDIA Forum Check
+- 5 new posts since 2026-04-13
+- ACTION: "[Guide] Uncensored Gemma-4-26B at 45 tok/s on DGX Spark" (user99333, Apr 13) — Gemma 4 config reference
+- ACTION: "Qwen3.5 Tool Calling finally fixed (possibly)" (Dickson, Apr 13) — check tool-calling compatibility
+- ACTION: "DFlash LLM for DGX Spark - too good to be true?" (LuckyChap, Apr 13) — 29 replies, active discussion on potential speed optimization
+- INFO: "Why do so many people here prefer vLLM?" (THUNDER_SPARK, Apr 15) — ecosystem discussion
+- SKIP: "Well, hello there!" (intro post), "Can't stack DGX Sparks" (basic setup)
+- None of the known community builders (Artyom, joshua.dale.warner, eugr, coolthor) posted in this window
+
+#### Cross-Correlated Findings
+- Gemma 4 appears in both Forum (45 tok/s guide) and vLLM (v0.19.0 support) — but baseline already has Gemma 4 reference numbers (38.9 tok/s FP8 MoE, guided JSON broken). Forum guide at 45 tok/s suggests possible config improvements worth comparing.
+- DFlash LLM forum thread (29 replies, high engagement) — no corresponding Arena entries or vLLM release notes. Could be a new inference engine or technique worth monitoring.
+- InstantTensor in spark-vllm-docker + continued dev241 wheel builds suggest eugr is actively optimizing — but no performance claims yet.
+
+#### Overall: WORTH WATCHING
+
+#### Recommendations
+1. **Read DFlash LLM thread in full** — 29 replies indicates significant community interest. Determine if it's a vLLM alternative, a plugin, or snake oil.
+2. **Read Qwen3.5 Tool Calling fix thread** — if tool calling is fixed upstream, this benefits the pipeline directly.
+3. **Compare Gemma 4 forum guide (45 tok/s)** against our Entry 020 result (38.9 tok/s) — 15% gap suggests config differences worth investigating if Gemma 4 guided JSON gets fixed.
+4. **No urgent action needed** — current Qwen3.5 FP8 config at 53.5 tok/s remains best-in-class for FP8 on Arena.
+
+---
+
+### Entry 031 — Recon Deep-Dive: DFlash LLM, Qwen3.5 Tool Calling, Gemma 4 NVFP4 (2026-04-15)
+**Date:** 2026-04-15 15:30 UTC
+**Operator:** Claude Code (spark-recon follow-up)
+**Status:** RESEARCH — no changes made
+
+#### 1. DFlash LLM Assessment
+
+**What it is:** Diffusion-based speculative decoding (z-lab, `github.com/AEON-7/vllm-dflash`). A ~900MB drafter model speculatively generates token candidates which the target model validates. Not a vLLM replacement — it's a layer within vLLM.
+
+**Performance claims:**
+| Workload | Reported tok/s | Draft Acceptance Rate |
+|----------|---------------|----------------------|
+| Simple tasks (HTML, templates) | 70-100+ | 60-70% |
+| Complex reasoning (llama-benchy) | 31 | 10-25% |
+| Code generation | 88-108 | ~35% |
+| Real-world mixed | 119-175 | Varies |
+
+**Community verdict:** "Basically not that good for most of the time." Partially confirmed — works on simple tasks, underperforms on reasoning. Consensus: "measure your own workloads."
+
+**Compatibility with our setup:**
+- Hardware (GB10/SM121): confirmed working
+- FP8 quantization: untested in forum (tested on INT4, NVFP4 only)
+- vLLM v0.19.0: v0.19.1+ officially required
+- Memory: **BLOCKER** — requires gpu_memory_utilization ≤0.60, our config is 0.65
+
+**Verdict: NOT ACTIONABLE.** Risk/reward unfavorable. Memory constraint is hard (would sacrifice capacity in 3-model config), FP8 untested, adds fragility, and realistic workload gains are 5-10% at best. The community's 70-81 tok/s with MTP=2 is a different (and more proven) speculative decoding approach.
+
+#### 2. Qwen3.5 Tool Calling Fix
+
+**The bug:** Tool calls silently fail during long agentic workflows (>2 hours), even though short tasks work fine. Tested on Qwen3.5-122B.
+
+**The fix (two parts):**
+1. Enhanced chat template: `qwen3.5-enhanced.jinja` from a referenced GitHub repo
+2. Tool call parser flag: `--tool-call-parser qwen3_xml` (replaces default `qwen3_coder`)
+
+**Confirmation:** Original poster ran 6-hour sessions successfully with the fix. Another user (Dr Henry Thomas) confirmed with caveats about parser sensitivity. Mix of results depending on parser choice.
+
+**Unknowns for our setup:**
+- No FP8 compatibility testing reported
+- No vLLM version specified (may or may not apply to v0.19.0)
+- Exact GitHub URL for enhanced template not captured
+
+**Verdict: WORTH TESTING.** Low-risk config change (add a flag + template). If tool calling becomes reliable, simplifies pipeline architecture. Test plan: add `--tool-call-parser qwen3_xml` to qwen35 container, run a short agentic workflow, then extended (6h) session.
+
+#### 3. Gemma 4 Guide Comparison (45 vs 38.9 tok/s)
+
+**Forum config achieving 45.26 tok/s:**
+| Parameter | Forum Config | Our Entry 020 |
+|-----------|-------------|---------------|
+| Model | AEON-7/Gemma-4-26B-A4B-it-Uncensored-**NVFP4** | Gemma-4-26B-A4B **FP8** |
+| Quantization | NVFP4 weights + FP8 KV cache | FP8 weights + FP8 KV cache |
+| gpu_memory_utilization | 0.60 | ~0.65 (inferred) |
+| prefix_caching | Enabled | Unknown |
+| chunked_prefill | Enabled | Unknown |
+| kv_cache_dtype | fp8 | Default |
+| Guided JSON | NOT TESTED | Broken |
+
+**Root cause of 15% gap:** NVFP4 quantization is the dominant factor. NVFP4 weights are ~6.5 GB vs ~26 GB for FP8, freeing massive bandwidth. Secondary factors: prefix caching + chunked prefill (~5%), measurement methodology (~5%).
+
+**Guided JSON status:** NOT tested in the forum guide. Our finding that guided JSON is broken on Gemma 4 remains unresolved — NVFP4 doesn't change this.
+
+**Verdict: INFORMATIONAL.** The 45 tok/s is real but explained by NVFP4 (4-bit) vs our FP8 (8-bit). This is a quality-throughput tradeoff, not a config optimization. NVFP4 is worth benchmarking if/when Gemma 4 guided JSON gets fixed upstream (vLLM issue #39130). Until then, Qwen3.5 remains the production model.
+
+#### Summary of Actionable Items
+
+| Finding | Priority | Action | Dependency |
+|---------|----------|--------|------------|
+| Qwen3.5 tool calling fix | MEDIUM | Test `--tool-call-parser qwen3_xml` + enhanced template | Next maintenance window |
+| DFlash LLM | LOW | Skip — memory constraint + FP8 untested | None (not pursuing) |
+| Gemma 4 NVFP4 | LOW | Benchmark NVFP4 when guided JSON is fixed | vLLM #39130 |
+
+---
+
+### Entry 032 — BGE-M3 Embedding Sidecar Launched (2026-04-19)
+
+**Date:** 2026-04-19 13:15 UTC
+**Operator:** Claude Code (remote execution via SSH)
+**Status:** COMPLETE — bge-m3 container live on port 8004
+
+#### Purpose
+Stand up BGE-M3 as an alternate embedding endpoint alongside qwen3-embed, for the kb-analysis v5h pipeline A/B test (1024-dim vs 2560-dim, 8K native context, ~40% smaller FAISS index). Does not replace qwen3-embed; both run in parallel.
+
+#### Preflight Findings
+- Port 8004 free (8000/8001/8002/8003 occupied by qwen35/qwen3-embed/gliner/chromadb)
+- Live qwen3-embed flags verified via `docker inspect`: image is `vllm/vllm-openai:cu130-known-good-20260306` (not cu130-nightly as spark-device.md claimed), util 0.10 (not 0.13). Memory file corrected.
+- GPU memory headroom: qwen35 ~3.6 GB RSS, qwen3-embed ~300 MB, gliner ~76 MB — ~80 GB+ free before launch.
+
+#### Command Executed
+```bash
+sudo docker run -d --name bge-m3 --restart unless-stopped --gpus all --ipc host \
+  -p 8004:8004 \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  vllm/vllm-openai:cu130-known-good-20260306 \
+  --model BAAI/bge-m3 --served-model-name bge-m3 --runner pooling \
+  --port 8004 --host 0.0.0.0 \
+  --gpu-memory-utilization 0.05 --max-model-len 8192 --enforce-eager
+```
+
+Container id: `b0286478f193`.
+
+#### Startup
+- Ready in **60 seconds** (faster than the 5–10 min predicted — model weights were already cached in `/home/davistroy/.cache/huggingface`).
+- Polled `/v1/models` every 15s; 200 response at t=60s.
+
+#### Verification
+```
+GET /v1/models →
+  id=bge-m3, root=BAAI/bge-m3, max_model_len=8192
+POST /v1/embeddings (input="KPS not bumping from Master Bump Terminal") →
+  dim=1024, prompt_tokens=12, 200 OK
+```
+
+#### Post-Launch Container State
+| Container | Status | Port | RSS |
+|-----------|--------|------|-----|
+| bge-m3 | Up 1m | 8004 | 4.85 GiB |
+| qwen35 | Up 5d | 8000 | 3.56 GiB |
+| qwen3-embed | Up 7d (healthy) | 8001 | 301 MiB |
+| gliner | Up 7d | 8002 | 76 MiB |
+
+bge-m3 RSS is within the 0.05 util budget (~6 GB ceiling). qwen35 undisturbed, qwen3-embed undisturbed.
+
+#### Files Updated
+- `memory/spark-device.md` — corrected qwen3-embed image + util to live state, added bge-m3 section, updated GPU memory budget to 4-model and flagged stale qwen35 section.
+- `memory/MEMORY.md` — index line expanded to mention bge-m3.
+
+#### Pipeline-Side Next Steps (handed back, not executed here)
+1. Add A/B flag (env var or CLI) to `find_duplicates.py` for embedding backend.
+2. `mv output/*_embeddings_*.npy output/embeddings-backup-qwen/` (NOT rm — non-git-tracked).
+3. Run v5h with `SPARK_HOST=spark.k4jda.net` pointing at 8004/bge-m3.
+4. Gate on `embedding_diagnostic_tier1.py` — expect real `semantic_sim` separation vs saturated-at-1.00 with Qwen.
+
+#### Rollback
+```bash
+ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net 'sudo docker stop bge-m3 && sudo docker rm bge-m3'
+```
+No production impact — qwen3-embed keeps serving the existing pipeline endpoint.
+
+---
+
+### Entry 033 — Qwen3.6-35B-A3B Upgrade Investigation & Plan (2026-04-23)
+**Date:** 2026-04-23
+**Operator:** Claude Code (remote research + Spark SSH)
+**Status:** INVESTIGATION COMPLETE — plan generated, ready to execute
+
+#### Objective
+Evaluate Qwen3.6-35B-A3B as a drop-in replacement for Qwen3.5-35B-A3B on the Spark.
+
+#### Key Findings
+
+**1. Architecture is identical.** Both models use `model_type: "qwen3_5_moe"` with the same 40-layer GDN hybrid (10 × (3×DeltaNet + 1×Attention)), 256 experts, 8 routed + 1 shared, hidden_size 2048, expert_dim 512. Qwen3.6 is a training improvement, not an architecture change.
+
+**2. vLLM v0.19.0 confirmed compatible.** Same model class (`Qwen3_5MoeForConditionalGeneration`), same architecture registration. The stock `v0.19.0-aarch64-cu130` image we're already running will load it without changes.
+
+**3. What's actually new in 3.6:**
+- Multimodal: image + video input (skippable via `--language-model-only`)
+- Training: improved agentic coding (SWE-bench +8pts to 73.4), reasoning (AIME26 92.7)
+- Feature: `preserve_thinking` for multi-turn reasoning context
+- Weights: ~72 GB BF16 (26 shards) vs 67 GB (14 shards) — extra ~5 GB is vision encoder
+
+**4. Downstream consumer blast radius.** `--served-model-name qwen3.5-35b` is hardcoded in 6+ locations:
+- contact-center-lab/pipeline/config.yaml (2 refs)
+- contact-center-lab/pipeline/tests (3 refs)
+- cfa/pipeline/scripts (2 refs)
+- spark-monitor-dashboard.json (15+ Prometheus queries)
+Decision: keep model name during experiment for zero consumer disruption.
+
+**5. Triton cache should be warm.** Identical tensor shapes (same text architecture dims) → Triton JIT cache is keyed by shapes, not model identity. Expect ~150s startup, not 30+ min cold compile.
+
+**6. KV cache overestimation (vLLM #37121).** Hybrid GDN models have ~7x KV cache memory overallocation — vLLM allocates for all 40 layers but only 10 attention layers need it. Affects both 3.5 and 3.6 equally. Not fixed yet. Separate optimization opportunity.
+
+**7. Live container config diverges from spark-device.md docs.** No `--no-async-scheduling`, no `VLLM_TEST_FORCE_FP8_MARLIN`. The documented docker run command is stale (pre-2026-04-11).
+
+#### Container Config Snapshot (live, 2026-04-23)
+
+```
+Image: vllm/vllm-openai:v0.19.0-aarch64-cu130
+Model: Qwen/Qwen3.5-35B-A3B
+Served as: qwen3.5-35b
+Flags: --max-model-len 32768 --gpu-memory-utilization 0.65 --quantization fp8
+        --kv-cache-dtype fp8 --reasoning-parser qwen3 --language-model-only
+        --enable-auto-tool-choice --tool-call-parser qwen3_coder
+Env: VLLM_FLASHINFER_MOE_BACKEND=latency
+Volumes: /home/davistroy/.cache/huggingface:/root/.cache/huggingface
+         /home/claude/.cache/triton:/root/.triton
+IPC: host, SHM: 64GB
+Uptime: 9 days
+```
+
+#### Plan Generated
+`IMPLEMENT_QWEN36_UPGRADE.md` — 3 phases:
+1. Weight download (non-disruptive, ~30 min)
+2. Container swap & throughput benchmark (~15 min downtime)
+3. Quality validation & adopt/rollback decision (~30 min)
+
+#### No Changes Made to Spark
+Investigation only. Model weights not yet downloaded.

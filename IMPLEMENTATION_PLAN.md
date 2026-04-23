@@ -353,7 +353,7 @@ The community's 70-81 tok/s numbers come from cu132 builds with MTP=2. Our prior
 The `vllm-cu132-test:latest` image (26.1 GB) already exists on the Spark from the Phase 3 cu132 build.
 
 ### Work Item 3.1: Verify cu132 image still works
-**Status: PENDING**
+**Status: COMPLETE 2026-04-23**
 
 ```bash
 ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net \

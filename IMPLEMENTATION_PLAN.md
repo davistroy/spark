@@ -134,8 +134,8 @@ Verify shard count, config.json model_type, and architectures list via a tempora
 
 ---
 
-### Work Item 1.3: Container swap to Qwen3.6
-**Status: PENDING**
+### Work Item 1.3: Container swap to Qwen3.6 — Completed 2026-04-23
+**Status: COMPLETE 2026-04-23**
 **Pre-flight:**
 - Confirm no active workload: `curl -s http://spark.k4jda.net:8000/metrics | grep 'vllm:num_requests_running'` → 0
 - Record current container ID

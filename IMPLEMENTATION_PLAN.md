@@ -274,15 +274,31 @@ Run identical methodology to Entry 022 (post-power-cycle clean benchmark).
 GPU memory utilization is 0.65. KV cache usage peaks at 1.6-3% under pipeline load — massively over-provisioned. vLLM issue #37121 confirms GDN hybrid models have ~7x KV cache overestimation. Increasing utilization to 0.70 or 0.75 could improve concurrent request capacity without risk, since actual cache usage is so low.
 
 ### Work Item 2.1: Increase gpu-memory-utilization to 0.70
-**Status: PENDING**
+**Status: COMPLETE 2026-04-23 — FAILED (OOM), rolled back to 0.65**
 
-Same container config as Phase 1 adopted config, with one change:
-```diff
-- --gpu-memory-utilization 0.65
-+ --gpu-memory-utilization 0.70
+Attempted 0.70 — container failed immediately at startup:
+
+```
+ValueError: Free memory on device cuda:0 (81.39/121.63 GiB) on startup is less than
+desired GPU memory utilization (0.7, 85.14 GiB).
 ```
 
-Memory budget at 0.70: ~85.1 GiB for qwen35 + ~12.2 qwen3-embed + ~6 bge-m3 + ~2 gliner + ~0.5 ce-service = ~105.8 GiB. Leaves ~15.8 GiB free (safe).
+**Root cause:** gliner container is consuming ~19.7 GiB (vs documented ~2 GiB — 10x over budget). Actual memory picture with qwen35 stopped:
+- qwen3-embed: ~11.8 GiB (0.10 util)
+- gliner: ~19.7 GiB (expected ~2 GiB — likely accumulated state or model larger than estimated)
+- bge-m3: ~1.7 GiB (0.05 util)
+- ce-service: ~2.0 GiB
+
+Total baseline: ~35.2 GiB consumed by other containers. Free at startup: ~81.4 GiB. Required for 0.70: 85.14 GiB. Gap: 3.7 GiB.
+
+**Rolled back to 0.65.** Production restored healthy at 19:09 UTC. GPU: 80,342 MiB (~78.5 GiB). Startup time: ~330s (from container start to /health 200, including Triton cache warm load).
+
+**vLLM hint from logs:** Set `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1` and raise util to 0.6770 to maintain the same effective KV cache size as 0.65 (accounts for CUDA graph memory profiling). This is a v0.19 default change.
+
+**Next actions before retrying 0.70:**
+1. Investigate gliner's 19.7 GiB allocation — restart gliner to reclaim memory and confirm baseline
+2. If gliner resets to ~2 GiB, retry 0.70
+3. Alternatively: test with `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1` at 0.6770 first (same effective cache, vLLM-recommended path)
 
 **Acceptance:** Container starts without OOM. Swap stays < 200 MB under c8 load for 10 min.
 

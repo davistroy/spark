@@ -3223,3 +3223,73 @@ Work Item 1.6 gate: evaluate throughput benchmark results and quality smoke test
 - Work Item 1.7: Update SPARK_BASELINE.md, spark-device.md, MEMORY.md with Qwen3.6 as live model
 - Phase 2: Memory budget tuning (gpu-memory-utilization increase)
 - Phase 3: cu132 + MTP throughput experiment
+
+---
+
+### Entry 036 — Phase 2 Work Item 2.1: gpu-memory-utilization 0.70 Attempt (2026-04-23)
+**Date:** 2026-04-23
+**Operator:** Claude Code (autonomous)
+**Status:** COMPLETE — **FAILED (OOM), rolled back to 0.65**
+
+#### Objective
+Work Item 2.1: Increase gpu-memory-utilization from 0.65 to 0.70 to give vLLM more KV cache space. Expected to improve concurrent request capacity.
+
+#### Pre-flight Check
+- Active requests at stop time: 0 (confirmed via `/metrics`)
+- Current container: `qwen35` running `Qwen/Qwen3.6-35B-A3B`, util=0.65, healthy
+
+#### Attempt
+
+Stopped qwen35, started with `--gpu-memory-utilization 0.70`. All other flags identical to Phase 1 adopted config.
+
+Container crashed immediately at startup with:
+
+```
+ValueError: Free memory on device cuda:0 (81.39/121.63 GiB) on startup is less than
+desired GPU memory utilization (0.7, 85.14 GiB). Decrease GPU memory utilization or
+reduce GPU memory used by other processes.
+```
+
+#### Root Cause Analysis
+
+With qwen35 stopped, actual GPU memory held by other containers (measured via `nvidia-smi`):
+
+| Container | Expected | Actual |
+|-----------|----------|--------|
+| qwen3-embed (0.10 util) | ~12 GiB | ~11.8 GiB |
+| gliner | ~2 GiB | **~19.7 GiB** |
+| bge-m3 (0.05 util) | ~6 GiB | ~1.7 GiB |
+| ce-service | ~0.5 GiB | ~2.0 GiB |
+| **Total baseline** | **~20.5 GiB** | **~35.2 GiB** |
+
+**Gliner is the culprit: 10x over its documented budget (19.7 GiB vs ~2 GiB expected).** This is almost certainly accumulated CUDA state or lazy model expansion — gliner uses `nvidia/cuda:13.0.1-runtime-ubuntu24.04` + PyTorch nightly, and has been running continuously since it was started. GLiNER large-v2.1 is ~900M params (~1.8 GiB weights) but the process may have accumulated CUDA context, JIT kernel state, or warm-started inference buffers.
+
+Math: 121.63 GiB total − 35.2 GiB (other containers) = 86.4 GiB available. vLLM's own process overhead brings free memory at check time to 81.39 GiB. Required for 0.70: 0.70 × 121.63 = **85.14 GiB**. Gap: 3.75 GiB. Fails by a meaningful margin.
+
+At 0.65 (79.05 GiB required), the same constraint passes because 81.39 > 79.05 (barely, by ~2.3 GiB).
+
+#### Rollback
+
+Restored to 0.65 (known-working config). Container healthy at 19:09 UTC.
+- Startup time: 324 seconds (19:03:40 init → 19:09:04 application startup complete)
+- GPU memory allocated: 80,342 MiB (~78.5 GiB) — consistent with previous runs
+- num_gpu_blocks: 512 (override in effect)
+- KV cache: 1,068,960 tokens available, 40.86 GiB
+- /health: 200 ✓
+
+#### vLLM Log Finding (actionable)
+
+vLLM v0.19 logged a useful hint:
+> "set VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 and increase --gpu-memory-utilization from 0.6500 to 0.6770 to maintain the same effective KV cache size"
+
+This means vLLM's default CUDA graph memory estimation in v0.19 is more conservative — at the same 0.65 flag value, the actual effective KV cache is smaller than in v0.18/earlier. Setting this env var and bumping to 0.6770 gets back the full cache without changing effective GPU pressure. Worth testing separately.
+
+#### Next Actions for Phase 2
+
+1. **Immediate:** Restart gliner container to reclaim accumulated memory. If it resets to ~2 GiB, the baseline drops from ~35.2 GiB to ~17.7 GiB — plenty of headroom for 0.70 (requires ~85.14 GiB; ~17.7 GiB baseline leaves ~103.9 GiB free at qwen35 startup).
+2. **Test VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 at 0.6770** — vLLM's recommended path for same-cache without changing real memory pressure.
+3. **Re-attempt 0.70** only after gliner is restarted and baseline confirmed.
+
+#### Updated Memory Budget (actual vs documented)
+
+Documentation needs update — gliner's 19.7 GiB actual vs 2 GiB documented is a significant discrepancy that invalidates the Phase 2 headroom calculations in IMPLEMENTATION_PLAN.md.

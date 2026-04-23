@@ -35,6 +35,8 @@ After any non-trivial finding (hardware capability/limitation, LLM performance c
 - **sysctl tuning applied:** `vm.swappiness=1`, `vm.min_free_kbytes=262144`, TCP buffers increased. Persisted in `/etc/sysctl.d/99-spark-tuning.conf`.
 - **Grafana 12 dashboards:** Use direct datasource UIDs (`{"uid": "PBFA97CFB590B2093"}`), not template variable references (`${DS_PROMETHEUS}`). Omit `"type"` field. Template vars cause panels not to render in Grafana 12.4.2.
 - **Homeserver curl broken:** Use `wget` for all HTTP ops on Unraid 7.2 homeserver. For POST: `wget -O /tmp/resp.txt --header="..." --post-file=/tmp/payload.json URL`.
+- **Production model is Qwen3.6-35B-A3B** (adopted 2026-04-23). Container name and `--served-model-name` remain `qwen3.5-35b` for downstream compatibility.
+- **`enable_thinking: false` placement:** Must be at request top level (`chat_template_kwargs`), NOT inside `extra_body`. Wrong placement silently fails to suppress thinking tokens, causing token exhaustion on short `max_tokens` budgets.
 
 ## Configuration Safety Rules — MANDATORY
 

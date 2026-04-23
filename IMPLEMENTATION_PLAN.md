@@ -304,8 +304,8 @@ Total baseline: ~35.2 GiB consumed by other containers. Free at startup: ~81.4 G
 
 ---
 
-### Work Item 2.2: Benchmark at 0.70
-**Status: PENDING**
+### Work Item 2.2: Benchmark at 0.70 — Skipped
+**Status: SKIPPED 2026-04-23 — prerequisite 2.1 failed (OOM at 0.70)**
 
 Run c1, c4, c8 benchmarks.
 
@@ -313,8 +313,8 @@ Run c1, c4, c8 benchmarks.
 
 ---
 
-### Work Item 2.3: Test 0.75 (conditional)
-**Status: PENDING**
+### Work Item 2.3: Test 0.75 (conditional) — Skipped
+**Status: SKIPPED 2026-04-23 — prerequisite 2.1 failed (OOM at 0.70)**
 
 If 0.70 is stable, test 0.75. Memory budget at 0.75: ~91.2 GiB for qwen35. Total ~112.4 GiB. Leaves ~9.2 GiB free — tighter margin.
 
@@ -322,10 +322,12 @@ If 0.70 is stable, test 0.75. Memory budget at 0.75: ~91.2 GiB for qwen35. Total
 
 ---
 
-### Work Item 2.4: Update documentation
-**Status: PENDING**
+### Work Item 2.4: Update documentation — 2026-04-23
+**Status: COMPLETE 2026-04-23**
 
 Update SPARK_BASELINE.md with new utilization value and benchmark numbers. LAB_NOTEBOOK entry.
+
+Memory tuning blocked by gliner memory bloat (19.7 GiB vs 2 GiB budget). Staying at gpu_util=0.65. Next action: restart gliner to reclaim memory, then retry.
 
 ### Phase 2 Exit Criteria
 

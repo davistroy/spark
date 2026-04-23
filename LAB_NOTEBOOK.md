@@ -693,6 +693,51 @@ SM120 has 53% more Blackwell cubins than SM121 (61 vs 40) because it includes th
 4. Swap to sm120, benchmark
 5. Compare results, pick winner, snapshot as pipeline-v3
 
+### Entry 006 — Autonomous benchmark setup
+**Date:** 2026-03-29 ~14:50 EDT
+**Operator:** Claude Code
+
+**Scripts deployed to Spark:**
+
+1. **`/home/claude/benchmark-ab-test.sh`** — Full A/B test script that:
+   - Takes pre-benchmark snapshot via spark-config.sh
+   - Runs 3 tests: baseline → SM121 → SM120
+   - For each: container swap, health wait (10 min max), FP8 warning check, backend log capture
+   - Single-request benchmark (3 runs per image, measures tok/s via metrics delta)
+   - Concurrent benchmark (8 simultaneous requests, measures aggregate tok/s)
+   - Memory snapshot per image
+   - Restores baseline after testing (safety)
+   - All results logged to `/home/claude/ab-test-results.md`
+
+2. **`/home/claude/pipeline-monitor.sh`** (PID 275720) — Autonomous monitor that:
+   - Checks pipeline state every 5 minutes
+   - Waits for two conditions: (a) after 01:30 EDT, (b) 0 running requests for 3 consecutive checks (15 min idle)
+   - When both met, automatically executes benchmark-ab-test.sh
+   - All monitor activity logged to `/home/claude/pipeline-monitor.log`
+
+**What happens overnight:**
+1. Pipeline runs until ~01:30 EDT
+2. Monitor detects idle state ~01:45 EDT (after 3 idle checks)
+3. Benchmark script runs (~30 min total: 3 images × ~10 min each)
+4. Results saved to `/home/claude/ab-test-results.md`
+5. Baseline restored for safety
+
+**To check results in morning:**
+```bash
+ssh claude@<spark-host> "cat /home/claude/ab-test-results.md"
+ssh claude@<spark-host> "cat /home/claude/pipeline-monitor.log"
+```
+
+**Observation:** qwen35 container restarted at ~11:55 EDT (during SM121/SM120 Docker builds). Success counter reset from 8,060 to 0. Pipeline recovered automatically via `--restart unless-stopped`. Likely cause: memory pressure from two large Docker builds (~32 GB images) running on the same system. Container has been healthy since restart (3,872+ requests completed by 14:55 EDT, 8 concurrent running).
+
+**Lesson:** Large Docker builds on the Spark can cause memory pressure sufficient to restart vLLM containers. In future, consider running builds during maintenance windows or limiting to one build at a time.
+
+**Bug fix (14:55 EDT):** Pipeline monitor showed `running=unknown` — the `awk '{print $2}'` in the heredoc was shell-expanded to `awk {print }`. Fixed by writing scripts via heredoc with proper quoting, then patching with sed. Verified: monitor now shows `running=8 success=3914`. Same bug affected benchmark-ab-test.sh — both fixed.
+
+**Lesson:** When writing shell scripts via SSH heredocs, `$` variables in awk/grep are consumed by the outer shell. Use `'\''` quoting or write scripts as files with proper escaping. Always verify scripts read back correctly before relying on them for autonomous execution.
+
+---
+
 ### Entry 007 — A/B test execution and critical build bug discovery
 **Date:** 2026-03-30 ~01:30 EDT
 **Operator:** Claude Code (autonomous)
@@ -1088,51 +1133,6 @@ All four items completed:
 - Data backup: SCRIPT DEPLOYED + initial backup taken
 - Marlin atomic add: TESTED, no effect, reverted
 
-### Entry 006 — Autonomous benchmark setup
-**Date:** 2026-03-29 ~14:50 EDT
-**Operator:** Claude Code
-
-**Scripts deployed to Spark:**
-
-1. **`/home/claude/benchmark-ab-test.sh`** — Full A/B test script that:
-   - Takes pre-benchmark snapshot via spark-config.sh
-   - Runs 3 tests: baseline → SM121 → SM120
-   - For each: container swap, health wait (10 min max), FP8 warning check, backend log capture
-   - Single-request benchmark (3 runs per image, measures tok/s via metrics delta)
-   - Concurrent benchmark (8 simultaneous requests, measures aggregate tok/s)
-   - Memory snapshot per image
-   - Restores baseline after testing (safety)
-   - All results logged to `/home/claude/ab-test-results.md`
-
-2. **`/home/claude/pipeline-monitor.sh`** (PID 275720) — Autonomous monitor that:
-   - Checks pipeline state every 5 minutes
-   - Waits for two conditions: (a) after 01:30 EDT, (b) 0 running requests for 3 consecutive checks (15 min idle)
-   - When both met, automatically executes benchmark-ab-test.sh
-   - All monitor activity logged to `/home/claude/pipeline-monitor.log`
-
-**What happens overnight:**
-1. Pipeline runs until ~01:30 EDT
-2. Monitor detects idle state ~01:45 EDT (after 3 idle checks)
-3. Benchmark script runs (~30 min total: 3 images × ~10 min each)
-4. Results saved to `/home/claude/ab-test-results.md`
-5. Baseline restored for safety
-
-**To check results in morning:**
-```bash
-ssh claude@<spark-host> "cat /home/claude/ab-test-results.md"
-ssh claude@<spark-host> "cat /home/claude/pipeline-monitor.log"
-```
-
-**Observation:** qwen35 container restarted at ~11:55 EDT (during SM121/SM120 Docker builds). Success counter reset from 8,060 to 0. Pipeline recovered automatically via `--restart unless-stopped`. Likely cause: memory pressure from two large Docker builds (~32 GB images) running on the same system. Container has been healthy since restart (3,872+ requests completed by 14:55 EDT, 8 concurrent running).
-
-**Lesson:** Large Docker builds on the Spark can cause memory pressure sufficient to restart vLLM containers. In future, consider running builds during maintenance windows or limiting to one build at a time.
-
-**Bug fix (14:55 EDT):** Pipeline monitor showed `running=unknown` — the `awk '{print $2}'` in the heredoc was shell-expanded to `awk {print }`. Fixed by writing scripts via heredoc with proper quoting, then patching with sed. Verified: monitor now shows `running=8 success=3914`. Same bug affected benchmark-ab-test.sh — both fixed.
-
-**Lesson:** When writing shell scripts via SSH heredocs, `$` variables in awk/grep are consumed by the outer shell. Use `'\''` quoting or write scripts as files with proper escaping. Always verify scripts read back correctly before relying on them for autonomous execution.
-
----
-
 ### Entry 012 — Spark Recon (2026-03-31)
 **Date:** 2026-03-31 ~11:30 UTC
 **Operator:** Claude Code (spark-recon skill)
@@ -1178,7 +1178,7 @@ ssh claude@<spark-host> "cat /home/claude/pipeline-monitor.log"
 
 ---
 
-## Entry 011 — Forum Thread Analysis: Community Response to SM121 Build Guide (2026-04-01)
+### Entry 012a — Forum Thread Analysis: Community Response to SM121 Build Guide (2026-04-01)
 
 **Context:** Posted the SM121 .so injection build guide to NVIDIA Developer Forums on 2026-03-30. Thread received engagement from community members and the `spark-vllm-docker` maintainer (eugr). This entry analyzes the responses and their implications for our optimization roadmap.
 
@@ -1264,7 +1264,7 @@ This means either:
 
 ---
 
-## Entry 012 — Gemma 4 Research and A/B Experiment Plan (2026-04-03)
+### Entry 012b — Gemma 4 Research and A/B Experiment Plan (2026-04-03)
 
 **Context:** Google DeepMind released Gemma 4 under Apache 2.0 on 2026-04-02. Four model sizes: E2B, E4B, 26B-A4B (MoE), 31B (dense). Community immediately began running on DGX Spark with day-1 benchmarks appearing within hours. Researched feasibility of Gemma 4 as replacement or complement to our Qwen3.5-35B-A3B.
 
@@ -1352,7 +1352,7 @@ Dedicated maintenance window required. ~5 hours execution time.
 
 ---
 
-## Entry 013 — Ethernet Troubleshooting: Switch MAC Table Corruption (2026-04-03)
+### Entry 012c — Ethernet Troubleshooting: Switch MAC Table Corruption (2026-04-03)
 
 **Date:** 2026-04-03 ~13:00–18:00 UTC
 **Operator:** Claude Code + Troy Davis (interactive sudo)
@@ -3296,7 +3296,7 @@ Documentation needs update — gliner's 19.7 GiB actual vs 2 GiB documented is a
 
 ---
 
-### Entry 031 — Phase 3 (3.2): cu132 + MTP=2 Container Start (2026-04-23)
+### Entry 038 — Phase 3 (3.2): cu132 + MTP=2 Container Start (2026-04-23)
 **Date:** 2026-04-23 ~19:16-19:23 UTC
 **Operator:** Claude Code (implement-plan)
 **Status:** COMPLETE — container running, /health 200
@@ -3390,7 +3390,7 @@ Container healthy. Ready for Work Item 3.3 (c1/c4/c8/c16 benchmarks).
 
 ---
 
-## Entry 029 — cu132 + MTP=2 Throughput Benchmark (Work Item 3.3)
+### Entry 039 — cu132 + MTP=2 Throughput Benchmark (Work Item 3.3)
 
 **Date:** 2026-04-23
 **Branch:** optimize-spark-2026-04-13
@@ -3516,7 +3516,7 @@ Work Item 3.4 gate: evaluate cu132+MTP benchmark results (Entry 029) and decide 
 
 ---
 
-## Entry 030 — Quality Baseline with spark-evals (AgentBench-OS)
+### Entry 040 — Quality Baseline with spark-evals (AgentBench-OS)
 
 **Date:** 2026-04-23
 **Work item:** 4.2
@@ -3603,7 +3603,7 @@ When comparing future quant experiments (e.g., NVFP4, INT4+FP8 hybrid), run the 
 
 ---
 
-## Entry 031 — Work Item 4.1: Tool Calling Parser Test (qwen3_xml) — Memory Blocked (2026-04-23)
+### Entry 041 — Work Item 4.1: Tool Calling Parser Test (qwen3_xml) — Memory Blocked (2026-04-23)
 
 **Date:** 2026-04-23
 **Work item:** 4.1

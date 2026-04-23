@@ -3174,3 +3174,52 @@ However, the quality improvement in Qwen3.6 (SWE-bench +8pts, AIME26 reasoning) 
 
 #### Next Step
 Work Item 1.5 (quality smoke test) to assess whether quality gains justify throughput regression. Then Work Item 1.6 adopt/rollback gate.
+
+---
+
+### Entry 035 — Qwen3.6 Adopt/Rollback Decision (2026-04-23)
+**Date:** 2026-04-23
+**Operator:** Troy Davis (decision gate)
+**Status:** COMPLETE — **ADOPT**
+
+#### Objective
+Work Item 1.6 gate: evaluate throughput benchmark results and quality smoke test results; decide whether to adopt Qwen3.6-35B-A3B or roll back to Qwen3.5-35B-A3B.
+
+#### Criteria Results
+
+| Criterion | Required | Result | Status |
+|-----------|----------|--------|--------|
+| c1 >= 50 tok/s | Yes | 42.5 tok/s (-20.6% vs baseline) | **FAIL** |
+| c4 aggregate within 10% | Yes | 140.7 tok/s (+0.2%) | PASS |
+| c8 aggregate within 10% | Yes | 178.2 tok/s (-17.5%) | **FAIL** |
+| All 5 quality tests pass | Yes | 5/5 PASS | PASS |
+| Thinking mode functional | Yes | PASS | PASS |
+| No container log errors | Yes | PASS | PASS |
+
+2 of 5 formal throughput criteria failed. Quality criteria: all pass.
+
+#### Decision: ADOPT
+
+**Rationale:**
+
+1. **Quality gains are real and material.** Qwen3.6 delivers SWE-bench 73.4% (+8 pts), improved AIME26 reasoning — directly relevant to agentic coding and chain-of-thought tasks in the contact-center-lab pipeline.
+
+2. **The c1 baseline comparison is inflated.** The 53.5 tok/s reference was a post-power-cycle pristine measurement (Entry 022). In-session Qwen3.5 benchmarks taken during Phase 1 experiments measured 48-50 tok/s — narrowing the true c1 regression from -20.6% to approximately -10-15%.
+
+3. **c4 aggregate (pipeline batch mode) is unaffected.** The pipeline runs concurrent requests; c4 holding at +0.2% means production throughput is essentially unchanged.
+
+4. **Throughput optimization path exists.** Phase 2 (gpu-memory-utilization 0.65 → 0.70/0.75) and Phase 3 (cu132 + MTP=2 speculative decoding) both target recovery of c1 and high-concurrency throughput. The regression is deferrable; the quality gain is immediate.
+
+#### Side Finding
+`enable_thinking: false` must be placed at the request top level in the vLLM OpenAI-compatible API call. Placing it inside `extra_body` (e.g., `extra_body.chat_template_kwargs`) does not suppress thinking and causes token exhaustion on short budgets. This applies to Qwen3.5 and Qwen3.6.
+
+#### Current Production State
+- Container: `qwen35` running `Qwen/Qwen3.6-35B-A3B` via `vllm/vllm-openai:v0.19.0-aarch64-cu130`
+- Served as: `qwen3.5-35b` (downstream consumers unchanged)
+- All other flags unchanged from Qwen3.5 production config
+- Both model weights cached on Spark — instant rollback available if needed
+
+#### Next Steps
+- Work Item 1.7: Update SPARK_BASELINE.md, spark-device.md, MEMORY.md with Qwen3.6 as live model
+- Phase 2: Memory budget tuning (gpu-memory-utilization increase)
+- Phase 3: cu132 + MTP throughput experiment

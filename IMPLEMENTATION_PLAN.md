@@ -417,16 +417,30 @@ docker run -d \
 ---
 
 ### Work Item 3.3: Benchmark cu132 + MTP
-**Status: PENDING**
+**Status: COMPLETE 2026-04-23**
 
-Run c1, c4, c8, c16 benchmarks.
+Run c1, c4, c8, c16 benchmarks. 3 runs each, 600 tokens, same prompt as prior entries.
 
-| Metric | Phase 1 Baseline | Community Target | Adopt Threshold |
-|--------|-----------------|-----------------|-----------------|
-| c1 tok/s | ~53.5 | 70-81 | >= 65 (+20%) |
-| c4 aggregate | ~140 | — | >= 140 (no regression) |
+| Concurrency | per-req tok/s | aggregate tok/s | vs Qwen3.6-cu130 | vs Qwen3.5-cu130 |
+|-------------|--------------|-----------------|------------------|------------------|
+| c1 | 51.2 | 51.2 | +20.5% | -4.3% |
+| c4 | 40.4 | 160.8 | +14.2% | +14.5% |
+| c8 | 48.6 | 384.4 | +115.7% | +78.0% |
+| c16 | 36.4 | 576.0 | — | — |
+
+**Baselines:** Qwen3.6-cu130: c1=42.5, c4=140.7, c8=178.2. Qwen3.5-cu130: c1=53.5, c4=140.4, c8=216.0.
+
+**MTP Acceptance Rate (post-benchmark from /metrics):**
+- Draft tokens: 39,948 (2 per draft × 19,974 drafts)
+- Accepted tokens: 32,231
+- Overall acceptance rate: 80.7%
+- Position 0 acceptance: 17,614 / 19,974 = 88.2%
+- Position 1 acceptance: 14,617 / 19,974 = 73.2%
+- num_gpu_blocks: 1,844 (vs 2,466 on cu130 — MTP draft model overhead, expected)
 
 **Acceptance:** c1 >= 65 tok/s AND no concurrent throughput regression.
+
+**Notes (2026-04-23):** c1 (51.2) does not meet the 65 tok/s adopt threshold, but is a significant improvement over the Qwen3.6-cu130 baseline (+20.5%). c8 aggregate nearly doubles (178.2 → 384.4). MTP acceptance rate of 80.7% is excellent (>70% considered good). c1 is still slightly below the Qwen3.5-cu130 original baseline (53.5). See Work Item 3.4 for adopt/rollback decision.
 
 ---
 

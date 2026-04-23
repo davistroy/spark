@@ -125,8 +125,8 @@ Downloads ~72 GB (26 safetensors shards). Runs alongside live model — zero dis
 
 ---
 
-### Work Item 1.2: Verify download integrity
-**Status: PENDING**
+### Work Item 1.2: Verify download integrity — Completed 2026-04-23
+**Status: COMPLETE 2026-04-23**
 
 Verify shard count, config.json model_type, and architectures list via a temporary container reading the HF cache.
 

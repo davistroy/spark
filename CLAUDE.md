@@ -37,6 +37,8 @@ After any non-trivial finding (hardware capability/limitation, LLM performance c
 - **Homeserver curl broken:** Use `wget` for all HTTP ops on Unraid 7.2 homeserver. For POST: `wget -O /tmp/resp.txt --header="..." --post-file=/tmp/payload.json URL`.
 - **Production model is Qwen3.6-35B-A3B** (adopted 2026-04-23). Container name and `--served-model-name` remain `qwen3.5-35b` for downstream compatibility.
 - **`enable_thinking: false` placement:** Must be at request top level (`chat_template_kwargs`), NOT inside `extra_body`. Wrong placement silently fails to suppress thinking tokens, causing token exhaustion on short `max_tokens` budgets.
+- **Production image is cu132+MTP** (adopted 2026-04-23). Image: `vllm-cu132-test:latest`. Requires `--entrypoint python3` override (cu132 image uses NVIDIA base entrypoint), `--num-speculative-tokens 2`, `--speculative-model [MTP]`, and `--max-num-batched-tokens 4096`.
+- **Separate Triton caches per CUDA toolkit:** cu130 uses `/home/claude/.cache/triton:/root/.triton`, cu132 uses `/home/claude/.cache/triton-cu132:/root/.triton`. Never mix — rollback requires the original cache intact.
 
 ## Configuration Safety Rules — MANDATORY
 

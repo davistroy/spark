@@ -6,19 +6,22 @@ Last recon: 2026-04-15 (Entry 030)
 ## Current Config
 | Field | Value |
 |-------|-------|
-| image | vllm/vllm-openai:v0.19.0-aarch64-cu130 |
+| image | vllm-cu132-test:latest (v0.19.1rc1.dev219+cu132) — adopted 2026-04-23 |
 | model | Qwen/Qwen3.6-35B-A3B (on-the-fly FP8) — adopted 2026-04-23, snapshot 53c43178507d69762986fbfa314f6e8d4d859409 |
-| vllm_version | v0.19.0 |
+| vllm_version | v0.19.1rc1.dev219+cu132 |
+| speculative_decoding | MTP=2 (method: mtp, num_speculative_tokens: 2, acceptance rate 80.7%) |
+| mtp_drafter | Qwen3_5MoeMTP, 34.16 GiB total model load |
 | moe_backend | TRITON (auto-selected) |
 | fp8_kernel | CutlassFP8ScaledMMLinearKernel |
 | attention_backend | FLASHINFER |
 | async_scheduling | Enabled |
 | chunked_prefill | Enabled |
-| single_request_tok_s | 42.5 (Qwen3.6, 2026-04-23 benchmark) |
-| c4_aggregate_tok_s | 140.7 |
-| c8_aggregate_tok_s | 178.2 |
-| c16_aggregate_tok_s | — (not re-benchmarked) |
-| startup_time | 187s (warm Triton cache) |
+| single_request_tok_s | 51.2 (cu132+MTP, 2026-04-23 benchmark) |
+| c4_aggregate_tok_s | 160.8 |
+| c8_aggregate_tok_s | 384.4 |
+| c16_aggregate_tok_s | 576.0 |
+| startup_time | ~364s (warm Triton cache, cu132-cu132 dir) |
+| triton_cache | /home/claude/.cache/triton-cu132 (separate from cu130 cache) |
 
 ## Previous Config (rollback target)
 | Field | Value |

@@ -3453,3 +3453,63 @@ cu132 + MTP=2 combination validated. The hypothesis that cu132 was necessary for
 ### Status
 
 COMPLETE — benchmarks recorded. See IMPLEMENTATION_PLAN.md Work Item 3.3 and Work Item 3.4 for decision gate.
+
+---
+
+### Entry 037 — Phase 3 Work Item 3.4: cu132+MTP Adopt/Rollback Decision (2026-04-23)
+**Date:** 2026-04-23
+**Operator:** Troy Davis (decision gate)
+**Status:** COMPLETE — **ADOPT**
+
+#### Objective
+
+Work Item 3.4 gate: evaluate cu132+MTP benchmark results (Entry 029) and decide whether to adopt as production config or roll back to cu130 (no MTP).
+
+#### Criteria Results
+
+| Criterion | Plan Target | Actual | Status |
+|-----------|-------------|--------|--------|
+| c1 per-req tok/s | >= 65 | 51.2 | Below threshold |
+| c4 aggregate tok/s | no regression | 160.8 (+14.2% vs cu130) | PASS |
+| c8 aggregate tok/s | no regression | 384.4 (+115.7% vs cu130) | PASS |
+| c16 aggregate tok/s | — | 576.0 | N/A (new measurement) |
+| MTP acceptance rate | >= 70% | 80.7% | PASS |
+| No errors/crashes | Yes | Clean | PASS |
+
+#### Decision: ADOPT
+
+**Rationale:**
+
+1. **c1 at 51.2 tok/s is still +20.5% above the Qwen3.6-cu130 baseline (42.5).** The plan's 65 tok/s target was derived from community benchmarks on different prompt types (lower-entropy prompts). Real-world pipeline prompts may see higher acceptance rates.
+
+2. **Concurrency gains are decisive.** c8 aggregate more than doubles (178.2 → 384.4 tok/s, +115.7%). c4 is +14.2%. c16 hits 576.0 tok/s. The pipeline's primary operating mode is c4-c12 — this is where the system sees the most benefit.
+
+3. **MTP acceptance rate of 80.7% is excellent.** Position 0 at 88.2% and position 1 at 73.2% both exceed the 70% threshold for "good" MTP efficiency. The combined architecture (cu132 CUDA toolkit + cubin-compiled FlashInfer + TRITON MoE) is the right combination for GB10/SM121.
+
+4. **The cu130 config is fully preserved for rollback.** `/home/claude/.cache/triton` (cu130 Triton cache) is untouched. The rollback is a single `docker stop` + `docker run` with the cu130 image and no MTP flags.
+
+5. **MTP confirmed cu132-dependent.** Entry 027 (MTP on cu130) showed net-negative performance. Entry 029 (MTP on cu132) shows 80.7% acceptance and large throughput gains. This confirms the dependency: cu132 native kernel codegen is a prerequisite for MTP to be beneficial on GB10/SM121.
+
+#### Production State After Decision
+
+- Container: `qwen35` running cu132+MTP config (ADOPT — no change from benchmark run)
+- Image: `vllm-cu132-test:latest` (v0.19.1rc1.dev219+cu132)
+- Model: `Qwen/Qwen3.6-35B-A3B`, served as `qwen3.5-35b`
+- Speculative config: `{"method":"mtp","num_speculative_tokens":2}`
+- Triton cache: `/home/claude/.cache/triton-cu132`
+- All other flags unchanged
+
+#### Key Operational Rules Added (cu132+MTP)
+
+1. `--entrypoint python3` override required — cu132 image uses NVIDIA base entrypoint, not vLLM OpenAI server entrypoint
+2. Use `-m vllm.entrypoints.openai.api_server --model <name>` convention (not positional arg)
+3. `--max-num-batched-tokens 4096` required — Mamba cache align mode block_size=2128 must be ≤ max_num_batched_tokens
+4. Separate Triton cache `/home/claude/.cache/triton-cu132` — do NOT share with cu130 kernels
+5. cu130 Triton cache at `/home/claude/.cache/triton` preserved — rollback is immediate
+
+#### Files Updated
+
+- `IMPLEMENTATION_PLAN.md` — 3.4 COMPLETE, 3.5 COMPLETE
+- `SPARK_BASELINE.md` — updated image, vllm_version, throughput numbers, MTP fields, startup time, triton cache
+- `memory/spark-device.md` — qwen35 section replaced with cu132+MTP command, rollback command added
+- `memory/MEMORY.md` — cu132+MTP adoption bullet added

@@ -49,9 +49,9 @@ docker images | grep vllm-cu132
 
 ---
 
-### Work Item 1.2 — Benchmark WITHOUT MTP
+### Work Item 1.2 — Benchmark WITHOUT MTP ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 1.1
 
 **Task:** Stop the production container. Start a new qwen35 container identical to production but WITHOUT `--speculative-config` and `--max-num-batched-tokens 4096`. Run the full throughput benchmark suite.

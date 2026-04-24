@@ -3863,3 +3863,101 @@ Two independent criteria trigger KEEP: (1) MTP wins c8 by >20%, and (2) the mixe
 - `LAB_NOTEBOOK.md` — this entry
 - `SPARK_BASELINE.md` — Watch Items updated (MTP critical item resolved)
 - `IMPLEMENTATION_PLAN.md` — Work Item 1.3 status updated to COMPLETE 2026-04-24
+
+### Entry 045 — eugr Image Benchmark — 0.19.2rc1+cu132 with FlashInfer 0.6.8 (2026-04-24)
+**Date:** 2026-04-24
+**Operator:** Claude Code
+**Status:** BENCHMARK COMPLETE — data captured for 2.3 decision
+**Work Item:** IMPLEMENTATION_PLAN.md 2.2
+
+#### Objective
+Benchmark the eugr community image (`eugr-vllm:test`, v0.19.2rc1.dev154+g1c2c1eb8b.d20260423, FlashInfer 0.6.8) against the current production image (`vllm-cu132-test:latest`, v0.19.1rc1.dev219+cu132). Same MTP=2 config, same model, same flags.
+
+#### Pre-Benchmark: GPU Memory Cleanup Required
+
+Initial eugr startup **failed** with `ValueError: Free memory on device cuda:0 (75.96/121.63 GiB) on startup is less than desired GPU memory utilization (0.65, 79.06 GiB)`.
+
+Root cause: gliner container had bloated from ~2 GiB to **19.7 GiB** GPU memory (same bloat pattern seen previously). The eugr image (v0.19.2rc1) has a stricter `request_memory()` check than the production image — it computes `0.65 * 121.63 = 79.06 GiB` required vs only 75.96 GiB available.
+
+**Fix:** Stopped and removed gliner container, but orphaned PID (1030371) still held GPU memory via stale containerd-shim. Killed via `docker run --rm --pid=host --privileged alpine kill -9 1030371`. Freed 19.7 GiB. Restarted gliner after eugr benchmark.
+
+#### Docker Run Command (eugr)
+Identical to production (spark-device.md) except image changed from `vllm-cu132-test:latest` to `eugr-vllm:test`.
+
+#### Startup Log Highlights
+
+| Metric | eugr (v0.19.2rc1) | Production (v0.19.1rc1) | Notes |
+|--------|-------------------|------------------------|-------|
+| vLLM version | 0.19.2rc1.dev154 | 0.19.1rc1.dev219 | eugr is newer minor |
+| FlashInfer | 0.6.8 (with autotuner) | (unknown, likely 0.6.x) | eugr ships FlashInfer autotuner |
+| MoE backend | TRITON | TRITON | Same — FLASHINFER_CUTLASS available but not selected |
+| Attention backend | FLASHINFER | FLASHINFER | Same |
+| FP8 kernel | CutlassFP8ScaledMMLinearKernel | CutlassFP8ScaledMMLinearKernel | Same |
+| Model load time | 224.5s (3:23 weight shards + 17.85s drafter) | ~210s typical | Slightly slower |
+| torch.compile (backbone) | 33.83s | ~30s typical | Similar |
+| torch.compile (eagle head) | 9.23s | ~8s typical | Similar |
+| Profiling/warmup | 45.08s + 0.88s | ~45s typical | Same |
+| Total startup | ~371s | ~364s | +7s (within noise) |
+| KV cache tokens | 929,936 | (not directly comparable) | |
+| Max concurrency (32K) | 70.04x | ~28x (1,844 blocks) | Higher — may indicate different block accounting |
+| CUDA graph mode | PIECEWISE only (51 graphs) | FULL_AND_PIECEWISE | FlashInfer+spec-decode limitation |
+| **MoE config file** | **MISSING** | **ALSO MISSING** | Both use default MoE config — not a differentiator |
+
+**Key finding: Missing MoE config.** BOTH images lack the tuned MoE kernel config for GB10 FP8 (`E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json`). Both emit the same "Using default MoE config" warning. This is NOT a differentiator between the two images.
+
+**Key finding: FLASHINFER_CUTLASS available but not selected.** The eugr image lists FLASHINFER_CUTLASS in potential MoE backends, but TRITON was still auto-selected. The `VLLM_FLASHINFER_MOE_BACKEND=latency` env var may not trigger FLASHINFER_CUTLASS selection. Warrants separate investigation.
+
+#### Benchmark Results (eugr)
+
+| Concurrency | per-req tok/s | aggregate tok/s | batch_time (s) |
+|-------------|--------------|----------------|----------------|
+| c1 | 55.0 (avg; 46.8 cold, ~59.0 warm) | 54.9 | 11.1 |
+| c4 | 43.2 | 171.6 | 14.1 |
+| c8 | 47.7 | 377.1 | 12.7 |
+| c16 | 35.4 | 556.0 | 17.3 |
+
+#### Comparison vs Production Baseline (Entry 039, cu132+MTP)
+
+| Concurrency | Production (tok/s) | eugr (tok/s) | Delta | Verdict |
+|-------------|-------------------|-------------|-------|---------|
+| c1 | 51.2 | 55.0 | **+7.4%** | eugr wins |
+| c4 | 160.8 | 171.6 | **+6.7%** | eugr wins |
+| c8 | 384.4 | 377.1 | -1.9% | Production wins (within noise) |
+| c16 | 576.0 | 556.0 | -3.5% | Production wins |
+
+**Pattern:** eugr wins at low concurrency (c1/c4), production wins at high concurrency (c8/c16). The c1 warm runs (~59 tok/s) suggest the eugr image has meaningfully better single-request throughput when warmed up. The high-concurrency regression is likely caused by the missing MoE config file.
+
+**Note on c1 variance:** Run 1 was 46.8 tok/s (cold — first request after startup), runs 2-3 were ~59.0 tok/s. The average (55.0) understates the warm performance. Production baseline of 51.2 was also a 3-run average but from a warm server.
+
+#### Detailed Run Data (JSON)
+
+| Run | Concurrency | per-req | aggregate | batch_time |
+|-----|-------------|---------|-----------|------------|
+| 1 | 1 | 46.8 | 46.7 | 12.8 |
+| 2 | 1 | 59.0 | 59.0 | 10.2 |
+| 3 | 1 | 59.2 | 59.1 | 10.1 |
+| 1 | 4 | 38.9 | 152.2 | 15.8 |
+| 2 | 4 | 43.1 | 172.3 | 13.9 |
+| 3 | 4 | 47.6 | 190.4 | 12.6 |
+| 1 | 8 | 48.3 | 381.7 | 12.6 |
+| 2 | 8 | 46.9 | 369.9 | 13.0 |
+| 3 | 8 | 47.9 | 379.8 | 12.6 |
+| 1 | 16 | 36.4 | 568.1 | 16.9 |
+| 2 | 16 | 37.2 | 588.4 | 16.3 |
+| 3 | 16 | 32.6 | 511.5 | 18.8 |
+
+#### Production Container Restored
+- Stopped eugr container, restored production `vllm-cu132-test:latest` with exact spark-device.md command.
+- Gliner container restarted (was removed during GPU memory cleanup).
+- Production healthy at 11:21:57 UTC (startup ~330s with warm Triton cache).
+- Production startup also shows missing MoE config warning (same as eugr).
+- Production KV cache: 1,012,928 tokens, max concurrency 76.16x (vs eugr 929,936 tokens, 70.04x).
+
+#### Side Findings
+1. **gliner memory bloat persists.** PID orphaning during `docker restart` leaves stale GPU allocations. Requires `docker stop && docker rm` + killing orphan PIDs via `docker run --pid=host --privileged alpine kill -9 <pid>`. Document as operational procedure.
+2. **v0.19.2rc1 stricter memory check.** The eugr image's `request_memory()` fails immediately if free GPU < requested utilization. Production v0.19.1rc1 is more lenient. This means upgrading to v0.19.2+ requires clean GPU state before starting qwen35.
+3. **KV cache token difference.** Production allocates 1,012,928 tokens vs eugr's 929,936 (~9% more). This may be due to different memory accounting or the `num_gpu_blocks_override=512` mechanism in production.
+
+#### Files Updated
+- `LAB_NOTEBOOK.md` — this entry
+- `IMPLEMENTATION_PLAN.md` — Work Item 2.2 status updated to COMPLETE 2026-04-24

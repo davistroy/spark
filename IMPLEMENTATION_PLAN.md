@@ -101,9 +101,9 @@ python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwe
 
 ---
 
-### Work Item 1.3 — MTP A/B comparison and decision
+### Work Item 1.3 — MTP A/B comparison and decision ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 1.2
 
 **Task:** Compare no-MTP results (1.2) against existing MTP results. Make adopt/drop decision using these criteria:

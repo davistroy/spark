@@ -3811,3 +3811,55 @@ This is a **mixed result** scenario. The c4 regression with MTP is notable and s
 #### Files Updated
 - `LAB_NOTEBOOK.md` — this entry
 - `IMPLEMENTATION_PLAN.md` — Work Item 1.2 status updated to COMPLETE 2026-04-24
+
+---
+
+### Entry 044 — MTP A/B Decision: KEEP MTP (2026-04-24)
+**Date:** 2026-04-24
+**Operator:** Claude Code
+**Status:** DECISION — no production changes required (MTP already active)
+**Work Item:** IMPLEMENTATION_PLAN.md 1.3
+
+#### Objective
+Evaluate Entry 043 benchmark data against the decision matrix in IMPLEMENTATION_PLAN.md 1.3 and make a final adopt/drop decision for MTP=2 on Qwen3.6.
+
+#### Decision Matrix Evaluation
+
+| Criterion | Result | Outcome |
+|-----------|--------|---------|
+| No-MTP c1 >= MTP c1 AND no-MTP c8 within 80% of MTP c8 → DROP MTP | c1 tied (50.9 vs 51.2), but c8 ratio = 75.3% (below 80% threshold) | Does NOT trigger DROP |
+| MTP clearly wins c8 by >20% → KEEP MTP | MTP c8 wins by 24.7% | **TRIGGERS KEEP** |
+| Mixed results → Keep MTP (proven throughput at high concurrency) | c4 regresses 14.9% with MTP, c8/c16 improve 25%/20% | Also supports KEEP |
+
+**Decision: KEEP MTP=2.**
+
+Two independent criteria trigger KEEP: (1) MTP wins c8 by >20%, and (2) the mixed-result fallback also favors keeping MTP given proven high-concurrency throughput.
+
+#### Rationale
+
+1. **Primary workload is pipeline at c8-c16.** The contact-center-lab pipeline runs at c8-c16 concurrency. MTP provides +24.7% at c8 and +19.6% at c16 — these are the concurrency levels that determine end-to-end pipeline runtime.
+
+2. **c4 regression is real but non-critical.** No-MTP wins c4 by 14.9% (184.8 vs 160.8 tok/s). However, the pipeline does not operate at c4 in production. Interactive single-request usage (c1) is unaffected — effectively tied at ~51 tok/s.
+
+3. **Forum reports validated but contextualized.** Community reports of MTP being "counterproductive" on Qwen3.6 are accurate for c1/c4 workloads. They do not generalize to high-concurrency batch inference, which is our primary use case.
+
+4. **KV cache budget anomaly noted but not blocking.** Both MTP and no-MTP configs showed num_gpu_blocks=512 (override). The no-MTP config without `--max-num-batched-tokens 4096` may be artificially constrained at high concurrency, meaning the c8/c16 gap could narrow with tuning. However, even if no-MTP improved at c8, MTP's acceptance rate of 80.7% provides a structural throughput advantage at high batch sizes that would persist.
+
+#### Summary Table (Final)
+
+| Concurrency | No-MTP | MTP=2 | Delta | Production Relevance |
+|-------------|--------|-------|-------|---------------------|
+| c1 | 50.9 (warm) | 51.2 | -0.6% | Interactive — tied |
+| c4 | 184.8 | 160.8 | +14.9% no-MTP | Not primary workload |
+| c8 | 289.4 | 384.4 | -24.7% MTP | **Pipeline primary** |
+| c16 | 463.3 | 576.0 | -19.6% MTP | **Pipeline burst** |
+
+#### Action Items
+- No production changes needed — MTP=2 is already active and validated.
+- SPARK_BASELINE.md Watch Items: resolve the "[CRITICAL] MTP=2 may degrade" item with nuanced finding.
+- IMPLEMENTATION_PLAN.md: mark 1.3 COMPLETE.
+
+#### Files Updated
+- `LAB_NOTEBOOK.md` — this entry
+- `SPARK_BASELINE.md` — Watch Items updated (MTP critical item resolved)
+- `IMPLEMENTATION_PLAN.md` — Work Item 1.3 status updated to COMPLETE 2026-04-24

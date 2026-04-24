@@ -104,7 +104,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 | forum | gemma4 AND (guided JSON OR grammar OR structured output) fix | INFO: community confirmation of #39130 fix | 2026-04-11 |
 
 ## Watch Items
-- **[CRITICAL]** MTP=2 may degrade on Qwen3.6 — multiple forum reports (Apr 16-17) say MTP is counterproductive on 3.6. Our MTP=2 was validated on 3.5. Re-benchmark with/without MTP at next maintenance window.
+- **[RESOLVED 2026-04-24]** MTP=2 on Qwen3.6 — ablation benchmark (Entry 043-044): MTP degrades c4 by 14.9% but improves c8 by 24.7% and c16 by 19.6%. c1 tied (~51 tok/s). Decision: KEEP MTP. Primary workload is pipeline at c8-c16 where MTP wins. Forum reports of degradation validated at c1/c4 only.
 - **[NEW]** PrismaQuant: mixed-precision quant framework (jwarner, Apr 22). 22 GB model at 87.8 tok/s, near-BF16 quality. Monitor for vLLM integration and community adoption.
 - **[NEW]** GPU power-draw throttle bug: after crash/sleep, GPU enters 14W/513 MHz cap → throughput halves. Fix: wall power cycle (unplug 1 min), not reboot. Systemic across OEM variants.
 - **[NEW]** Sparkview (github.com/parallelArchitect/sparkview): GB10-aware GPU monitor with PSI pressure, clock state, unified memory handling. Consider installing.

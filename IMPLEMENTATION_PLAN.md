@@ -428,9 +428,9 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 ---
 
-### Work Item 4.5 — Update memory files and baseline
+### Work Item 4.5 — Update memory files and baseline ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 4.4
 
 **Task:** Update spark-device.md container command and any SPARK_BASELINE.md / CLAUDE.md references.
@@ -441,19 +441,40 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 ---
 
-### Work Item 4.6 — Flag contact-center-lab for update
+### Work Item 4.6 — Flag contact-center-lab for update ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 4.4
 
 **Task:** Document required changes in contact-center-lab as follow-up. Do NOT modify the other repo from this plan.
 
-**Consumer changes needed (for reference):**
-- `pipeline/config.yaml` lines 24, 30, 77
-- `pipeline/tests/unit/test_llm_client.py` lines 63, 98, 126
-- `experiments/knowledge-base/augmented_knowledge_extraction_complete.ipynb` lines 336, 364
-- `experiments/knowledge-base/servicenow_sampling_and_evaluation.ipynb` line 2011
+**Grep results:** Searched `contact-center-lab` for `qwen3.5-35b` and `qwen3.5` (as model name). Found **10 actionable references** across 4 files, plus 2 non-actionable bibliographic citations.
 
-**Acceptance:** Follow-up documented in LAB_NOTEBOOK.md with file paths and line numbers.
+#### Actionable — Must update `qwen3.5-35b` → `spark-llm`
 
-**Files:** LAB_NOTEBOOK.md
+| # | File | Line | Context | Change |
+|---|------|------|---------|--------|
+| 1 | `pipeline/config.yaml` | 24 | Comment: `# Available models: spark-qwen3.5-35b` | Update comment to `spark-llm` |
+| 2 | `pipeline/config.yaml` | 30 | LiteLLM proxy model: `model: "spark-qwen3.5-35b"` | → `"spark-llm"` (must also match LiteLLM proxy config) |
+| 3 | `pipeline/config.yaml` | 77 | Direct DGX Spark model: `model: "qwen3.5-35b"` | → `"spark-llm"` |
+| 4 | `pipeline/tests/unit/test_llm_client.py` | 63 | Test fixture: `model="qwen3.5-35b"` | → `"spark-llm"` |
+| 5 | `pipeline/tests/unit/test_llm_client.py` | 98 | Assertion: `assert client._model == "qwen3.5-35b"` | → `"spark-llm"` |
+| 6 | `pipeline/tests/unit/test_llm_client.py` | 126 | Assertion: `assert client._model == "qwen3.5-35b"` | → `"spark-llm"` |
+| 7 | `experiments/knowledge-base/augmented_knowledge_extraction_complete.ipynb` | 336 | Output cell: `"DGX Spark model: qwen3.5-35b\n"` | Update output text |
+| 8 | `experiments/knowledge-base/augmented_knowledge_extraction_complete.ipynb` | 364 | Config class: `dgx_spark_model: str = "qwen3.5-35b"` | → `"spark-llm"` |
+| 9 | `experiments/knowledge-base/servicenow_sampling_and_evaluation.ipynb` | 2011 | Curl example: `"model": "qwen3.5-35b"` | → `"spark-llm"` |
+| 10 | `pipeline/config.yaml` | 30 | The LiteLLM proxy route `spark-qwen3.5-35b` must also be updated on the proxy side | Coordinate with LiteLLM proxy config |
+
+#### Non-actionable — Bibliographic / upstream model references (no change needed)
+
+| File | Line | Context | Reason |
+|------|------|---------|--------|
+| `research/LLM for Structured JSON Extraction.md` | 204 | Citation: `qwen3.5-397b-a17b` on NVIDIA NIM | Different model (397B), upstream reference |
+| `research/LLM for Structured JSON Extraction.md` | 246 | Citation: `Qwen3.5-35B-A3B` on OpenRouter | Upstream model name, not our served-model-name |
+
+#### Dependency note
+Item #2/#10: The LiteLLM proxy config at `llm.troy-davis.com` routes `spark-qwen3.5-35b` to the Spark backend. That proxy route must be updated to `spark-llm` BEFORE or simultaneously with the `config.yaml` change, or the pipeline will fail to connect.
+
+**Acceptance:** Follow-up documented with file paths, line numbers, and dependency notes. ✅
+
+**Files:** `IMPLEMENTATION_PLAN.md`

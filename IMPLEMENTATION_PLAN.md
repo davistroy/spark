@@ -31,9 +31,9 @@
 
 **Current state:** MTP=2 active, acceptance rate 80.7%, benchmarks: c1=51.2, c4=160.8, c8=384.4, c16=576.0 tok/s.
 
-### Work Item 1.1 — Tag current image for rollback
+### Work Item 1.1 — Tag current image for rollback ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 
 **Task:** Tag the current production image so it can be restored if anything goes wrong during testing.
 

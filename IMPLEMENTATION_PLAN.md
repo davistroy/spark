@@ -344,9 +344,9 @@ docker rm qwen35
 
 **Prerequisite:** Phases 1-3 complete (config stable, no more container restarts expected).
 
-### Work Item 4.1 — Update benchmark script defaults
+### Work Item 4.1 — Update benchmark script defaults ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 
 **Task:** Change default `--model` argument in both benchmark scripts.
 
@@ -361,9 +361,9 @@ docker rm qwen35
 
 ---
 
-### Work Item 4.2 — Update SPARK_CONFIG.md
+### Work Item 4.2 — Update SPARK_CONFIG.md ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 
 **Task:** Update all model name references.
 
@@ -379,9 +379,9 @@ docker rm qwen35
 
 ---
 
-### Work Item 4.3 — Update spark-dashboard.json
+### Work Item 4.3 — Update spark-dashboard.json ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 
 **Task:** Replace all 19 Prometheus metric label references.
 

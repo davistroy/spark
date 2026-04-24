@@ -103,7 +103,7 @@
       "title": "Container Process Memory (RSS)",
       "type": "timeseries",
       "targets": [
-        { "expr": "process_resident_memory_bytes{job=\"vllm-llm\"}", "legendFormat": "LLM (qwen3.5-35b)", "refId": "A" },
+        { "expr": "process_resident_memory_bytes{job=\"vllm-llm\"}", "legendFormat": "LLM (spark-llm)", "refId": "A" },
         { "expr": "process_resident_memory_bytes{job=\"vllm-embed\"}", "legendFormat": "Embed (qwen3-embed-4b)", "refId": "B" }
       ]
     },
@@ -125,7 +125,7 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
       "id": 101,
-      "title": "LLM \u2014 qwen3.5-35b (:8000)",
+      "title": "LLM \u2014 spark-llm (:8000)",
       "type": "row"
     },
     {
@@ -136,7 +136,7 @@
       "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "title": "Running",
       "type": "stat",
-      "targets": [{ "expr": "vllm:num_requests_running{model_name=\"qwen3.5-35b\"}", "refId": "A" }]
+      "targets": [{ "expr": "vllm:num_requests_running{model_name=\"spark-llm\"}", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
@@ -146,7 +146,7 @@
       "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "title": "Waiting",
       "type": "stat",
-      "targets": [{ "expr": "vllm:num_requests_waiting{model_name=\"qwen3.5-35b\"}", "refId": "A" }]
+      "targets": [{ "expr": "vllm:num_requests_waiting{model_name=\"spark-llm\"}", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
@@ -156,7 +156,7 @@
       "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
       "title": "KV Cache Usage",
       "type": "gauge",
-      "targets": [{ "expr": "vllm:kv_cache_usage_perc{model_name=\"qwen3.5-35b\"}", "refId": "A" }]
+      "targets": [{ "expr": "vllm:kv_cache_usage_perc{model_name=\"spark-llm\"}", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
@@ -167,8 +167,8 @@
       "title": "Token Throughput",
       "type": "timeseries",
       "targets": [
-        { "expr": "rate(vllm:prompt_tokens_total{model_name=\"qwen3.5-35b\"}[1m])", "legendFormat": "Prompt tok/s", "refId": "A" },
-        { "expr": "rate(vllm:generation_tokens_total{model_name=\"qwen3.5-35b\"}[1m])", "legendFormat": "Gen tok/s", "refId": "B" }
+        { "expr": "rate(vllm:prompt_tokens_total{model_name=\"spark-llm\"}[1m])", "legendFormat": "Prompt tok/s", "refId": "A" },
+        { "expr": "rate(vllm:generation_tokens_total{model_name=\"spark-llm\"}[1m])", "legendFormat": "Gen tok/s", "refId": "B" }
       ]
     },
     {
@@ -180,10 +180,10 @@
       "title": "Latency",
       "type": "timeseries",
       "targets": [
-        { "expr": "histogram_quantile(0.5, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "TTFT p50", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "TTFT p95", "refId": "B" },
-        { "expr": "histogram_quantile(0.5, rate(vllm:inter_token_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "ITL p50", "refId": "C" },
-        { "expr": "histogram_quantile(0.95, rate(vllm:inter_token_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "ITL p95", "refId": "D" }
+        { "expr": "histogram_quantile(0.5, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"spark-llm\"}[5m]))", "legendFormat": "TTFT p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{model_name=\"spark-llm\"}[5m]))", "legendFormat": "TTFT p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.5, rate(vllm:inter_token_latency_seconds_bucket{model_name=\"spark-llm\"}[5m]))", "legendFormat": "ITL p50", "refId": "C" },
+        { "expr": "histogram_quantile(0.95, rate(vllm:inter_token_latency_seconds_bucket{model_name=\"spark-llm\"}[5m]))", "legendFormat": "ITL p95", "refId": "D" }
       ]
     },
     {
@@ -195,9 +195,9 @@
       "title": "E2E Request Latency",
       "type": "timeseries",
       "targets": [
-        { "expr": "histogram_quantile(0.5, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "p50", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "p95", "refId": "B" },
-        { "expr": "histogram_quantile(0.99, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"qwen3.5-35b\"}[5m]))", "legendFormat": "p99", "refId": "C" }
+        { "expr": "histogram_quantile(0.5, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"spark-llm\"}[5m]))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"spark-llm\"}[5m]))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, rate(vllm:e2e_request_latency_seconds_bucket{model_name=\"spark-llm\"}[5m]))", "legendFormat": "p99", "refId": "C" }
       ]
     },
     {
@@ -209,8 +209,8 @@
       "title": "Requests & Preemptions",
       "type": "timeseries",
       "targets": [
-        { "expr": "rate(vllm:request_success_total{model_name=\"qwen3.5-35b\"}[5m])", "legendFormat": "Success/s", "refId": "A" },
-        { "expr": "rate(vllm:num_preemptions_total{model_name=\"qwen3.5-35b\"}[5m])", "legendFormat": "Preemptions/s", "refId": "B" }
+        { "expr": "rate(vllm:request_success_total{model_name=\"spark-llm\"}[5m])", "legendFormat": "Success/s", "refId": "A" },
+        { "expr": "rate(vllm:num_preemptions_total{model_name=\"spark-llm\"}[5m])", "legendFormat": "Preemptions/s", "refId": "B" }
       ]
     },
     {
@@ -311,7 +311,7 @@
       "title": "KV Cache Usage Over Time",
       "type": "timeseries",
       "targets": [
-        { "expr": "vllm:kv_cache_usage_perc{model_name=\"qwen3.5-35b\"}", "legendFormat": "LLM KV Cache", "refId": "A" }
+        { "expr": "vllm:kv_cache_usage_perc{model_name=\"spark-llm\"}", "legendFormat": "LLM KV Cache", "refId": "A" }
       ]
     },
     {
@@ -323,8 +323,8 @@
       "title": "Active Requests Over Time",
       "type": "timeseries",
       "targets": [
-        { "expr": "vllm:num_requests_running{model_name=\"qwen3.5-35b\"}", "legendFormat": "LLM Running", "refId": "A" },
-        { "expr": "vllm:num_requests_waiting{model_name=\"qwen3.5-35b\"}", "legendFormat": "LLM Waiting", "refId": "B" },
+        { "expr": "vllm:num_requests_running{model_name=\"spark-llm\"}", "legendFormat": "LLM Running", "refId": "A" },
+        { "expr": "vllm:num_requests_waiting{model_name=\"spark-llm\"}", "legendFormat": "LLM Waiting", "refId": "B" },
         { "expr": "vllm:num_requests_running{model_name=\"qwen3-embedding-4b\"}", "legendFormat": "Embed Running", "refId": "C" }
       ]
     }

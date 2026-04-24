@@ -8,6 +8,7 @@ Last recon: 2026-04-24 (Entry 042)
 |-------|-------|
 | image | vllm-cu132-test:latest (v0.19.1rc1.dev219+cu132) — adopted 2026-04-23 |
 | model | Qwen/Qwen3.6-35B-A3B (on-the-fly FP8) — adopted 2026-04-23, snapshot 53c43178507d69762986fbfa314f6e8d4d859409 |
+| served_model_name | spark-llm (renamed from qwen3.5-35b on 2026-04-24, Phase 4) |
 | vllm_version | v0.19.1rc1.dev219+cu132 |
 | speculative_decoding | MTP=2 (method: mtp, num_speculative_tokens: 2, acceptance rate 80.7%) |
 | mtp_drafter | Qwen3_5MoeMTP, 34.16 GiB total model load |

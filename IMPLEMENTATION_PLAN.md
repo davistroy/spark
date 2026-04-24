@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-24
 **Branch:** spark-optimization-2026-04-24
-**Status:** PENDING
+**Status:** COMPLETE (15/16 items done, 1 skipped) — finalized 2026-04-24
 
 **Context:** Spark-recon Entry 042 (2026-04-24) found multiple community reports that MTP speculative decoding degrades performance on Qwen3.6. Our MTP=2 was validated on Qwen3.5 and carried forward without re-benchmark. Additionally, eugr's spark-vllm-docker has a newer build (0.19.2rc1+cu132 with flashinfer_cutlass re-enabled), gliner memory bloat blocked the gpu_util 0.70 tuning attempt, and the legacy served-model-name `qwen3.5-35b` needs updating.
 

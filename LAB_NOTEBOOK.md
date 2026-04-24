@@ -4018,3 +4018,134 @@ The criteria are split: c1 triggers ADOPT (>= 5% improvement), but c8 triggers R
 - `LAB_NOTEBOOK.md` — this entry
 - `SPARK_BASELINE.md` — eugr watch item resolved
 - `IMPLEMENTATION_PLAN.md` — Work Item 2.3 status updated to COMPLETE 2026-04-24
+
+---
+
+## Entry 047 — GLiNER Container Restart (Memory Reclamation) — 2026-04-24
+
+**Work Item:** 3.1 (IMPLEMENTATION_PLAN.md)
+**Goal:** Restart gliner to reclaim GPU memory bloat (19.7 GiB observed during Entry 045/046 benchmarking).
+
+### Pre-Restart State
+
+The gliner container had already auto-restarted via its `--restart unless-stopped` policy after an orphan PID was killed during the eugr benchmark (Entry 045, Work Item 2.2). At the time of this work item:
+
+| Metric | Value |
+|--------|-------|
+| Container uptime | 11 minutes (auto-restarted) |
+| System memory | 919.9 MiB |
+| GPU memory (PID 1921263) | 1,963 MiB |
+
+The auto-restart had already reclaimed memory from the 19.7 GiB bloat state.
+
+### Actions Taken
+
+Performed a clean stop/rm/run cycle for a proper restart regardless of auto-restart state:
+
+1. `sudo docker stop gliner && sudo docker rm gliner`
+2. Started fresh container using exact command from `spark-device.md`:
+   ```bash
+   docker run -d \
+     --name gliner \
+     --restart unless-stopped \
+     --gpus all \
+     -p 8002:8002 \
+     -v /home/davistroy/gliner-env/hf-cache:/root/.cache/huggingface \
+     -e GLINER_MODEL=urchade/gliner_large-v2.1 \
+     -e GLINER_DEVICE=cuda \
+     gliner-ner:latest
+   ```
+3. Verified health via NER API test request (PERSON + ORGANIZATION extraction).
+
+### Post-Restart State
+
+| Metric | Value |
+|--------|-------|
+| Container ID | 35e6d149a1cd |
+| System memory | 3.91 GiB |
+| GPU memory (PID 1931788) | 1,963 MiB (~1.9 GiB) |
+| API response | Healthy (correct PERSON/ORG extraction) |
+
+### Memory Comparison
+
+| State | GPU Memory | Notes |
+|-------|-----------|-------|
+| Bloated (during 2.2) | ~19.7 GiB | Accumulated over extended runtime |
+| After clean restart | 1.9 GiB | Normal (~2 GiB expected) |
+| Delta reclaimed | ~17.8 GiB | Available for gpu_util 0.70 attempt (Work Item 3.2) |
+
+### Result
+
+GLiNER memory usage confirmed at ~2 GiB, matching expected baseline from spark-device.md. The 17.8 GiB reclamation unblocks Work Item 3.2 (retry gpu_util 0.70).
+
+### Files Updated
+- `LAB_NOTEBOOK.md` — this entry
+- `IMPLEMENTATION_PLAN.md` — Work Item 3.1 status updated to COMPLETE 2026-04-24
+
+---
+
+## Entry 049: Qwen3.6 Chat Template Format Analysis (2026-04-24)
+
+**Work Item:** 3.3 — Check Qwen3.6 chat template format
+**Goal:** Determine whether Qwen3.6's tool calling format is JSON or XML, validating that `--tool-call-parser qwen3_coder` is correct.
+
+### Method
+
+Read the chat template directly from the HF cache on Spark:
+```
+sudo cat /home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B/snapshots/53c43178507d69762986fbfa314f6e8d4d859409/chat_template.jinja
+```
+
+Note: Qwen3.6 ships the template as a standalone `chat_template.jinja` file (not embedded in `tokenizer_config.json` like Qwen3.5). No `tokenizer_config.json` exists in the Qwen3.6 snapshot.
+
+### Finding: XML Format Confirmed
+
+The Qwen3.6 chat template instructs the model to use XML-style tool calls:
+
+```
+<tool_call>
+<function=example_function_name>
+<parameter=example_parameter_1>
+value_1
+</parameter>
+<parameter=example_parameter_2>
+This is the value for the second parameter
+that can span
+multiple lines
+</parameter>
+</function>
+</tool_call>
+```
+
+This is the same XML format used by Qwen3.5. No JSON function calling format present.
+
+### Parser Analysis
+
+Inspected vLLM's tool parser registry (`vllm/tool_parsers/__init__.py`). Two parsers handle this XML format:
+
+| Parser Name | Class | File | LOC | Implementation |
+|-------------|-------|------|-----|----------------|
+| `qwen3_coder` | `Qwen3CoderToolParser` | `qwen3coder_tool_parser.py` | 683 | Regex-based XML parsing |
+| `qwen3_xml` | `Qwen3XMLToolParser` | `qwen3xml_tool_parser.py` | 1295 | expat XML parser + streaming state machine |
+
+Both parsers use the same sentinel tokens:
+- `<tool_call>` / `</tool_call>`
+- `<function=...>` / `</function>`
+- `<parameter=...>` / `</parameter>`
+
+The `qwen3_coder` parser's internal error message explicitly says "Qwen3 XML Tool parser" — confirming it IS an XML parser despite the `coder` name.
+
+### Decision
+
+| Question | Answer |
+|----------|--------|
+| Template format | XML (`<tool_call><function=...><parameter=...>`) |
+| Current parser correct? | **YES** — `qwen3_coder` parses this exact XML format |
+| Change needed? | **NO** — current config is correct |
+| Work Item 3.4 needed? | **NO** — skip (parser already matches template format) |
+| Future consideration | `qwen3_xml` could offer better streaming robustness (expat vs regex), testable at a future maintenance window |
+
+### Files Updated
+- `LAB_NOTEBOOK.md` — this entry
+- `SPARK_BASELINE.md` — watch item resolved
+- `IMPLEMENTATION_PLAN.md` — Work Items 3.3 (COMPLETE) and 3.4 (SKIP) updated

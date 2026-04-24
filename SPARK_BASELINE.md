@@ -120,6 +120,6 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 - DanTup/spark-evals GitHub repo — systematic Inspect AI quality evals across quant formats.
 - Qwen4 monitor: no announcement as of 2026-04-24, prediction markets suggest before July 2026
 - Forum stream loading + gather-free Triton decode techniques: may be relevant for multi-request scenarios (c16, c32)
-- Tool calling fix: `--tool-call-parser qwen3_xml` + enhanced jinja template. Untested on Qwen3.6. Test at next maintenance window.
+- **[RESOLVED 2026-04-24]** Tool calling parser: Qwen3.6 uses XML format (`<tool_call><function=...><parameter=...>`). Current `qwen3_coder` parser is correct — it parses this XML format via regex. `qwen3_xml` is an alternative (expat-based, 1295 LOC vs 683 LOC) that parses the same format. No change needed. Optional: test `qwen3_xml` at next maintenance window for potential streaming robustness improvement.
 - Gemma 4 NVFP4 at 45 tok/s (vs our 38.9 FP8): delta explained by NVFP4 quantization. Guided JSON still untested. Revisit when vLLM fixes structured output.
 - InstantTensor in eugr/spark-vllm-docker — operator fusion library, monitor for perf claims

@@ -242,9 +242,9 @@ If REJECT: restore from `vllm-cu132-test:pre-optimization-2026-04-24`.
 
 **Goal:** Reclaim wasted GPU memory and determine the correct tool-calling parser for Qwen3.6.
 
-### Work Item 3.1 — Restart gliner, verify memory reclamation
+### Work Item 3.1 — Restart gliner, verify memory reclamation ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 
 **Task:** Restart the gliner container to reclaim accumulated GPU memory (19.7 GiB → expected ~2 GiB). Prerequisite for retrying gpu_util 0.70.
 
@@ -311,82 +311,30 @@ docker rm qwen35
 
 ---
 
-### Work Item 3.3 — Check Qwen3.6 chat template format
+### Work Item 3.3 — Check Qwen3.6 chat template format ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 
-**Task:** Determine whether Qwen3.6's tokenizer_config.json uses XML or JSON format for tool calls. Zero-risk pre-test — no container restart needed.
+**Task:** Determine whether Qwen3.6's chat template uses XML or JSON format for tool calls. Zero-risk pre-test — no container restart needed.
 
-**SSH commands:**
-```bash
-python3 -c "
-import json, glob
-files = glob.glob('/home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B/snapshots/*/tokenizer_config.json')
-tc = json.load(open(files[0]))
-tmpl = tc.get('chat_template', 'NOT FOUND')
-if '<tool_call>' in tmpl or 'tool_call>' in tmpl:
-    print('FORMAT: XML')
-elif 'tool_calls' in tmpl:
-    print('FORMAT: JSON')
-else:
-    print('FORMAT: UNKNOWN — manual inspection needed')
-print('---')
-for line in tmpl.split(chr(10)):
-    if 'tool' in line.lower():
-        print(line.strip()[:120])
-"
-```
+**What was done:** Read `chat_template.jinja` from the HF cache snapshot (`/home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B/snapshots/53c43178507d69762986fbfa314f6e8d4d859409/chat_template.jinja`). Note: Qwen3.6 ships the template as a standalone `.jinja` file, not embedded in `tokenizer_config.json`.
 
-**Decision:**
+**Result:** XML format confirmed -- template uses `<tool_call><function=...><parameter=...>` tags. The current `--tool-call-parser qwen3_coder` is correct because `Qwen3CoderToolParser` parses exactly this XML format (despite the `coder` name). A separate `qwen3_xml` parser also exists (expat-based, more robust streaming) and parses the same format -- testable at a future maintenance window but not required.
 
-| Template Format | Correct Parser | Action |
-|----------------|---------------|--------|
-| JSON | `qwen3_coder` (current) | No change. Resolve watch item. Skip 3.4. |
-| XML | `qwen3_xml` | Proceed to 3.4. |
-| Unknown | — | Print full template, inspect manually. |
+**Decision:** No change needed. Watch item resolved. Work Item 3.4 SKIPPED.
 
-**Acceptance:** Format determined and documented.
+**Acceptance:** Format determined (XML). Current parser validated. Documented in LAB_NOTEBOOK.md Entry 049.
 
-**Files:** LAB_NOTEBOOK.md, SPARK_BASELINE.md (resolve watch item if JSON)
+**Files:** LAB_NOTEBOOK.md (Entry 049), SPARK_BASELINE.md (watch item resolved)
 
 ---
 
-### Work Item 3.4 — Live test qwen3_xml parser (conditional)
+### Work Item 3.4 — Live test qwen3_xml parser (conditional) -- SKIPPED
 
-**Status:** PENDING
-**Depends on:** 3.3 result = XML
-**Skip if:** 3.3 result = JSON
+**Status:** SKIPPED 2026-04-24
+**Reason:** Work Item 3.3 confirmed that `qwen3_coder` already correctly parses Qwen3.6's XML tool call format. Both `qwen3_coder` (regex) and `qwen3_xml` (expat) handle the same `<tool_call><function=...><parameter=...>` tags. No parser change needed.
 
-**Task:** During a container cycle, test `qwen3_xml` parser with 10 tool-calling requests.
-
-**SSH commands:**
-```bash
-# When restarting qwen35 for any reason, temporarily use --tool-call-parser qwen3_xml
-
-# Run 10 tool-call requests
-for i in $(seq 1 10); do
-  curl -s http://localhost:8000/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{
-      "model":"qwen3.5-35b",
-      "messages":[{"role":"user","content":"What is the weather in Boston?"}],
-      "tools":[{"type":"function","function":{"name":"get_weather","description":"Get weather for a city","parameters":{"type":"object","properties":{"location":{"type":"string"}},"required":["location"]}}}],
-      "tool_choice":"auto"
-    }' | python3 -c "
-import json, sys
-r = json.load(sys.stdin)
-c = r['choices'][0]
-fr = c['finish_reason']
-tc = c['message'].get('tool_calls', [])
-ok = fr == 'tool_calls' and len(tc) > 0 and tc[0]['function']['name'] == 'get_weather'
-print(f'Run $i: finish_reason={fr}, tool_calls={len(tc)}, valid={ok}')
-"
-done
-```
-
-**Acceptance:** ≥9/10 succeed with valid tool calls. If <9/10: revert to `qwen3_coder`.
-
-**Files:** LAB_NOTEBOOK.md, spark-device.md (update if parser changed)
+**Future consideration:** `qwen3_xml` (1295 LOC, expat-based) may offer better streaming robustness than `qwen3_coder` (683 LOC, regex-based). Can be tested at a future maintenance window without urgency.
 
 ---
 

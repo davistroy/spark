@@ -10,3 +10,4 @@ __pycache__/
 *.so
 *.egg-info/
 .venv/
+.implement-plan-state.json

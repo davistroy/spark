@@ -3961,3 +3961,60 @@ Identical to production (spark-device.md) except image changed from `vllm-cu132-
 #### Files Updated
 - `LAB_NOTEBOOK.md` — this entry
 - `IMPLEMENTATION_PLAN.md` — Work Item 2.2 status updated to COMPLETE 2026-04-24
+
+---
+
+### Entry 046 — eugr Image Decision: REJECT (2026-04-24)
+**Date:** 2026-04-24
+**Operator:** Claude Code
+**Status:** DECISION COMPLETE
+**Work Item:** IMPLEMENTATION_PLAN.md 2.3
+
+#### Objective
+Apply the adopt/reject decision criteria from work item 2.3 to the eugr benchmark data captured in Entry 045.
+
+#### Decision Criteria (from IMPLEMENTATION_PLAN.md 2.3)
+
+| Scenario | Decision |
+|----------|----------|
+| eugr >=5% improvement at c1 or c8 | ADOPT eugr image |
+| eugr within 5% | STAY on current image (avoid unnecessary change) |
+| eugr regresses | REJECT, restore current image |
+
+#### Analysis
+
+| Concurrency | Production (tok/s) | eugr (tok/s) | Delta | Criteria Match |
+|-------------|-------------------|--------------|-------|----------------|
+| c1 | 51.2 | 55.0 | +7.4% | >= 5% improvement (ADOPT signal) |
+| c4 | 160.8 | 171.6 | +6.7% | >= 5% improvement (ADOPT signal) |
+| c8 | 384.4 | 377.1 | -1.9% | Regression (REJECT signal) |
+| c16 | 576.0 | 556.0 | -3.5% | Regression (REJECT signal) |
+
+The criteria are split: c1 triggers ADOPT (>= 5% improvement), but c8 triggers REJECT (regression). This requires workload-weighted judgment.
+
+**Workload profile:** The production pipeline (`contact-center-lab`) runs at c8-c16 concurrency. The c1/c4 levels are only hit during interactive/ad-hoc usage, which is a minor fraction of total inference volume.
+
+**Regression at pipeline concurrency:** The c8 regression (-1.9%) is within noise, but the c16 regression (-3.5%) is consistent across all three runs (568.1, 588.4, 511.5 vs production's 576.0 baseline). The c16 run 3 outlier (511.5 tok/s, -11.2%) suggests the eugr image may have higher variance under heavy load.
+
+**Root cause hypothesis:** The eugr image allocates fewer KV cache tokens (929,936 vs production's 1,012,928 — 8.2% fewer). This directly limits high-concurrency scheduling headroom. The CUDA graph mode difference (PIECEWISE only vs FULL_AND_PIECEWISE) may also contribute to c16 regression.
+
+**Risk assessment:** eugr is v0.19.2rc1 (newer, less tested than our v0.19.1rc1). The stricter `request_memory()` check already caused a startup failure during benchmarking (Entry 045). Adopting introduces operational fragility without a throughput win at the concurrency levels that matter.
+
+#### Decision: REJECT
+
+**Rationale:** Production wins at c8 (-1.9%) and c16 (-3.5%), which are the primary pipeline concurrency levels. The c1/c4 gains (+7%) are real but irrelevant to the dominant workload. The image also introduces operational risk (stricter memory checks, fewer KV cache tokens, untested in production). Not worth the change.
+
+**Actions taken:**
+- Production container already restored to `vllm-cu132-test:latest` (done in Entry 045).
+- eugr image preserved on Spark as `eugr-vllm-0192:latest` / `eugr-vllm:test` for future reference.
+- SPARK_BASELINE.md watch item resolved.
+- IMPLEMENTATION_PLAN.md work item 2.3 marked COMPLETE.
+
+**Future considerations:**
+- If eugr or community ships a tuned MoE config for GB10 FP8 (the missing `E=256,N=512` config), re-benchmark — it may close the c8/c16 gap.
+- FlashInfer 0.6.8 autotuner is worth monitoring. If it lands in a future vLLM stable release, the c1/c4 gains may carry forward without the image-specific regressions.
+
+#### Files Updated
+- `LAB_NOTEBOOK.md` — this entry
+- `SPARK_BASELINE.md` — eugr watch item resolved
+- `IMPLEMENTATION_PLAN.md` — Work Item 2.3 status updated to COMPLETE 2026-04-24

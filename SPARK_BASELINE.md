@@ -108,7 +108,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 - **[NEW]** PrismaQuant: mixed-precision quant framework (jwarner, Apr 22). 22 GB model at 87.8 tok/s, near-BF16 quality. Monitor for vLLM integration and community adoption.
 - **[NEW]** GPU power-draw throttle bug: after crash/sleep, GPU enters 14W/513 MHz cap → throughput halves. Fix: wall power cycle (unplug 1 min), not reboot. Systemic across OEM variants.
 - **[NEW]** Sparkview (github.com/parallelArchitect/sparkview): GB10-aware GPU monitor with PSI pressure, clock state, unified memory handling. Consider installing.
-- **[NEW]** eugr 0.19.2rc1.dev154+cu132 build (Apr 23): flashinfer_cutlass re-enabled, FlashInfer 0.6.8, PR #40191 torch fix. Worth benchmarking.
+- **[RESOLVED 2026-04-24]** eugr 0.19.2rc1.dev154+cu132 build: benchmarked Entry 045-046. REJECTED — c8 -1.9%, c16 -3.5% regression at pipeline concurrency. c1/c4 improved +7% but irrelevant to primary workload. Image preserved on Spark as `eugr-vllm-0192:latest` for future reference.
 - **[NEW]** vLLM v0.20.0 prerelease (Apr 23): CUDA 13.0 default, PyTorch 2.11, FlashAttention 4, TurboQuant 2-bit KV, MoE refactor. Monitor for stable release.
 - **[NEW]** Qwen3.6-27B (Apr 22): dense 27B, Gated DeltaNet hybrid, FP8 on HF. Bandwidth-limited ~7.8 tok/s on GB10 (15.2 with MTP=3). Not primary model candidate but could serve as routing/fast model.
 - **[NEW]** Qwen3.6-35B-A3B-FP8 official pre-quant on HF. Pre-quant hang rule (from Qwen3.5 experience) needs re-test on 3.6.

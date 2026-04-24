@@ -216,9 +216,9 @@ python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwe
 
 ---
 
-### Work Item 2.3 — Image adopt/reject decision
+### Work Item 2.3 — Image adopt/reject decision ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 2.2
 
 **Task:** Compare eugr benchmark results against Phase 1 winner.

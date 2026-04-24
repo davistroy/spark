@@ -65,7 +65,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 ## Version Tracking
 | Field | Value |
 |-------|-------|
-| vllm_last_checked_version | v0.17.1 |
+| vllm_last_checked_version | v0.19.0 |
 | vllm_latest_observed | v0.19.0 (2026-04-03, HIGH priority — Qwen3.5 FP8 optimizations + SM120/121 support) |
 | qwen_current_model | Qwen/Qwen3.6-35B-A3B (adopted 2026-04-23) |
 
@@ -99,7 +99,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 | vllm_release | FlashInfer AND (heterogeneous OR mixed head) | INFO: could boost Gemma 4 single-request past 50 tok/s | 2026-04-11 |
 | vllm_release | MXFP4 AND (online OR on-the-fly OR Qwen) | INFO: test MXFP4 quantization path on Qwen3.5 | 2026-04-11 |
 | vllm_release | speculative AND (Qwen OR MoE) | INFO: test spec decode with Qwen3-0.6B draft model | 2026-04-11 |
-| arena | fp8 AND qwen3.5 AND single-node > 58 tok/s | ACTION: investigate config difference vs our 53.5 | 2026-04-11 |
+| arena | fp8 AND {model_family} AND single-node > baseline_tok_s * 1.10 | ACTION: investigate config difference vs current baseline | 2026-04-11 |
 | huggingface | Qwen3.6-Plus OR Qwen4 model weights | ACTION: benchmark day — full throughput + quality suite | 2026-04-11 |
 | forum | gemma4 AND (guided JSON OR grammar OR structured output) fix | INFO: community confirmation of #39130 fix | 2026-04-11 |
 

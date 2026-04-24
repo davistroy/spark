@@ -270,9 +270,9 @@ python3 -c "import torch; f,t=torch.cuda.mem_get_info(); print(f'Free: {f/1024**
 
 ---
 
-### Work Item 3.2 — Retry gpu_util 0.70
+### Work Item 3.2 — Retry gpu_util 0.70 ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 3.1, Phase 2 complete (final image + MTP config known)
 
 **Task:** Restart qwen35 with `--gpu-memory-utilization 0.70`. Now feasible since gliner memory reclaimed.

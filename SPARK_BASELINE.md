@@ -1,6 +1,6 @@
 # Spark Performance Baseline
 
-Last updated: 2026-04-23
+Last updated: 2026-04-24
 Last recon: 2026-04-24 (Entry 042)
 
 ## Current Config
@@ -16,10 +16,12 @@ Last recon: 2026-04-24 (Entry 042)
 | attention_backend | FLASHINFER |
 | async_scheduling | Enabled |
 | chunked_prefill | Enabled |
-| single_request_tok_s | 51.2 (cu132+MTP, 2026-04-23 benchmark) |
-| c4_aggregate_tok_s | 160.8 |
-| c8_aggregate_tok_s | 384.4 |
-| c16_aggregate_tok_s | 576.0 |
+| gpu_memory_utilization | 0.70 (increased from 0.65 on 2026-04-24) |
+| kv_cache_memory | 47.95 GiB (1,142,736 tokens, max concurrency 85.92x) |
+| single_request_tok_s | 59.9 (cu132+MTP, gpu_util 0.70, 2026-04-24 benchmark) |
+| c4_aggregate_tok_s | 166.2 |
+| c8_aggregate_tok_s | 373.8 |
+| c16_aggregate_tok_s | 564.0 |
 | startup_time | ~364s (warm Triton cache, cu132-cu132 dir) |
 | triton_cache | /home/claude/.cache/triton-cu132 (separate from cu130 cache) |
 

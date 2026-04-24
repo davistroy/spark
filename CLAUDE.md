@@ -31,7 +31,7 @@ After any non-trivial finding (hardware capability/limitation, LLM performance c
 - **Ethernet static IP:** enP7s7 set to <spark-lan-ip>/24, route-metric=700 (WiFi=600 takes priority). NM reads from `/run/NetworkManager/system-connections/` first — write there AND `/etc/`. Delete NM auto-generated volatile profiles.
 - **Ethernet switch port: USW Pro 24 Port 10.** Do NOT move cable. Moving triggers MAC flapping detection and silently drops all frames. If you must change ports, reboot the switch afterward.
 - **Dual-homed routing hazard:** WiFi (.32) and Ethernet (.33) on same /24. Ethernet route-metric MUST be higher than WiFi (700 vs 600).
-- **GPU memory utilization 0.65** (reduced from 0.72 on 2026-03-28). num_gpu_blocks=2466.
+- **GPU memory utilization 0.70** (increased from 0.65 on 2026-04-24 after gliner memory fix). KV cache: 47.95 GiB, 1,142,736 tokens, max concurrency 85.92x.
 - **sysctl tuning applied:** `vm.swappiness=1`, `vm.min_free_kbytes=262144`, TCP buffers increased. Persisted in `/etc/sysctl.d/99-spark-tuning.conf`.
 - **Grafana 12 dashboards:** Use direct datasource UIDs (`{"uid": "PBFA97CFB590B2093"}`), not template variable references (`${DS_PROMETHEUS}`). Omit `"type"` field. Template vars cause panels not to render in Grafana 12.4.2.
 - **Homeserver curl broken:** Use `wget` for all HTTP ops on Unraid 7.2 homeserver. For POST: `wget -O /tmp/resp.txt --header="..." --post-file=/tmp/payload.json URL`.

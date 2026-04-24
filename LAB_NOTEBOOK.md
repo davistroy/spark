@@ -4148,4 +4148,83 @@ The `qwen3_coder` parser's internal error message explicitly says "Qwen3 XML Too
 ### Files Updated
 - `LAB_NOTEBOOK.md` — this entry
 - `SPARK_BASELINE.md` — watch item resolved
+
+---
+
+## Entry 050: gpu-memory-utilization 0.65 → 0.70 (2026-04-24)
+
+**Work Item:** 3.2 — Retry gpu_util 0.70
+**Goal:** Increase qwen35 GPU memory utilization from 0.65 to 0.70, now feasible after gliner memory fix (Entry 048: 19.7 GiB → 1.9 GiB).
+
+### Pre-Change GPU State
+
+| Process | Container | GPU Memory |
+|---------|-----------|-----------|
+| VLLM::EngineCore (PID 1921494) | qwen35 | 82,034 MiB |
+| VLLM::EngineCore (PID 4253) | qwen3-embed | 11,810 MiB |
+| VLLM::EngineCore (PID 1901937) | bge-m3 | 1,681 MiB |
+| python (PID 1908252) | ce-service | 1,538 MiB |
+| python3 (PID 1931788) | gliner | 1,989 MiB |
+| **Total** | | **99,052 MiB (~96.7 GiB)** |
+
+### Headroom Calculation
+
+- 0.70 × 121.6 GiB = 85.1 GiB for qwen35 (was 80.1 GiB at 0.65)
+- Estimated new total: 85.1 + 11.5 + 1.6 + 1.5 + 1.9 = 101.6 GiB
+- Remaining for OS: ~20 GiB -- sufficient
+
+### Change Applied
+
+Stopped qwen35, restarted with ONLY `--gpu-memory-utilization 0.70` changed (was 0.65). All other flags identical to production command in spark-device.md.
+
+### Startup
+
+- Container ID: `3a9ed10e7ec7`
+- GPU memory at t=60s: 12,963 MiB (model loading in progress)
+- Health check passed at t=285s (~4.75 min)
+- Final GPU memory: 87,994 MiB (~85.9 GiB)
+
+### KV Cache Comparison
+
+| Metric | 0.65 | 0.70 | Change |
+|--------|------|------|--------|
+| Available KV cache memory | ~36 GiB (est) | 47.95 GiB | +33% |
+| KV cache tokens | — | 1,142,736 | — |
+| Max concurrency (32K req) | — | 85.92x | — |
+| num_gpu_blocks_override | — | 512 (block_size=2128) | — |
+
+Note: Mamba hybrid architecture uses block_size=2128 (attention block size aligned with Mamba page size). The num_gpu_blocks_override=512 is set by the Mamba cache alignment mode.
+
+### Benchmark Results (3 runs per level)
+
+| Concurrency | 0.65 baseline | 0.70 new | Delta |
+|-------------|--------------|----------|-------|
+| c1 | 51.2 tok/s | **59.9 tok/s** | **+17.0%** |
+| c4 agg | 160.8 tok/s | **166.2 tok/s** | **+3.4%** |
+| c8 agg | 384.4 tok/s | 373.8 tok/s | -2.8% |
+| c16 agg | 576.0 tok/s | 564.0 tok/s | -2.1% |
+
+c1 shows a significant +17% improvement. c4 slight improvement. c8/c16 within run-to-run variance (~3%).
+
+### Post-Change GPU State
+
+| Process | Container | GPU Memory |
+|---------|-----------|-----------|
+| VLLM::EngineCore (PID 1937846) | qwen35 | 87,994 MiB |
+| VLLM::EngineCore (PID 4253) | qwen3-embed | 11,810 MiB |
+| VLLM::EngineCore (PID 1901937) | bge-m3 | 1,681 MiB |
+| python (PID 1908252) | ce-service | 1,538 MiB |
+| python3 (PID 1931788) | gliner | 1,989 MiB |
+| **Total** | | **105,012 MiB (~102.6 GiB)** |
+| **Remaining** | | **~19 GiB for OS/buffers** |
+
+### Result
+
+**SUCCESS.** gpu_util 0.70 deployed and stable. KV cache memory increased by ~33%. c1 throughput improved +17% (59.9 vs 51.2 tok/s). Pipeline-relevant c8/c16 within noise of previous baseline.
+
+### Files Updated
+- `LAB_NOTEBOOK.md` — this entry
+- `spark-device.md` — docker run command updated (0.65 → 0.70), GPU memory budget updated, performance numbers updated
+- `SPARK_BASELINE.md` — gpu_memory_utilization, kv_cache_memory, throughput numbers updated
+- `IMPLEMENTATION_PLAN.md` — Work Item 3.2 status updated to COMPLETE 2026-04-24
 - `IMPLEMENTATION_PLAN.md` — Work Items 3.3 (COMPLETE) and 3.4 (SKIP) updated

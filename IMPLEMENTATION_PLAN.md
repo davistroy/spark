@@ -132,34 +132,34 @@ python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwe
 
 **Prerequisite:** Phase 1 complete (we know the winning MTP config).
 
-### Work Item 2.1 — Pull eugr's 0.19.2rc1 build
+### Work Item 2.1 — Pull eugr's 0.19.2rc1 build ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 1.3
 
 **Task:** Pull the prebuilt vLLM and FlashInfer wheels from eugr's GitHub releases and build a test image, OR pull eugr's Docker image directly if available.
 
-**SSH commands:**
-```bash
-# Check eugr's repo structure for build instructions
-# Releases at:
-#   https://github.com/eugr/spark-vllm-docker/releases/tag/prebuilt-vllm-current
-#   https://github.com/eugr/spark-vllm-docker/releases/tag/prebuilt-flashinfer-current
+**What was done:** No GHCR image available. Cloned repo, build script auto-downloaded prebuilt wheels from GitHub releases, built runner image (Stage 6 only — no source compilation). Build time: 4:53.
 
-# Option A: Clone and build from repo
+**SSH commands used:**
+```bash
 git clone https://github.com/eugr/spark-vllm-docker.git /tmp/svd
 cd /tmp/svd
-# Follow README build instructions
-# Tag output: docker tag <output> vllm-eugr-0192:test
-
-# Option B: If Docker image available via GHCR
-docker pull ghcr.io/eugr/spark-vllm-docker:latest
-docker tag ghcr.io/eugr/spark-vllm-docker:latest vllm-eugr-0192:test
+bash build-and-copy.sh -t eugr-vllm-0192 --full-log
+docker tag eugr-vllm-0192:latest eugr-vllm:test
 ```
 
-**Note:** Exact build method depends on eugr's repo structure. Inspect README first. The prebuilt wheels (v0.19.2rc1.dev154+cu132 and FlashInfer 0.6.8) were published 2026-04-23.
+**Result:**
+- Image: `eugr-vllm-0192:latest` / `eugr-vllm:test` (same image ID: `83aec1653cd6`)
+- Size: 19.3 GB
+- vLLM: `0.19.2rc1.dev154+g1c2c1eb8b.d20260423.cu132`
+- FlashInfer: 0.6.8 (cubin + jit_cache + python wheels)
+- Base: `nvidia/cuda:13.2.0-devel-ubuntu24.04`
+- Entrypoint: `/opt/nvidia/nvidia_entrypoint.sh` (needs `--entrypoint python3` override, same as current image)
+- Python: 3.12, transformers 5.6.2, torch 2.11.0
+- Note: Includes custom NCCL with mesh support (dgxspark-3node-ring), ray, fastsafetensors, instanttensor
 
-**Acceptance:** `docker images | grep eugr` shows the new image. `docker inspect` confirms cu132 CUDA toolkit.
+**Acceptance:** `docker images | grep eugr` shows both tags. Entrypoint confirmed via `docker inspect`. Production containers untouched.
 
 **Files:** None (remote only)
 
@@ -208,7 +208,7 @@ until curl -sf http://localhost:8000/health; do sleep 10; done
 python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwen3.5-35b --concurrency 1 4 8 16
 ```
 
-**Note:** `--entrypoint python3` may not be needed depending on eugr's base image entrypoint. Check first: `docker inspect vllm-eugr-0192:test --format '{{.Config.Entrypoint}}'`.
+**Note:** `--entrypoint python3` IS needed — eugr image uses NVIDIA base entrypoint (`/opt/nvidia/nvidia_entrypoint.sh`), same as our cu132 image. Confirmed via `docker inspect eugr-vllm:test`. Also: eugr image ships with transformers 5.6.2 (vs our image's transformers 4.x) — monitor for any behavioral differences.
 
 **Acceptance:** Benchmark completes. Results compared against Phase 1 winner.
 

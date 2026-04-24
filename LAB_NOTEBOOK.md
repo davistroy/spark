@@ -3690,3 +3690,50 @@ If template emits XML → `qwen3_xml` is the correct parser; switch is safe.
 ### Files Updated
 
 - `IMPLEMENTATION_PLAN.md` — Work Item 4.1 Status changed to COMPLETE 2026-04-23, result and recommendation documented
+
+### Entry 042 — Spark Recon (2026-04-24)
+**Date:** 2026-04-24 13:42 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Check: INFO (spark-arena.com 403 — data from forum threads)
+- Top FP8 Qwen3.6 single-node tg128 c1: 76.82 tok/s (serapis, no MTP) — within existing 70-81 baseline range
+- PrismaQuant contender: 87.8 tok/s c1 (JW2026) — +7.1% over 81 baseline top, below 10% ACTION threshold
+- Intel/Qwen3.6-35B-A3B-int4-AutoRound: ~68.8 tok/s single-node
+
+#### vLLM Release Check: MEDIUM
+- v0.20.0 prerelease (Apr 23): CUDA 13.0 default, PyTorch 2.11, FlashAttention 4, MoE refactor, TurboQuant 2-bit KV cache
+- v0.19.1 stable (Apr 18): Transformers v5.5.3, Gemma4 bug fixes
+- No HIGH keywords (SM121/SM120/Blackwell/GB10)
+
+#### spark-vllm-docker Check: WORTH WATCHING
+- vLLM 0.19.2rc1.dev154+cu132, FlashInfer 0.6.8, flashinfer_cutlass re-enabled, PR #40191 torch fix
+- 6 commits since Apr 15
+
+#### Qwen Model Check: INFO
+- Qwen3.6-27B released Apr 22 (dense, 27B, Gated DeltaNet, FP8 on HF) — bandwidth-limited ~7.8 tok/s on GB10
+- Qwen3.6-35B-A3B-FP8 official pre-quant available
+- Qwen3.6-Plus still API-only; Qwen3.6-Max-Preview closed weights; no Qwen4
+
+#### NVIDIA Forum Check: WORTH WATCHING
+- ~30+ active topics since Apr 15
+- MTP confirmed counterproductive on Qwen3.6 by multiple users (!!!)
+- PrismaQuant: mixed-precision quant, 22 GB model, 87.8 tok/s, near-BF16 quality
+- GPU power-draw throttle bug: 14W/513 MHz after crash → fix is wall power cycle
+- Sparkview: GB10-aware GPU monitor (PSI, throttle state)
+- Tool Eval Bench CLI: Qwen3.6 100/100 on ToolCall-15
+
+#### Cross-Correlated Findings:
+1. PrismaQuant appeared in Arena (87.8 tok/s) and Forum (framework announcement) — strongest new signal
+2. MTP counterproductive on Qwen3.6 — reported in Arena forum data and Forum threads. Our MTP=2 may need re-evaluation.
+3. spark-vllm-docker 0.19.2rc1 + FlashInfer 0.6.8 aligns with PyTorch 2.10/Triton 3.6 migration in Forum
+
+#### Triggered Alerts: No trigger matches
+#### Overall: WORTH WATCHING
+
+#### Recommendations:
+1. **INVESTIGATE:** MTP=2 re-benchmark on Qwen3.6 — multiple reports of degradation. Highest priority.
+2. **EVALUATE:** eugr's 0.19.2rc1+cu132 build (flashinfer_cutlass re-enabled + FlashInfer 0.6.8)
+3. **WATCH:** PrismaQuant (22 GB model, 87.8 tok/s, near-BF16 quality)
+4. **NOTE:** GPU power-draw throttle bug — wall power cycle (not reboot) to fix
+5. **TOOL:** Sparkview for GB10-aware memory/PSI monitoring

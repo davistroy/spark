@@ -1,7 +1,7 @@
 # Spark Performance Baseline
 
 Last updated: 2026-04-23
-Last recon: 2026-04-15 (Entry 030)
+Last recon: 2026-04-24 (Entry 042)
 
 ## Current Config
 | Field | Value |
@@ -65,20 +65,20 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 ## Version Tracking
 | Field | Value |
 |-------|-------|
-| vllm_last_checked_version | v0.19.0 |
-| vllm_latest_observed | v0.19.0 (2026-04-03, HIGH priority — Qwen3.5 FP8 optimizations + SM120/121 support) |
+| vllm_last_checked_version | v0.20.0 (prerelease 2026-04-23) / v0.19.1 (stable 2026-04-18) |
+| vllm_latest_observed | v0.20.0 (2026-04-23, prerelease, MEDIUM — CUDA 13.0 default, PyTorch 2.11, FlashAttention 4, MoE refactor) |
 | qwen_current_model | Qwen/Qwen3.6-35B-A3B (adopted 2026-04-23) |
 
 ## spark-vllm-docker Tracking
 | Field | Value |
 |-------|-------|
-| svd_last_checked_date | 2026-04-15 (eugr/spark-vllm-docker — v0.19.1rc1.dev241+cu132, FlashInfer 0.6.7, InstantTensor added) |
+| svd_last_checked_date | 2026-04-24 (eugr/spark-vllm-docker — v0.19.2rc1.dev154+cu132, FlashInfer 0.6.8, flashinfer_cutlass re-enabled, PR #40191 torch fix) |
 
 ## Forum Tracking
 | Field | Value |
 |-------|-------|
-| forum_last_checked_date | 2026-04-15 |
-| forum_posts_since_041 | 5 new posts since Apr 13 (DFlash LLM discussion, Gemma-4 guide, Qwen3.5 tool-calling fix, vLLM preference thread) |
+| forum_last_checked_date | 2026-04-24 |
+| forum_posts_since_042 | ~30+ active topics since Apr 15 (Qwen3.6 launch, PrismaQuant, GPU power-draw bug, Sparkview, DeepSeek V4, Tool Eval Bench, thermal shutdown) |
 
 ## Gemma 4 Reference Numbers (2026-04-11, Entries 020-021)
 | Model | Quant | c1 tok/s | c8 agg | c16 agg | Notes |
@@ -104,21 +104,22 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 | forum | gemma4 AND (guided JSON OR grammar OR structured output) fix | INFO: community confirmation of #39130 fix | 2026-04-11 |
 
 ## Watch Items
-- vLLM v0.19.0 released 2026-04-03 with Qwen3.5 FP8 "Optimize top-k in Triton sampler" — wait for patch releases (approaching 1-week mark, test soon)
-- vLLM v0.19.1 (unreleased as of 2026-04-10) rumored to include TurboQuant KV cache (forum post bjk110) — monitor for release
-- **[RESOLVED]** Pre-quantized `Qwen/Qwen3.5-35B-A3B-FP8` confirmed on HuggingFace (official). On-the-fly FP8 (52.32 tok/s) outperforms pre-quantized (50.75 tok/s on Arena). No switch needed unless cold-start time matters.
-- **[NEW]** Qwen3.6-Plus announced ~April 2, 2026 — hybrid linear attention + sparse MoE, 1M context. No HF weights yet. Monitor for model availability and Spark feasibility.
-- **[NEW]** Track `eugr/spark-vllm-docker` instead of `nickyu42/spark-vllm-docker` (nickyu42 404 across 3 consecutive recon runs)
-- **[NEW]** saikanov "Only got 50 TPS" thread (Apr 9) — review for config comparison insights during next upgrade cycle
-- **[NEW]** MTP=2 speculative decoding validated by multiple community members at 70-81 tok/s FP8 single-stream (joshua.dale.warner, forum thread 366326). Our top optimization priority.
-- **[NEW]** Hybrid INT4+FP8 checkpoint achieves 108-125 tok/s synthetic, ~80 sustained. Requires custom checkpoint build. Future investigation after MTP.
-- **[NEW]** DanTup/spark-evals GitHub repo — systematic Inspect AI quality evals across quant formats. Bookmark for quality validation.
-- **[NEW]** PyTorch 2.11.0 stable now sufficient for SM121 (eugr pinned, no longer needs nightly)
-- coolthor's MXFP4 analysis: 57-59 tok/s on Qwen3.5 — potential 20% improvement path
-- FlashInfer PR #2913 GDC fix: included in vLLM 0.19.0 — no longer a blocker
-- Qwen4 monitor: no announcement as of 2026-04-10, prediction markets suggest before July 2026
+- **[CRITICAL]** MTP=2 may degrade on Qwen3.6 — multiple forum reports (Apr 16-17) say MTP is counterproductive on 3.6. Our MTP=2 was validated on 3.5. Re-benchmark with/without MTP at next maintenance window.
+- **[NEW]** PrismaQuant: mixed-precision quant framework (jwarner, Apr 22). 22 GB model at 87.8 tok/s, near-BF16 quality. Monitor for vLLM integration and community adoption.
+- **[NEW]** GPU power-draw throttle bug: after crash/sleep, GPU enters 14W/513 MHz cap → throughput halves. Fix: wall power cycle (unplug 1 min), not reboot. Systemic across OEM variants.
+- **[NEW]** Sparkview (github.com/parallelArchitect/sparkview): GB10-aware GPU monitor with PSI pressure, clock state, unified memory handling. Consider installing.
+- **[NEW]** eugr 0.19.2rc1.dev154+cu132 build (Apr 23): flashinfer_cutlass re-enabled, FlashInfer 0.6.8, PR #40191 torch fix. Worth benchmarking.
+- **[NEW]** vLLM v0.20.0 prerelease (Apr 23): CUDA 13.0 default, PyTorch 2.11, FlashAttention 4, TurboQuant 2-bit KV, MoE refactor. Monitor for stable release.
+- **[NEW]** Qwen3.6-27B (Apr 22): dense 27B, Gated DeltaNet hybrid, FP8 on HF. Bandwidth-limited ~7.8 tok/s on GB10 (15.2 with MTP=3). Not primary model candidate but could serve as routing/fast model.
+- **[NEW]** Qwen3.6-35B-A3B-FP8 official pre-quant on HF. Pre-quant hang rule (from Qwen3.5 experience) needs re-test on 3.6.
+- **[NEW]** Tool Eval Bench CLI (SerraphimSerapis): Qwen3.6 scores 100/100 on ToolCall-15. Install: `uv tool install git+https://github.com/SeraphimSerapis/tool-eval-bench.git`
+- **[NEW]** Thermal shutdown issue systemic across DGX Spark OEMs. Throttle GPU clocks to 2100-2400 MHz if experiencing shutdowns.
+- Qwen3.6-Plus: still API-only (Apr 24), no HF weights. Monitor for open-weight release.
+- **[RESOLVED]** vLLM v0.19.1 released 2026-04-18. TurboQuant landed in v0.20.0, not v0.19.1.
+- Hybrid INT4+FP8 checkpoint achieves 108-125 tok/s synthetic, ~80 sustained. Requires custom checkpoint build. Future investigation.
+- DanTup/spark-evals GitHub repo — systematic Inspect AI quality evals across quant formats.
+- Qwen4 monitor: no announcement as of 2026-04-24, prediction markets suggest before July 2026
 - Forum stream loading + gather-free Triton decode techniques: may be relevant for multi-request scenarios (c16, c32)
-- **[RESOLVED]** DFlash LLM (diffusion-based speculative decoding): NOT ACTIONABLE — requires gpu_memory_utilization ≤0.60 (ours is 0.65), FP8 untested, realistic gains 5-10% on reasoning workloads. Community: "not that good most of the time."
-- **[NEW]** Qwen3.5 tool calling fix: `--tool-call-parser qwen3_xml` + enhanced jinja template. 6-hour sessions confirmed working. Test at next maintenance window. (Dickson, Apr 13)
-- **[NEW]** Gemma 4 NVFP4 at 45 tok/s (vs our 38.9 FP8): delta explained by NVFP4 quantization, not config. Guided JSON still untested. Revisit when vLLM #39130 fixes structured output.
-- **[NEW]** InstantTensor added to eugr/spark-vllm-docker (Apr 14) — operator fusion library, monitor for perf claims
+- Tool calling fix: `--tool-call-parser qwen3_xml` + enhanced jinja template. Untested on Qwen3.6. Test at next maintenance window.
+- Gemma 4 NVFP4 at 45 tok/s (vs our 38.9 FP8): delta explained by NVFP4 quantization. Guided JSON still untested. Revisit when vLLM fixes structured output.
+- InstantTensor in eugr/spark-vllm-docker — operator fusion library, monitor for perf claims

@@ -4228,3 +4228,47 @@ c1 shows a significant +17% improvement. c4 slight improvement. c8/c16 within ru
 - `SPARK_BASELINE.md` — gpu_memory_utilization, kv_cache_memory, throughput numbers updated
 - `IMPLEMENTATION_PLAN.md` — Work Item 3.2 status updated to COMPLETE 2026-04-24
 - `IMPLEMENTATION_PLAN.md` — Work Items 3.3 (COMPLETE) and 3.4 (SKIP) updated
+
+---
+
+## Entry 051: served-model-name rename qwen3.5-35b → spark-llm (2026-04-24)
+
+**Work Item:** 4.4 — Remote container rename
+**Goal:** Change `--served-model-name` from `qwen3.5-35b` to `spark-llm` on the production Spark container.
+
+### Change
+
+Only parameter changed: `--served-model-name qwen3.5-35b` → `--served-model-name spark-llm`. All other flags identical to production command.
+
+### Procedure
+
+1. Stopped and removed existing container: `docker stop qwen35 && docker rm qwen35`
+2. Started new container with identical command except `--served-model-name spark-llm`
+3. Container name remains `qwen35` (internal reference only)
+
+### Startup
+
+- Container ID: `74a95fff3207`
+- Model loading: 26 shards, 204.1s total (34.16 GiB)
+- MTP drafter loaded: 12.62s (shared weights)
+- torch.compile: 38.37s
+- CUDA graph capture: piecewise=51 (largest=512)
+- KV cache: 512 blocks (block_size=2128), 1,129,968 tokens, 85.08x max concurrency at 32K
+- Health check passed: ~5 min after start
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| `/v1/models` returns `spark-llm` | PASS |
+| Chat completion with `model=spark-llm` | PASS — "Hello! How can I help you today?" |
+| Old name `qwen3.5-35b` rejected | PASS — 404 "model does not exist" |
+| Benchmark c1 (1 run) | 59.1 tok/s (baseline: 59.9) — within variance |
+
+### Result
+
+**SUCCESS.** Model name changed to `spark-llm`. No performance regression. All downstream consumers using the old name `qwen3.5-35b` will need updating (flagged in Work Item 4.6).
+
+### Files Updated
+- `LAB_NOTEBOOK.md` — this entry
+- `IMPLEMENTATION_PLAN.md` — Work Item 4.4 marked COMPLETE 2026-04-24

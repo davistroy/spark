@@ -395,9 +395,9 @@ docker rm qwen35
 
 ---
 
-### Work Item 4.4 — Change served-model-name on remote Spark
+### Work Item 4.4 — Change served-model-name on remote Spark ✅ Completed 2026-04-24
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-24
 **Depends on:** 4.1, 4.2, 4.3
 
 **Task:** Restart qwen35 with `--served-model-name spark-llm`. Verify API responds.

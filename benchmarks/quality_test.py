@@ -5,7 +5,7 @@ Runs identical prompts through two model configs and outputs structured results
 for manual scoring. Designed for pipeline-specific and general capability testing.
 
 Usage:
-    python quality_test.py --url http://localhost:8000 --model qwen3.5-35b
+    python quality_test.py --url http://localhost:8000 --model spark-llm
     python quality_test.py --url http://localhost:8000 --model gemma4-26b --prompts prompts/pipeline.json
 """
 
@@ -114,7 +114,7 @@ def run_prompt(url, model, prompt_data, max_tokens=500):
 def main():
     parser = argparse.ArgumentParser(description="Quality A/B test")
     parser.add_argument("--url", default="http://localhost:8000", help="vLLM base URL")
-    parser.add_argument("--model", default="qwen3.5-35b", help="Model name")
+    parser.add_argument("--model", default="spark-llm", help="Model name")
     parser.add_argument("--prompts", help="Path to custom prompts JSON file")
     parser.add_argument("--max-tokens", type=int, default=500, help="Max tokens per response")
     parser.add_argument("--output", help="Output JSON file path")

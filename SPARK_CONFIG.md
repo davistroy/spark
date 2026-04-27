@@ -85,7 +85,7 @@ The primary LLM serving the Qwen3.5-35B mixture-of-experts model with on-the-fly
 **Key details:**
 - **Image:** `vllm/vllm-openai:v0.19.0-aarch64-cu130` (stock vLLM v0.19.0, ARM64)
 - **Model:** `Qwen/Qwen3.5-35B-A3B` (on-the-fly FP8 quantization)
-- **Served as:** `qwen3.5-35b`
+- **Served as:** `spark-llm`
 - **Max context length:** 32768 tokens
 - **GPU memory utilization:** 0.65
 - **MoE backend:** TRITON (auto-selected)
@@ -107,7 +107,7 @@ docker run -d \
   -v /home/claude/.cache/triton:/root/.triton \
   vllm/vllm-openai:v0.19.0-aarch64-cu130 \
   Qwen/Qwen3.5-35B-A3B \
-    --served-model-name qwen3.5-35b \
+    --served-model-name spark-llm \
     --port 8000 \
     --host 0.0.0.0 \
     --max-model-len 32768 \
@@ -203,9 +203,9 @@ LiteLLM proxy configuration exists at `/home/<user>/litellm/config.yaml` but may
 
 ```yaml
 model_list:
-  - model_name: qwen3.5-35b
+  - model_name: spark-llm
     litellm_params:
-      model: openai/qwen3.5-35b
+      model: openai/spark-llm
       api_base: http://localhost:8000/v1
       api_key: <your-api-key>
 
@@ -352,7 +352,7 @@ These are hard-won lessons. Do not ignore them.
 # LLM — Chat completions
 curl http://<spark-lan-ip>:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen3.5-35b","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"spark-llm","messages":[{"role":"user","content":"Hello"}]}'
 
 # LLM — List models
 curl http://<spark-lan-ip>:8000/v1/models

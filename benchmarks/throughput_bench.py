@@ -96,7 +96,7 @@ def run_benchmark(url, model, max_tokens, concurrency, runs):
 def main():
     parser = argparse.ArgumentParser(description="vLLM throughput benchmark")
     parser.add_argument("--url", default="http://localhost:8000", help="vLLM base URL")
-    parser.add_argument("--model", default="qwen3.5-35b", help="Model name")
+    parser.add_argument("--model", default="spark-llm", help="Model name")
     parser.add_argument("--tokens", type=int, default=600, help="Max completion tokens")
     parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 4, 8, 16], help="Concurrency levels")
     parser.add_argument("--runs", type=int, default=3, help="Runs per concurrency level")

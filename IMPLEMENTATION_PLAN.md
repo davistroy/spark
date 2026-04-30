@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (16/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done + Phase 4 done + Phase 5 done — Phase 6 pending)
+**Status:** COMPLETE (17/17 items complete — Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 all done)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -747,9 +747,9 @@ Note: healthcheck iterative fixes required during test: chromadb uses `/proc/net
 
 **Goal:** Document the NVFP4/INT4 and Gemma 4 paths for future decision-making. No system changes.
 
-### Work Item 6.1 — Scope NVFP4/INT4 quantization path
+### Work Item 6.1 — Scope NVFP4/INT4 quantization path ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** None (can run anytime)
 
 **Task:** Document what's required to pursue the INT4/NVFP4 tier (90+ tok/s). This is a decision-support document, not an action plan.
@@ -771,9 +771,9 @@ Note: healthcheck iterative fixes required during test: chromadb uses `/proc/net
 
 ---
 
-### Work Item 6.2 — Check Gemma 4 community status
+### Work Item 6.2 — Check Gemma 4 community status ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** None (can run anytime)
 
 **Task:** Quick research pass on Gemma 4 status since our April 11 benchmarks (Entry 020-021).
@@ -786,9 +786,15 @@ Note: healthcheck iterative fixes required during test: chromadb uses `/proc/net
 
 **Decision gate:** Schedule a dedicated maintenance window only if: guided JSON is confirmed fixed AND throughput exceeds 50 tok/s c1 on community benchmarks.
 
-**Acceptance:** Status documented. Decision on whether to schedule a Gemma 4 experiment.
+**Findings (2026-04-30, Entry 061):**
+1. **Guided JSON NOT fixed.** Two bugs block deployment: #39130 (xgrammar bypass when `enable_thinking=false`, PR #39138 unmerged) and #40080 (repetition loops under JSON schema, PR #40099 unmerged). Both PRs in review with active engagement but no merge date.
+2. **Throughput gap narrowed significantly.** NVFP4 path (`bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4`, 16.5 GB) achieves 52 tok/s c1 (community, ai-muninn.com Apr 13). FP8 via eugr recipe reaches 45-50 tok/s. Still 21% below our Qwen3.6 production baseline (65.9 tok/s). Throughput gate PASSES; structured output gate FAILS.
+3. **eugr "Gemma 4 fixes" were Python env fixes**, not throughput/correctness fixes. Specifically: PyTorch 2.11.0 pin + transformers 5.x flag fixing initialization failures. InstantTensor separately confirmed to break Gemma 4 26B init (safetensors workaround gives 75% perf regression).
+4. **Best new checkpoint:** `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` (W4A4 modelopt, 97.6% quality retained vs BF16, `VLLM_NVFP4_GEMM_BACKEND=marlin`). 31B dense remains non-viable on single-node (6.8 tok/s NVFP4).
 
-**Files:** LAB_NOTEBOOK.md, SPARK_BASELINE.md (update Gemma 4 reference section), GEMMA4_EXPERIMENT_PLAN.md (update if warranted)
+**Decision:** DO NOT SCHEDULE. Throughput gate passes (52 tok/s > 50 tok/s threshold), structured output gate fails (PRs unmerged). Recon Triggers updated to monitor PR merge status.
+
+**Files:** LAB_NOTEBOOK.md (Entry 061), SPARK_BASELINE.md (Gemma 4 community table, Recon Triggers, Watch Items), GEMMA4_EXPERIMENT_PLAN.md (status update block)
 
 ---
 

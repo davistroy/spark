@@ -5014,3 +5014,411 @@ Snapshot `compose-v1` captured.
 - **gliner-ner image only has /opt/venv/bin/python3**. External health script mounted at `/home/claude/healthchecks/` solves this cleanly without rebuilding the image.
 - **neo4j has wget** (confirmed — standard path).
 - `docker compose up -d --no-deps <service>` is the correct command to apply healthcheck-only changes to individual services without recreating dependent services.
+
+---
+
+## Entry 060 — Phase 6.1: NVFP4/INT4 Quantization Path Scoping (Work Item 6.1) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE (research only — no system changes)
+**Goal:** Document what is required to pursue the INT4/NVFP4 quantization tier targeting 90+ tok/s single-request, and produce a decision matrix for when/whether to pursue each path.
+
+---
+
+### Context: Why INT4/NVFP4 Matters
+
+Current production: 65.9 tok/s c1 (Qwen3.6-35B-A3B, on-the-fly FP8, MTP=2). The community Arena leaderboard shows:
+- FP8 ceiling: ~60-66 tok/s (Seth Hobson, Arena traderaegis, v0.20.0, pre-quant FP8, MTP=1)
+- INT4/NVFP4 tier: 91-127 tok/s documented in community reports
+
+The gap between FP8 (ours) and INT4 (community top) is 38-93% in single-request throughput. At high concurrency (c16), FP8 already beats some INT4 configs due to larger KV cache, but single-request latency matters for interactive use. The question is whether the quality tradeoff justifies the engineering overhead.
+
+---
+
+### Quantization Format Primer
+
+**Why INT4/NVFP4 is faster:** Weight loading from VRAM is the bottleneck for memory-bandwidth-limited inference (which GB10 is — confirmed 44% BW drop under load, 161→90 GB/s). Model weights with on-the-fly FP8 quantization occupy half the VRAM of BF16 (2 bytes/param vs 4), but INT4 formats halve it again (~1 byte/param). With 35B params active across 256 experts (but only ~3B active per token), the decode phase is almost entirely VRAM bandwidth. Halving weight bytes → approaching 2x memory bandwidth per token → proportional throughput gain.
+
+**The quality tradeoff is not free:** Going from BF16 to FP8 incurs ~1-2% quality loss (perplexity increase) depending on model. FP8 preserves exponent range well due to the E4M3 format used by vLLM on Blackwell. INT4 formats like AWQ, GPTQ, and NVFP4 incur 3-6% quality loss — measurable on benchmarks, noticeable on edge cases (complex structured output, multi-step reasoning chains with ambiguous intermediate steps). PrismaQuant's 4.75-bit achieves 88/100 vs FP8's 91/100 on an unspecified internal score — a 3.3% gap that may or may not matter for a given pipeline.
+
+---
+
+### Checkpoint Inventory
+
+Four distinct INT4/NVFP4 quantization paths exist for Qwen3.6-35B-A3B as of 2026-04-30:
+
+#### 1. RedHatAI NVFP4 (MXFP4 block-scaled)
+- **HF handle:** `RedHatAI/Qwen3.6-35B-A3B-NVFP4` (exact name unconfirmed — may be under different org, verify on HF)
+- **Format:** NVFP4 = NVIDIA's Microscaling FP4 (MX spec, E2M1 mantissa, block-scaled per 32 elements)
+- **Disk size:** ~10-11 GB estimated (4-bit weights for ~35B params)
+- **Reported throughput:** 127 tok/s c1 with DFlash speculative decoding (community forum, jwarner)
+- **SM121 status:** REQUIRES hardware support for `cvt.e2m1x2` instruction. GB10 (SM 12.1) has this instruction — it's on Blackwell, not Hopper/Ada. NVFP4 on GB10 works at the hardware level.
+- **Practical blocker:** vLLM NVFP4 inference requires `flashinfer_cutlass` GEMM backend (not standard FlashInfer). This backend is available only in specific builds (nightly cu130 with `--extra-index-url` flags, or DFlash-patched builds). Our `vllm-cu132-test:latest` does not have `flashinfer_cutlass`.
+- **KV cache impact:** NVFP4 model weights are smaller, which frees VRAM for KV cache. At gpu_util=0.70, current KV = 47.95 GiB. With NVFP4 weights saving ~12 GB, KV could grow to ~60 GiB — 25% more tokens at c8/c16.
+
+#### 2. PrismaQuant 4.75-bit (GPTQ hybrid INT4+INT8)
+- **HF handle:** `PrismaQuantized/Qwen3.6-35B-A3B-PrismaQuant-4.75bit-vllm` (Sean Williams, #1 Arena as of 2026-04-30)
+- **Format:** Custom 4.75-bit — a mix of INT4 and INT8 blocks, calibrated with proprietary PrismaQuant toolkit. Not standard GPTQ.
+- **Disk size:** ~15-16 GB estimated (between GPTQ-4bit ~13 GB and GPTQ-8bit ~35 GB)
+- **Reported throughput:** 95.11 tok/s c1 (Sean Williams, Arena #1), ~80 tok/s sustained with DFlash
+- **Quality:** 88/100 internal score vs FP8 91/100 (3.3% gap). DanTup/spark-evals repo cited as measurement source.
+- **SM121 status:** GPTQ-family quantization works on GB10 with standard vLLM. The PrismaQuant format may require the PrismaQuant vLLM fork or specific `quantization=` flags — needs verification.
+- **DFlash dependency:** 95.11 tok/s number uses DFlash speculative decoding. Standard MTP=2 would yield less — estimate 70-80 tok/s based on FP8 MTP/non-MTP ratios.
+- **Minimum viable experiment:** Load checkpoint with `--quantization gptq` or `--quantization prisma` (if format-specific flag required). If it loads without DFlash, benchmark gives baseline INT4 number with MTP.
+
+#### 3. AWQ INT4 (standard 4-bit)
+- **HF handle:** Several community quantizations exist (search `Qwen3.6-35B-A3B AWQ` on HF)
+- **Format:** Activation-aware Weight Quantization — INT4 weights, INT8 activations, group-size 128
+- **Disk size:** ~13-14 GB
+- **Reported throughput:** DFlash entry cites ~80 tok/s, standard vLLM MTP probably 55-65 tok/s
+- **vLLM support:** Native, `--quantization awq`. No special build required — runs on our current cu132 image.
+- **Quality:** AWQ is among the best INT4 formats; 4-8% quality degradation typical
+- **Risk:** AWQ on GB10 has not been independently validated in the community. Standard architecture (Qwen3.6 uses same MoE structure as 3.5 which AWQ supports) suggests it will work, but confirm before committing.
+
+#### 4. Hybrid INT4+FP8 (custom checkpoint)
+- **HF handle:** Not publicly released — referenced as custom community build
+- **Format:** INT4 for linear projections (router, attention) + FP8 for MoE expert weights. Tradeoff: less quality degradation on MoE paths (FP8) vs pure INT4.
+- **Reported throughput:** 108-125 tok/s synthetic, ~80 sustained
+- **Status:** Requires custom checkpoint build with proprietary toolchain. Not a practical path today.
+
+---
+
+### vLLM Build Requirements by Path
+
+The quantization paths require different vLLM builds. This is the primary gating factor:
+
+| Path | Required Build | Available Today? | Gap |
+|------|---------------|-----------------|-----|
+| FP8 on-the-fly (current) | Any cu132+ | Yes (`vllm-cu132-test:latest`) | — |
+| AWQ INT4 | Standard mainline (any) | Yes (cu132 supports AWQ) | None |
+| PrismaQuant 4.75-bit | Likely standard + format flag | Needs verification | Low risk |
+| NVFP4 | `flashinfer_cutlass` backend | No — not in cu132 build | Requires nightly cu130 or DFlash image |
+| DFlash speculative decode | DFlash fork (joshua.dale.warner) | No — not mainline | Not merged, no ETA |
+
+**Key insight:** AWQ INT4 and possibly PrismaQuant can be tested TODAY on the existing cu132 image without any build changes. NVFP4 requires a different build. DFlash adds another layer of complexity beyond NVFP4.
+
+---
+
+### What is DFlash and Why Does It Matter?
+
+DFlash is an alternative speculative decoding implementation developed by community contributor joshua.dale.warner. It differs from vLLM's built-in MTP in how it handles draft token generation:
+- MTP (our current): uses model's built-in multi-token prediction head — works without a separate draft model, no extra VRAM
+- DFlash: uses a separate small draft model (e.g., Qwen3-0.6B) with fused attention kernels for reduced latency per draft step
+
+DFlash's reported throughput advantage on INT4 weights comes from two factors working together: (1) INT4 model loads fast enough that a separate draft model doesn't bottleneck the pipeline, (2) DFlash's attention kernels are tuned for GB10 memory hierarchy. Our MTP=2 already achieves 80.7% acceptance rate on FP8 — whether DFlash would materially outperform MTP on INT4 is unclear without direct benchmarking.
+
+DFlash is not merged into mainline vLLM as of 2026-04-30. Integrating it requires either pulling a community Docker image (which may not have cu132 support) or manually applying patches to a cu132 build — both paths involve significant risk and are hard to maintain across vLLM version updates.
+
+---
+
+### Quality Evaluation Framework
+
+The plan asks about quality eval infrastructure before committing to INT4.
+
+**DanTup/spark-evals** (github.com/DanTup/spark-evals):
+- Uses Inspect AI evaluation framework
+- Runs standardized evals against local vLLM endpoints
+- Coverage: multiple reasoning benchmarks, code generation, instruction following
+- Designed specifically for DGX Spark comparative eval across quantization formats
+- Status as of 2026-04-30: exists, referenced in community forum, specific benchmark coverage unclear
+
+**PrismaQuant's 88/100 vs FP8 91/100** rating:
+- "88/100" and "91/100" are from an unspecified internal score, not a standard benchmark like MMLU or HumanEval
+- These numbers are community-reported without methodology disclosure
+- A 3.3% gap on an opaque composite metric could mask large gaps on specific task types (e.g., structured JSON reliability, long-chain reasoning)
+- For the contact-center-lab pipeline, the relevant quality dimensions are: (1) JSON schema compliance rate, (2) entity extraction precision/recall, (3) tool call format compliance. General benchmarks may not predict performance on these.
+
+**Minimum viable quality framework for this pipeline:**
+1. Run 50 production-format requests (entity extraction + structured JSON + tool calls) against current FP8
+2. Record exact outputs as ground truth
+3. Run identical requests against INT4 candidate
+4. Compute: JSON parse success rate, entity type match rate, tool call format compliance
+5. Accept if all three metrics degrade less than 5% relative
+
+This is faster than running spark-evals from scratch and directly measures pipeline-relevant quality.
+
+---
+
+### Minimum Viable Experiment: AWQ INT4 Without DFlash
+
+The lowest-effort path to an INT4 data point:
+
+1. Identify a community AWQ checkpoint for Qwen3.6-35B-A3B on HuggingFace
+2. Download (~13 GB): `huggingface-cli download <checkpoint>`
+3. Stop qwen35 production container
+4. Start with: `--model <awq-checkpoint> --quantization awq` on existing `vllm-cu132-test:latest`
+5. Run `throughput_bench.py` at c1/c4/c8/c16
+6. Run 20 pipeline-format quality requests
+7. Decision: if c1 > 80 tok/s AND quality passes → pursue further; else defer
+
+Time estimate: 45 minutes end-to-end (15 min download, 10 min startup, 20 min benchmark). Production downtime: ~30 minutes.
+
+No new tooling required. This is the cleanest, lowest-risk way to determine if INT4 is worth pursuing with the more complex NVFP4/DFlash stack.
+
+---
+
+### Performance Expectation Model
+
+Based on memory bandwidth scaling theory and community data points:
+
+| Config | Expected c1 tok/s | c16 agg tok/s | Confidence | Notes |
+|--------|------------------|---------------|------------|-------|
+| Current: FP8 + MTP=2 | 65.9 (measured) | 634.0 (measured) | — | Baseline |
+| AWQ INT4 + MTP=2 | 70-85 | 550-700 | Low | Smaller weights → faster decode; KV cache slightly reduced; no community data on GB10 |
+| PrismaQuant 4.75-bit + MTP=2 | 75-90 | 580-720 | Low | Community: 95.11 with DFlash → ~75 without |
+| NVFP4 + MTP=2 | 85-100 | 600-750 | Low | Requires flashinfer_cutlass; no direct comparison data |
+| NVFP4 + DFlash | 95-127 | Unknown | Very Low | Community top; two unproven components together |
+
+The c16 aggregate may not improve significantly: at high concurrency the bottleneck shifts from weight decode bandwidth to attention/KV bandwidth. INT4 weights reduce weight bandwidth demand but don't touch attention bandwidth. MTP acceptance rate may also drop on INT4 (draft predictions calibrated on FP8 activations).
+
+---
+
+### Decision Matrix
+
+| Path | Prerequisites | Engineering Effort | Expected c1 Gain | Quality Risk | Go/No-Go Criterion |
+|------|--------------|-------------------|-----------------|--------------|-------------------|
+| AWQ INT4 (baseline INT4) | Find/validate community checkpoint | Low — works with current image | +7-29% | Medium (unvalidated) | Run it. Data point needed. |
+| PrismaQuant 4.75-bit | Verify vLLM format support | Low-Medium — may need format flag | +14-37% | Low-Medium (88/100 measured) | Run if AWQ shows >10% c1 gain AND quality holds |
+| NVFP4 without DFlash | flashinfer_cutlass build (nightly cu130 or custom) | Medium — new image, lose cu132 gains | +29-52% | Medium | Only if AWQ/PrismaQuant insufficient AND mainline support arrives |
+| NVFP4 + DFlash | flashinfer_cutlass + DFlash patch | High — two unmerged components | +44-93% | High | Defer until DFlash merges to mainline |
+| spark-evals quality framework | DanTup/spark-evals setup | Medium (one-time) | N/A | N/A | Set up before any INT4 adoption |
+
+---
+
+### Decision Gates (Defer Until)
+
+Execution should be deferred until at least one of these is true:
+
+1. **DFlash lands in mainline vLLM** — eliminates the biggest integration risk. Check vLLM release notes and PR tracker. Current PR status: open, no merge date.
+
+2. **Quality eval framework exists** — run DanTup/spark-evals against current FP8 baseline first. Without a quality baseline, INT4 adoption is flying blind on the dimension that matters most.
+
+3. **Throughput requirements change** — current c8/c16 numbers (394/634 tok/s) comfortably serve the pipeline. If pipeline concurrency scales beyond what current config handles, the INT4 tradeoff calculus changes.
+
+4. **AWQ INT4 data point exists** — run the 45-minute minimum viable experiment to establish whether INT4 even yields the expected bandwidth gains on GB10 with our specific MoE config. If AWQ shows <15% c1 improvement, NVFP4 and DFlash may not be worth the complexity.
+
+**Immediate action (does not require the above):** Run AWQ INT4 minimum viable experiment in next available maintenance window. Low risk, generates real data, clarifies whether the INT4 path is worth any further investment.
+
+---
+
+### Summary Table: What We Know vs What We Need
+
+| Question | Status | Source |
+|----------|--------|--------|
+| Does NVFP4 work at all on GB10 SM121? | YES — hardware supports it | Forum: jwarner confirmed GB10 works |
+| Does AWQ INT4 work on current cu132 image? | LIKELY YES — standard vLLM support | Not tested on our hardware |
+| What's the c1 gain from INT4 on GB10? | UNKNOWN — no GB10-specific data | Community data is NVFP4 + DFlash combined |
+| Does quality degrade in pipeline-relevant dimensions? | UNKNOWN | spark-evals not set up; PrismaQuant 88/100 is opaque |
+| Is DFlash ready to use? | NO — not mainline, patchy image availability | Forum thread joshua.dale.warner |
+| Does flashinfer_cutlass exist in a stable GB10 image? | PARTIAL — in nightly cu130, not cu132 | Would lose our cu132+MTP performance gains |
+| Can MTP=2 be used with NVFP4? | UNKNOWN — MTP drafter is calibrated on BF16/FP8 activations | Not tested |
+
+---
+
+### Connection to Phase 3 Finding
+
+The pre-quantized FP8 experiment (Entry 054) is directly relevant here: `CutlassFp8BlockScaledMMKernel` (block-scaled FP8) significantly underperformed row-wise on-the-fly FP8 at c1/c4/c16, even though the weights were pre-computed. This suggests block-scaled quantization may not be optimal for GB10's memory hierarchy. NVFP4 also uses block-scaled (MX spec, 32-element blocks) — there's a non-trivial risk that NVFP4 on GB10 follows the same pattern: faster on paper, slower in practice due to dequantization overhead in the decode kernel path. The AWQ experiment (row-wise grouping) would be a better leading indicator than NVFP4 of whether any INT4 format will win.
+
+---
+
+### Files to Monitor
+
+- `github.com/vllm-project/vllm` — PR tracker for "DFlash", "flashinfer_cutlass", "NVFP4", "MX spec"
+- `github.com/DanTup/spark-evals` — quality eval framework maturity
+- NVIDIA DGX Spark forum — Arena leaderboard entries with GB10 INT4 benchmarks
+- `huggingface.co/PrismaQuantized` — PrismaQuant Qwen3.6 checkpoint updates
+- SPARK_BASELINE.md Recon Triggers: `MXFP4 AND (online OR on-the-fly OR Qwen)` — existing trigger, already covers NVFP4 path
+
+---
+
+## Entry 061 — Phase 6.2: Gemma 4 Community Status Check (Work Item 6.2) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE (research only — no system changes)
+**Goal:** Document Gemma 4's current state since our April 11 benchmarks (Entry 020-021). Answer four questions: (1) Is guided JSON fixed? (2) Has throughput gap narrowed? (3) What did eugr's v0.20.1rc1 recipe fixes address? (4) What new quantized checkpoints exist? Produce a go/no-go decision on scheduling a dedicated Gemma 4 experiment.
+
+---
+
+### Background: Where We Left Off (Entry 020-021, 2026-04-11)
+
+Our April 11 benchmarks established the Gemma 4 26B-A4B MoE as the only Gemma variant competitive with Qwen3.6 on this hardware:
+
+| Model | Quant | c1 tok/s | c8 agg | Notes |
+|-------|-------|---------|--------|-------|
+| 26B-A4B (MoE) | FP8 on-the-fly | 38.9 | 257.6 | **Best Gemma config. Guided JSON broken.** |
+| 26B-A4B (MoE) | BF16 | 23.6 | 158.7 | Day-1 floor, no community optimization |
+| 31B Dense | NVFP4 | 6.8 | 54.0 | Bandwidth-bound. Not viable for interactive. |
+| 31B Dense | BF16 | 3.7 | 28.2 | Bandwidth-bound. Matches community exactly. |
+
+Two blockers prevented deployment: (1) guided JSON/structured output broken — our pipeline requires it; (2) throughput at 38.9 tok/s c1 was 58% of production Qwen3.6 at the time (65.9 post-firmware). Both had to close before Gemma 4 was worth a maintenance window.
+
+---
+
+### Question 1: Is Guided JSON Fixed?
+
+**Short answer: No. Two distinct bugs remain open as of 2026-04-30.**
+
+#### Bug A — Issue #39130: `--reasoning-parser gemma4` silently disables xgrammar when `enable_thinking=false`
+
+Root cause: `BaseThinkingReasoningParser.is_reasoning_end()` returns `False` when no `<|channel>` / `<channel|>` reasoning tokens are present in the prompt. This means "reasoning has not ended yet," which prevents the grammar bitmask from being filled for any subsequent token. In practice, structured output enforcement is completely bypassed — the model generates free-form output, which happens to be valid JSON often enough that users don't immediately notice, but the guarantee is gone.
+
+Fix: PR #39138 changes the fallback return value to `True` (absent reasoning tokens → reasoning already ended → grammar applies). As of April 29, 2026, the PR is **awaiting code owner approval and has not merged**. No released vLLM version contains this fix.
+
+**Practical impact for our pipeline:** We run `enable_thinking=false` on every production request (it's in `chat_template_kwargs`). If we deployed Gemma 4 with `--reasoning-parser gemma4`, every structured output request would silently produce unvalidated JSON — a correctness regression disguised as success. This is a hard blocker.
+
+**Workaround:** Omit `--reasoning-parser gemma4`. This disables Gemma 4's chain-of-thought reasoning capability entirely — Gemma's extended thinking mode is one of its quality advantages over Qwen3.6 on multi-step tasks. Accepting this workaround means deploying Gemma 4 in a degraded configuration that sacrifices one of its main differentiators. Not recommended.
+
+#### Bug B — Issue #40080: Infinite repetition loops under grammar-constrained decoding
+
+Root cause: Model-level repetition bias, amplified by xgrammar token masking. When xgrammar restricts the valid token set to valid-JSON continuations, the model's slight tendency to repeat recent tokens becomes a self-reinforcing loop — it produces a valid prefix, then repeats a phrase until `max_tokens` is exhausted. The problem is cross-platform (observed in Ollama, vLLM, llama.cpp), which indicates it's intrinsic to Gemma 4's weight distribution, not a vLLM bug.
+
+Fix attempt: PR #40099 proposes auto-enabling `RepetitionDetectionParams` (3-to-20 token patterns, 4+ repetitions → stop with `finish_reason=repetition_detected`). Status: **open, awaiting approval**. Conservative approach — trades incomplete output for garbage output, which is better for production use.
+
+Mitigation available today: `repetition_penalty=1.1` or `frequency_penalty=0.1` at the request level partially suppresses loops but does not eliminate them. Combining with output length limits helps; does not fully prevent.
+
+**Practical impact:** Even if Bug A were fixed, Bug B would cause intermittent structured output failures in production. Our pipeline has no retry logic for `finish_reason=repetition_detected`. Building that retry path is additional engineering work.
+
+#### Combined structured output assessment
+
+| Bug | Severity | Fix status | ETA |
+|-----|----------|------------|-----|
+| #39130 — xgrammar bypass with enable_thinking=false | Critical (correctness) | PR #39138 open, not merged | Unknown |
+| #40080 — repetition loops under JSON schema | High (reliability) | PR #40099 open, not merged | Unknown |
+
+Both blockers must clear before Gemma 4 guided JSON is production-ready. Neither is merged as of today. The fix PR for #39130 has been open since April 6 with active review comments — merge within 1-2 vLLM releases is plausible but unconfirmed.
+
+---
+
+### Question 2: Has the Throughput Gap Narrowed?
+
+**Short answer: Yes — significantly. Community benchmarks show 45-54 tok/s c1 for the 26B-A4B MoE, up from our 38.9.**
+
+#### What changed between April 11 and April 30
+
+Our April 11 number (38.9 tok/s c1) used the official `vllm/vllm-openai:gemma4-cu130` image — a day-1 build with no SM121 kernel optimization. Since then:
+
+1. **NVFP4 quantization emerged as the dominant path.** The `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` community checkpoint (published April 3-5) achieves 52 tok/s c1 on GB10 using `--quantization modelopt` with `VLLM_NVFP4_GEMM_BACKEND=marlin`. Model weights are 16.5 GB (vs ~49 GB BF16, vs ~25 GB FP8). The model had 371,000+ HF downloads in its first month.
+
+2. **FP8 on-the-fly also improved.** Community reports show 45-54 tok/s for the FP8 path using newer builds. The eugr/spark-vllm-docker `gemma4-26b-a4b.yaml` recipe uses on-the-fly FP8 (not NVFP4) and achieves the lower end of this range.
+
+3. **Concurrency scaling is strong.** At c4 (4 concurrent requests), the NVFP4 config achieves ~114 tok/s aggregate — consistent with the 26B MoE's small active parameter footprint (3.8B active/token, KV cache demand low, batching very efficient).
+
+#### Updated community throughput table (as of 2026-04-30)
+
+| Config | c1 tok/s | c4 agg tok/s | vLLM | Image | Source |
+|--------|---------|-------------|------|-------|--------|
+| 26B-A4B NVFP4 + Marlin (bg-digitalservices) | 52 | 114.6 | 0.19.x | gemma4-cu130 | ai-muninn.com, April 13 |
+| 26B-A4B FP8 (eugr recipe) | ~45-50 | ~140 | 0.20.1rc1.dev96 | eugr build | forum April 3-5 |
+| 26B-A4B BF16 (day-1 official) | 23.6 | ~158 | 0.19.0 | gemma4-cu130 | Entry 020-021 |
+| 31B Dense FP8 runtime (AT build) | 6.9 | ~27 | 0.19.1rc1.dev31 | custom | NVIDIA forum April 6 |
+
+**Vs. our production baseline (post-firmware):**
+- Qwen3.6-35B-A3B FP8 + MTP=2: c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s
+- Best Gemma 4 26B c1 (52 tok/s NVFP4): still 21% below our Qwen baseline
+- Best Gemma 4 26B c4 (140 tok/s FP8): ~20% below Qwen c4 at 174.7
+
+At c1, Gemma 4 26B is now respectable (was unusable in early benchmarks) but still trails. At high concurrency (c8+), Gemma's smaller active parameter count suggests better scaling — but no published c8/c16 numbers exist for the 26B yet.
+
+#### The MoE advantage that matters
+
+Gemma 4 26B-A4B active params/token: 3.8B. Qwen3.6-35B-A3B active params/token: ~3.5B. The difference is small (~9%). However, Gemma's experts are much denser per active parameter, and its 256K context window is 8x Qwen's 32K. For long-document tasks that currently require chunking, Gemma 4's context advantage could be decisive — if throughput and structured output blockers are resolved.
+
+---
+
+### Question 3: What Did eugr's "Gemma 4 Recipe Fixes" in v0.20.1rc1 Address?
+
+**Short answer: Not Gemma-specific bugs. The v0.20.1rc1 build added a `gemma4-26b-a4b.yaml` recipe and fixed a general PyTorch/transformers version conflict that was breaking Gemma 4 initialization.**
+
+Specific changes in the eugr build relevant to Gemma 4 (from GitHub repo analysis):
+- Added `gemma4-26b-a4b.yaml` recipe for the MoE variant with on-the-fly FP8
+- PyTorch pinned to 2.11.0 (previously nightly) — this fixed a `transformers 5.x` compatibility break that was causing Gemma 4 (which requires `transformers >= 5.4`) to fail initialization with "module not found" errors
+- The `--tf5` flag on `build-and-copy.sh` forces transformers 5.x in the image; earlier builds used transformers 4.x which cannot load Gemma 4's architecture
+
+**Critical caveat discovered during research (April 29-30 forum posts):** InstantTensor, the operator fusion library that eugr incorporates for MoE throughput gains, was confirmed to break Gemma 4 26B initialization. Workaround: build with `safetensors` mode (disables InstantTensor), but this reportedly makes the build 75% slower than the prior v0.19.1rc0 version. In other words, using eugr's Gemma 4 recipe today requires either accepting a major performance regression or using a pinned older build hash (`v0.19.2rc0`).
+
+This matters for our evaluation: the "Gemma 4 recipe fixes" marketing in v0.20.1rc1 resolved Python environment issues, not throughput or structured output issues. The core blockers are in the vLLM codebase, not the eugr build system.
+
+---
+
+### Question 4: What New Quantized Checkpoints Exist?
+
+Since April 11, the following checkpoints have appeared or become confirmed usable on GB10:
+
+#### For Gemma 4 26B-A4B (MoE)
+| HF Handle | Format | Disk | Notes |
+|-----------|--------|------|-------|
+| `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` | NVFP4 (W4A4, modelopt) | 16.5 GB | Primary NVFP4 option; 97.6% quality retained vs BF16; requires `VLLM_NVFP4_GEMM_BACKEND=marlin` + `--tf5` flag on build; 371k downloads |
+| `protoLabsAI/gemma-4-26B-A4B-it-FP8` | FP8 pre-quant | ~25 GB | Claims 175 tok/s on single GPU with FP8 KV — likely exaggerated or benchmark-specific; use community recipe instead |
+
+#### For Gemma 4 31B (Dense)
+| HF Handle | Format | Disk | Notes |
+|-----------|--------|------|-------|
+| `nvidia/Gemma-4-31B-IT-NVFP4` | NVFP4 (official) | ~20 GB | 6.8 tok/s c1 on GB10 (bandwidth-bound, no MoE advantage); not competitive |
+| `RedHatAI/gemma-4-31B-IT-NVFP4` | NVFP4 (LLM Compressor) | ~20 GB | Similar performance profile to NVIDIA official |
+| `RedHatAI/gemma-4-31B-it-FP8-block` | FP8 block-scaled | ~32 GB | Block-scaled FP8 (same format that underperformed on Qwen3.6 in Entry 054); not recommended |
+| `LilaRest/gemma-4-31B-it-NVFP4-turbo` | NVFP4 repackaged | ~20 GB | Claims 2.5x faster than BF16; still bandwidth-bound on GB10 single-node |
+
+**Assessment:** The 31B dense model has no viable path on a single-node Spark. 6.8 tok/s NVFP4 vs 3.7 tok/s BF16 is a confirmed improvement, but 6.8 tok/s is not interactive-capable for any production use. The 26B MoE is the only Gemma variant that belongs in a single-Spark conversation.
+
+---
+
+### Decision: Schedule a Gemma 4 Experiment?
+
+The plan's decision gate is: **schedule a dedicated maintenance window ONLY if guided JSON is confirmed fixed AND throughput exceeds 50 tok/s c1 on community benchmarks.**
+
+#### Evaluate against gate criteria:
+
+| Criterion | Status | Assessment |
+|-----------|--------|------------|
+| Guided JSON confirmed fixed | No — PRs #39138 and #40099 unmerged | Gate FAILS |
+| c1 throughput > 50 tok/s community benchmark | 52 tok/s (NVFP4), 45-50 tok/s (FP8) | Gate PASSES |
+
+**Decision: DO NOT SCHEDULE. Structured output blockers not resolved.**
+
+#### Rationale
+
+The throughput criterion is now met — 52 tok/s c1 on NVFP4 clears the 50 tok/s bar by a small margin. But structured output is a hard requirement for the contact-center-lab pipeline. Every production use case requires JSON schema compliance: entity extraction, slot filling, classification. Running Gemma 4 without guaranteed structured output is not an option.
+
+The PRs that would fix this are in review with active engagement from maintainers. Based on the PR trajectory (filed April 6, review feedback received, revisions submitted), a merge within 1-2 vLLM releases (v0.20.1 or v0.21) is plausible. The repetition loop fix (PR #40099) has a cleaner path — it's additive and conservative. The xgrammar bypass fix (PR #39138) is more complex due to class hierarchy concerns raised in review.
+
+Even after both PRs merge, validation is needed before committing a maintenance window. The minimum validation path is:
+1. Deploy Gemma 4 26B NVFP4 in test (not replacing production)
+2. Run 20 pipeline-format structured output requests
+3. Verify zero xgrammar bypass, zero repetition loops
+
+#### What to monitor
+
+| Signal | Action |
+|--------|--------|
+| PR #39138 merges | Note vLLM version. Verify it's in eugr build or our cu132 image. |
+| PR #40099 merges | Note vLLM version. Same verification. |
+| Both merged AND available in a stable build | Schedule Gemma 4 evaluation maintenance window |
+| Community reports > 55 tok/s c1 with structured output confirmed working | Accelerate scheduling — throughput advantage becomes compelling |
+| Gemma 4 c8/c16 community benchmarks published | Update throughput comparison (high-concurrency profile unknown) |
+
+---
+
+### Connection to Phase 3 Finding (Entry 054)
+
+The pre-quant FP8 experiment revealed that block-scaled FP8 (`CutlassFp8BlockScaledMMKernel`) underperforms row-wise FP8 on GB10 at c1/c4/c16. NVFP4's `bg-digitalservices` checkpoint uses W4A4 MX-spec block scaling — a different format but the same block-scaling principle. The 52 tok/s community number may include overhead from sub-optimal block-scaling dequantization in the decode kernel. When we eventually benchmark NVFP4 on our hardware, compare against the Entry 054 pattern to see if block-scaling overhead is consistent.
+
+---
+
+### Recon Trigger Updates
+
+The following SPARK_BASELINE.md Recon Triggers should be updated to reflect current state:
+
+- Row `vllm_release | gemma4 AND (guided OR grammar OR xgrammar)` — status changed from "watch" to "BLOCKED on #39138 and #40080". Action remains the same.
+- Row `forum | gemma4 AND (guided JSON OR grammar OR structured output) fix` — change from `INFO: community confirmation of #39130 fix` to `ACTION: confirm both PRs (#39138, #40099) merged before scheduling experiment`.
+
+---
+
+### Summary
+
+| Question | Finding |
+|----------|---------|
+| Guided JSON fixed? | No. Two bugs unresolved: #39130 (xgrammar bypass) and #40080 (repetition loops). PRs in review, not merged. |
+| Throughput gap narrowed? | Yes. NVFP4: 52 tok/s c1 (was 38.9 FP8). Still 21% below our Qwen3.6 baseline (65.9). c8/c16 scaling unknown. |
+| eugr v0.20.1rc1 "Gemma 4 fixes"? | Python environment fixes (transformers 5.x compatibility). InstantTensor broke Gemma 4; workaround degrades perf 75%. Not structural throughput or correctness fixes. |
+| New quantized checkpoints? | bg-digitalservices NVFP4 (16.5 GB, 52 tok/s, 97.6% quality retained) is best option. 31B dense not viable on single-node. |
+| Schedule experiment? | **NO** — guided JSON gate fails. Revisit when PRs #39138 and #40099 merge. |

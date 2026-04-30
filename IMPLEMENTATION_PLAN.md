@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (13/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done + Phase 4 done)
+**Status:** IN_PROGRESS (14/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done + Phase 4 done + Phase 5.1 done)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -592,9 +592,9 @@ RuntimeError: Engine core initialization failed.
 
 **Prerequisite:** Phases 2-4 complete (final production config is settled).
 
-### Work Item 5.1 — Restore auxiliary containers
+### Work Item 5.1 — Restore auxiliary containers ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 4.2 (or 3.3 if Phase 4 is skipped/blocked)
 
 **Task:** Restart gliner, bge-m3, ce-service (stopped in Work Item 2.2 for clean GPU state). Verify all endpoints healthy.
@@ -627,6 +627,8 @@ done
 ```
 
 **Acceptance:** All 6 service endpoints healthy. nvidia-smi shows expected GPU memory allocation.
+
+**Results (2026-04-30):** Containers re-created with `docker run` (were removed in 2.2, not just stopped). Startup sequence: gliner (~10s), bge-m3 (~110s), ce-service (~15s). All endpoints healthy: 8000 (qwen35), 8001 (qwen3-embed), 8002 (gliner), 8004 (bge-m3), 8005 (ce-service), 8003 (chromadb healthy per docker ps). GPU memory: qwen35=87,292 MiB, qwen3-embed=12,236 MiB, gliner=1,989 MiB, bge-m3=1,681 MiB, ce-service=1,538 MiB; total ~104.7 GiB / 121.6 GiB available.
 
 **Files:** None (remote only)
 

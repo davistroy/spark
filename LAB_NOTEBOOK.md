@@ -4920,3 +4920,97 @@ Production restored to standard command (without tuned config volume mount). Hea
 **Workaround path (if needed in future):** Use `--enforce-eager` to disable CUDA graphs entirely, then vLLM-Tune configs become valid. But this would regress c8/c16 throughput significantly (CUDA graphs are critical for our decode performance).
 
 **No benchmark results:** Tuned config never reached healthy state. Post-restore production config is unchanged at baseline: c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s (Entry 052).
+
+---
+
+## Entry 058 — Phase 5.2: Docker Compose Authoring (Work Item 5.2) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Create a comprehensive Docker Compose file capturing all 8 running containers.
+
+### Findings from docker inspect
+
+- `qwen35`, `bge-m3`, `gliner`, `ce-service` were running on the default bridge network via standalone `docker run` commands — NOT in the existing compose project.
+- `qwen3-embed`, `chromadb`, `neo4j`, `node-exporter` were already managed by a partial compose project (`claude`) at `/home/claude/docker-compose.yml` — but that file was severely outdated (old image `vllm-custom:sm121-inject`, old model `Qwen3.5`, gpu_util 0.60, FP8 Marlin forced, cu130 Triton cache).
+- Key per-image healthcheck tool constraints:
+  - vLLM images (qwen35, qwen3-embed, bge-m3): have `curl` — standard CMD healthcheck works
+  - gliner-ner image: only has `/opt/venv/bin/python3` — requires mounted Python script
+  - chromadb/chroma:latest (Rust-based): NO curl/wget/nc — use `grep -q 1F40 /proc/net/tcp` (port 8000 = 0x1F40 in little-endian hex)
+  - neo4j:5-community: has `wget` — use `wget -q -O - http://localhost:7474`
+  - ce-service: has `curl` via NVIDIA PyTorch base image
+
+### Compose File Design
+
+All services moved to single compose file at `/home/claude/docker-compose.yml`. Old file backed up to `docker-compose.yml.pre-5.2-backup`.
+
+Key changes from old compose:
+- `qwen35`: image → `vllm-cu132-test:latest`, `entrypoint: ["python3"]` added, command updated for MTP (`--speculative-config`), served-model-name → `spark-llm`, gpu_util → 0.70, triton cache → cu132 path, removed `VLLM_TEST_FORCE_FP8_MARLIN=1`
+- Added `bge-m3` service (new)
+- Added `ce-service` service (new)
+- Fixed all healthchecks for tool constraints (see above)
+- Added `logging: driver: json-file` explicitly on all services
+- Helper script `/home/claude/healthchecks/gliner-health.py` created (python3/urllib NER POST probe)
+
+Startup dependency chain:
+```
+chromadb / neo4j / node-exporter (independent)
+qwen35 (independent, starts first)
+  └── qwen3-embed (depends_on qwen35:healthy)
+  |     └── gliner (depends_on qwen3-embed:healthy)
+  ├── bge-m3 (depends_on qwen35:healthy)
+  └── ce-service (depends_on qwen35:healthy)
+```
+
+`docker compose config` validates clean.
+
+---
+
+## Entry 059 — Phase 5.3: Docker Compose Migration Test (Work Item 5.3) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Stop all containers, bring up via compose, verify all health checks pass.
+
+### Pre-migration state
+
+Snapshot `pre-compose` captured via `spark-config.sh`. All 8 services running and healthy per endpoint verification.
+
+### Migration steps
+
+1. Stopped all 8 containers: `docker stop qwen35 qwen3-embed bge-m3 gliner ce-service chromadb neo4j node-exporter`
+2. Removed bridge-network containers (not in compose project): `docker rm qwen35 bge-m3 gliner ce-service`
+3. `docker compose up -d` — compose recreated qwen3-embed/chromadb/neo4j/node-exporter (config changed) and created qwen35/bge-m3/gliner/ce-service (new to compose)
+4. Startup sequence observed (correct):
+   - chromadb, neo4j, node-exporter, qwen35 started immediately
+   - qwen3-embed, bge-m3, ce-service waited for qwen35 health (~6 min)
+   - gliner waited for qwen3-embed health
+5. Healthcheck iteration required during migration (expected for first run):
+   - chromadb: initial curl healthcheck failed (no curl in image) → fixed to `/proc/net/tcp` grep
+   - gliner: nc healthcheck failed (no nc in image) → fixed to mounted Python script
+   - neo4j: curl healthcheck failed → fixed to wget
+
+### Final state
+
+All 8 services healthy:
+- qwen35 (8000): healthy
+- qwen3-embed (8001): healthy
+- gliner (8002): healthy
+- chromadb (8003): healthy (via /proc/net/tcp grep)
+- bge-m3 (8004): healthy
+- ce-service (8005): healthy
+- neo4j (7474/7687): healthy
+- node-exporter (9100): running (no healthcheck — host network service)
+
+Inference test: `curl .../v1/chat/completions` → "Hi there" (stop, 3 tokens). Stack fully operational.
+
+GPU memory: qwen35=86,080 MiB, ce-service=1,538 MiB, bge-m3=1,681 MiB, gliner=1,989 MiB, qwen3-embed=9,932 MiB. Total ~101.2 GiB / 121.6 GiB.
+
+Snapshot `compose-v1` captured.
+
+### Key Learnings
+
+- **chromadb/chroma:latest is a Rust binary** with no curl/wget/nc. Healthcheck via `/proc/net/tcp` port hex is the only option without modifying the image.
+- **gliner-ner image only has /opt/venv/bin/python3**. External health script mounted at `/home/claude/healthchecks/` solves this cleanly without rebuilding the image.
+- **neo4j has wget** (confirmed — standard path).
+- `docker compose up -d --no-deps <service>` is the correct command to apply healthcheck-only changes to individual services without recreating dependent services.

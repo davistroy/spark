@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (14/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done + Phase 4 done + Phase 5.1 done)
+**Status:** IN_PROGRESS (16/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done + Phase 4 done + Phase 5 done — Phase 6 pending)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -636,7 +636,7 @@ done
 
 ### Work Item 5.2 — Create docker-compose.yml
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 5.1
 
 **Task:** Create a Docker Compose file that captures the complete running state of all containers. Use `docker inspect` to extract exact flags for each container.
@@ -667,13 +667,15 @@ done
 
 **Acceptance:** `docker compose config` validates without errors. All services match their current `docker inspect` output (same image, same flags, same mounts, same ports).
 
+**Results (2026-04-30):** Compose file authored at `/home/claude/docker-compose.yml`. All 8 services defined. New services added: bge-m3, ce-service (not in old compose). qwen35 updated to cu132+MTP image with `entrypoint: ["python3"]` override. Health checks use image-native tools: vLLM services use curl, gliner uses mounted `/home/claude/healthchecks/gliner-health.py` (python3/urllib), chromadb uses `/proc/net/tcp` grep (port 0x1F40), neo4j uses wget. `docker compose config` validates clean.
+
 **Files:** `/home/claude/docker-compose.yml` (remote), LAB_NOTEBOOK.md
 
 ---
 
 ### Work Item 5.3 — Test Docker Compose migration
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 5.2
 
 **Task:** Stop all containers. Start via `docker compose up -d`. Verify startup order and all health checks pass.
@@ -732,6 +734,10 @@ docker compose down
 ```
 
 **Acceptance:** All 8 services start in correct order via `docker compose up -d`. All health checks pass. Inference test returns valid response. Snapshot captured.
+
+**Results (2026-04-30):** Full migration tested. Stopped all 8 containers, removed bridge-network ones, ran `docker compose up -d`. Startup sequence: chromadb/neo4j/node-exporter/qwen35 started immediately; qwen3-embed/bge-m3/ce-service waited for qwen35 health (6 min); gliner waited for qwen3-embed health. All 8 services healthy after ~8 minutes. Inference test passed ("Hi there" response). Snapshots: `pre-compose` and `compose-v1` both captured. GPU memory: qwen35=86GB, qwen3-embed+bge-m3+gliner+ce-service=~14GB total, ~104.7 GiB / 121.6 GiB.
+
+Note: healthcheck iterative fixes required during test: chromadb uses `/proc/net/tcp` grep (no curl in Rust image), gliner uses mounted Python script at `/home/claude/healthchecks/gliner-health.py`, neo4j uses `wget` (available in neo4j image).
 
 **Files:** LAB_NOTEBOOK.md, spark-device.md (note compose management)
 

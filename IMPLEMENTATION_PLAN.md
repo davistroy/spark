@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (8/16 items complete — Phase 0 + Phase 1 + Phase 2 done)
+**Status:** IN_PROGRESS (9/16 items complete — Phase 0 + Phase 1 + Phase 2 done + 3.1)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -375,9 +375,9 @@ Re-test when FlashInfer backend gains FULL_AND_PIECEWISE support with speculativ
 
 **Prerequisite:** Phase 2 complete (winning image determined).
 
-### Work Item 3.1 — Download pre-quant FP8 model
+### Work Item 3.1 — Download pre-quant FP8 model ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 2.4
 
 **Task:** Download the pre-quantized FP8 model weights if not already cached.

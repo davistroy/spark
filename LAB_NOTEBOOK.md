@@ -4478,3 +4478,51 @@ docker start bge-m3 ce-service
 2. **Kernel update does NOT auto-install matching nvidia module package.** The `linux-modules-nvidia-580-open-{version}` package must be installed manually (or via meta-package dependency).
 3. **Prebuilt module packages are pre-signed** — safe under Secure Boot, no MOK enrollment needed. DKMS would NOT work here without MOK setup.
 4. **Recovery does not require reboot** — `modprobe nvidia` after installing the module package is sufficient.
+
+---
+
+## Entry 051 — Phase 0 Data Backup (2026-04-30 ~16:26 UTC)
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+
+### Task
+Execute initial pre-sprint data backup (Work Item 0.2). Back up ChromaDB and Neo4j Docker volumes to timestamped directory before any container experiments.
+
+### Execution
+
+Script `/home/claude/backup-data.sh` run as `claude` user (no sudo needed — docker accessible directly):
+
+```
+=== Backing up ChromaDB ===
+=== Stopping Neo4j for consistent backup ===
+neo4j
+neo4j
+=== Backup complete ===
+total 106M
+-rw-r--r-- 1 root root 5.1K Apr 30 16:26 chromadb-data.tar.gz
+-rw-r--r-- 1 root root 106M Apr 30 16:27 neo4j-data.tar.gz
+-rw-r--r-- 1 root root  87K Apr 30 16:27 neo4j-logs.tar.gz
+Total: 106M
+```
+
+### Integrity Verification
+
+Spot-checked archive contents via `docker run alpine tar tzf`:
+
+| Archive | First entries | Status |
+|---------|--------------|--------|
+| chromadb-data.tar.gz | `./`, `./chroma.sqlite3` | VALID |
+| neo4j-data.tar.gz | `./`, `./databases/neo4j/neostore.*` | VALID |
+| neo4j-logs.tar.gz | `./security.log`, `./debug.log`, `./neo4j.log`, `./query.log` | VALID |
+
+### Post-Backup State
+
+- Backup location: `/home/claude/backups/20260430-162645/`
+- Total size: 106 MB (below ~1 GB estimate — Neo4j data is mostly indexes, log rotation has pruned old data)
+- Neo4j restarted: `Up 12 seconds`, HTTP `curl -sf http://localhost:7474` → OK
+- All 8 containers running post-backup: qwen35, gliner, ce-service, bge-m3, chromadb (healthy), qwen3-embed (healthy), neo4j, node-exporter
+
+### Note on Size
+
+Total backup is 106 MB, not ~1 GB as estimated. `docker system df` showed 1.068 GB total volume usage but that includes volumes for all containers including vLLM's triton cache and other data volumes. The ChromaDB + Neo4j data specifically compresses to 106 MB.

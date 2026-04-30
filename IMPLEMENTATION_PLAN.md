@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** PENDING (0/16 items complete)
+**Status:** IN_PROGRESS (2/16 items complete)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -81,9 +81,9 @@ chmod +x /home/claude/backup-data.sh
 
 ---
 
-### Work Item 0.2 — Run initial backup
+### Work Item 0.2 — Run initial backup ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 0.1
 
 **Task:** Execute the backup script. Verify backup sizes are reasonable (total ~1 GB based on `docker system df` showing 1.068 GB in volumes).

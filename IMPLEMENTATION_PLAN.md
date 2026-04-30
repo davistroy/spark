@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** COMPLETE (17/17 items complete — Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 all done)
+**Status:** COMPLETE (18/18 items complete — Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 all done)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -634,7 +634,7 @@ done
 
 ---
 
-### Work Item 5.2 — Create docker-compose.yml
+### Work Item 5.2 — Create docker-compose.yml ✅ Completed 2026-04-30
 
 **Status:** COMPLETE 2026-04-30
 **Depends on:** 5.1
@@ -673,7 +673,7 @@ done
 
 ---
 
-### Work Item 5.3 — Test Docker Compose migration
+### Work Item 5.3 — Test Docker Compose migration ✅ Completed 2026-04-30
 
 **Status:** COMPLETE 2026-04-30
 **Depends on:** 5.2
@@ -817,3 +817,34 @@ After all phases complete:
 2. Run `/spark-recon` to update SPARK_BASELINE.md watch items
 3. Update memory files with any new learnings
 4. Archive this plan to `docs/archive/`
+
+---
+
+## Summary of Outcomes
+
+**Sprint completed 2026-04-30. All 18 work items done. Production baseline improved.**
+
+### Key Results
+
+| Area | Result |
+|------|--------|
+| **Firmware gain** | Post-firmware throughput: c1 +10.0%, c4 +5.1%, c8 +5.5%, c16 +12.4% vs pre-firmware. New record: 634.0 tok/s at c16. |
+| **eugr v0.20.1rc1** | REJECTED. c16 -4.2% vs post-firmware baseline. Root cause: FlashInfer + speculative decode forces PIECEWISE-only CUDA graphs in v0.20.1rc1 (FULL_AND_PIECEWISE unsupported). Re-test when resolved. |
+| **Pre-quant FP8** | REJECTED. `Qwen/Qwen3.6-35B-A3B-FP8` regresses vs production at c1 (-11.8%), c4 (-9.7%), c16 (-14.7%). Root cause: block-scaled FP8 kernel + uncalibrated KV scale factors. Key finding: hang rule updated — no hang on v0.19.1rc1 (was v0.19.0-specific). |
+| **Kernel tuning (vLLM-Tune)** | REJECTED. Pre-tuned NVIDIA_GB10 configs exceed CUDA graph capture shared memory limit (110,592 bytes required vs 101,376 byte limit). Default MoE config is the maximum valid configuration. |
+| **Docker Compose migration** | COMPLETE. All 8 services codified in `/home/claude/docker-compose.yml` with health checks, startup ordering, and log rotation. Full migration tested — all services healthy after ~8 min. |
+| **OS cleanup** | COMPLETE. Removed gnome-46-2404, gtk-common-themes, mesa-2404 snaps. firmware-updater retained. |
+| **Research: NVFP4/INT4** | Scoped and deferred. Prerequisites: DFlash in mainline vLLM OR quality eval framework. Best current path: RedHatAI NVFP4 + DFlash (127 tok/s reported). |
+| **Research: Gemma 4** | DO NOT SCHEDULE. Throughput gate passes (52 tok/s NVFP4), structured output gate fails (xgrammar bypass and repetition bugs unmerged). Monitor PR #39138 and #40099. |
+
+### Final Production State
+
+| Metric | Value |
+|--------|-------|
+| Image | `vllm-cu132-test:latest` (v0.19.1rc1.dev219+cu132) |
+| Model | `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` (on-the-fly) |
+| Served model name | `spark-llm` |
+| GPU memory utilization | 0.70 |
+| MTP speculative decoding | `--num-speculative-tokens 2` (acceptance ~80.7%) |
+| Throughput (post-firmware) | c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s |
+| Stack management | Docker Compose (`/home/claude/docker-compose.yml`) |

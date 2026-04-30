@@ -4021,7 +4021,7 @@ The criteria are split: c1 triggers ADOPT (>= 5% improvement), but c8 triggers R
 
 ---
 
-## Entry 047 — GLiNER Container Restart (Memory Reclamation) — 2026-04-24
+## Entry 048 — GLiNER Container Restart (Memory Reclamation) — 2026-04-24
 
 **Work Item:** 3.1 (IMPLEMENTATION_PLAN.md)
 **Goal:** Restart gliner to reclaim GPU memory bloat (19.7 GiB observed during Entry 045/046 benchmarking).
@@ -4084,7 +4084,7 @@ GLiNER memory usage confirmed at ~2 GiB, matching expected baseline from spark-d
 
 ---
 
-## Entry 049: Qwen3.6 Chat Template Format Analysis (2026-04-24)
+## Entry 049 — Qwen3.6 Chat Template Format Analysis (2026-04-24)
 
 **Work Item:** 3.3 — Check Qwen3.6 chat template format
 **Goal:** Determine whether Qwen3.6's tool calling format is JSON or XML, validating that `--tool-call-parser qwen3_coder` is correct.
@@ -4231,7 +4231,7 @@ c1 shows a significant +17% improvement. c4 slight improvement. c8/c16 within ru
 
 ---
 
-## Entry 051: served-model-name rename qwen3.5-35b → spark-llm (2026-04-24)
+## Entry 051a: served-model-name rename qwen3.5-35b → spark-llm (2026-04-24)
 
 **Work Item:** 4.4 — Remote container rename
 **Goal:** Change `--served-model-name` from `qwen3.5-35b` to `spark-llm` on the production Spark container.
@@ -4605,7 +4605,7 @@ Updated `SPARK_BASELINE.md` with new post-firmware baseline numbers. Previous nu
 
 ---
 
-## Entry 052 — eugr v0.20.1rc1 Pre-flight (Work Item 2.2) — 2026-04-30
+## Entry 052a — eugr v0.20.1rc1 Pre-flight (Work Item 2.2) — 2026-04-30
 
 **Goal:** Clean GPU state before eugr image swap. Stop auxiliary containers to prevent memory contention.
 

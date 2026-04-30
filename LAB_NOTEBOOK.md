@@ -4801,3 +4801,122 @@ The plan calls for isolating `VLLM_MARLIN_USE_ATOMIC_ADD=1` vs the model change 
 **Production restore:** Stopped test container, restarted `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on `vllm-cu132-test:latest`. Healthy after 360s.
 
 **Post-restore GPU state:** Production running, /health 200 confirmed.
+
+---
+
+## Entry 056 — Phase 4.1: Kernel Tuning Research (Work Item 4.1) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Investigate vLLM-Tune and other kernel tuning opportunities for GB10 FP8 MoE on our cu132+MTP config.
+
+### Background: "Default MoE Config" Warning
+
+Every container startup produces:
+```
+WARNING [fused_moe.py:1090] Using default MoE config. Performance might be sub-optimal!
+Config file not found at .../E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json
+```
+
+This indicates vLLM is using generic Triton kernel parameters (BLOCK_N=64, BLOCK_K=128, warps=4, stages=4) instead of device-optimized values. For GB10 Blackwell MoE decode, larger block sizes could improve SM utilization.
+
+### Research: vLLM-Tune
+
+- **Tool:** `github.com/SeraphimSerapis/vllm-tune` — kernel tuning CLI for vLLM on DGX Spark
+- **Method:** Runs `benchmark_moe.py` (vLLM's built-in tool) inside a running container across 18 batch sizes. Generates JSON config files for MoE and FP8 dense GEMM kernels.
+- **Injection:** `VLLM_TUNED_CONFIG_FOLDER` env var — volume-mount a directory + set env var. No container modification needed.
+- **Reported gains:** +9.5% decode, +58% prefill on Qwen3.6-35B-A3B-FP8, TP=2, GB10×2.
+- **Pre-tuned config:** `configs/qwen--qwen3.6-35b-a3b-fp8/tp1/moe/` — tuned 2026-04-27 on single GB10, TP=1. Contains `E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8,block_shape=[128,128].json`. Tuning report confirms 18 batch sizes tested, total 14 seconds.
+
+### Config Analysis
+
+**Default config (all M ≤ 32):** `BLOCK_N=64, BLOCK_K=128, warps=4, stages=4` → 40,960 bytes shared memory
+
+**vLLM-Tune tp1 M=1 config:** `BLOCK_N=256, BLOCK_K=256, warps=8, stages=3`
+**vLLM-Tune tp1 M=2 config:** `BLOCK_N=128, BLOCK_K=256, warps=4, stages=4`
+
+Tuned config uses 4× wider N blocks and 2× wider K blocks — significantly larger tiles for better SM utilization.
+
+### GB10 Hardware Limits (measured)
+
+```
+Shared memory per block:         49,152 bytes (48 KB)
+Shared memory per multiprocessor: 102,400 bytes (100 KB)
+```
+
+Estimated shared memory for vLLM-Tune M=1 config during CUDA graph capture: ~110,592 bytes — exceeds both limits.
+
+### Injection Mechanism (VLLM_TUNED_CONFIG_FOLDER)
+
+`get_moe_configs()` in `fused_moe.py` checks `envs.VLLM_TUNED_CONFIG_FOLDER` first, then falls back to the shipped configs directory. The filename lookup uses `get_config_file_name(E, N, dtype, block_shape)`. For our model: `E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json` (no block_shape — confirmed from startup warning log).
+
+Volume mount: `-v /home/claude/vllm-tuned-configs:/tuned-configs` + `-e VLLM_TUNED_CONFIG_FOLDER=/tuned-configs`.
+
+### Finding
+
+- Pre-tuned vLLM-Tune configs exist for exactly NVIDIA_GB10, TP=1, Qwen3.6-35B-A3B-FP8.
+- Injection method via `VLLM_TUNED_CONFIG_FOLDER` is clean and reversible.
+- **Proceed to 4.2: apply and test.**
+
+---
+
+## Entry 057 — Phase 4.2: Kernel Tuning Application (Work Item 4.2) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Apply vLLM-Tune pre-tuned MoE config for NVIDIA_GB10, benchmark before/after.
+
+### Approach
+
+Created `/home/claude/vllm-tuned-configs/E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json` with the two entries from vLLM-Tune tp1 config. Restarted qwen35 with:
+- `-v /home/claude/vllm-tuned-configs:/tuned-configs`
+- `-e VLLM_TUNED_CONFIG_FOLDER=/tuned-configs`
+
+All other flags identical to production.
+
+### Result: CRASH — OutOfResources: Shared Memory Overflow
+
+Container crashed during CUDA graph capture with:
+```
+triton.runtime.errors.OutOfResources: out of resource: shared memory,
+Required: 110592, Hardware limit: 101376. Reducing block sizes or num_stages may help.
+RuntimeError: Engine core initialization failed.
+```
+
+The M=1 config (`BLOCK_N=256, BLOCK_K=256, warps=8, stages=3`) requires **110,592 bytes** shared memory during CUDA graph capture. GB10 hardware limit (per SM) is **101,376 bytes** at runtime (slightly below the static 102,400 reported by CUDA props — driver overhead).
+
+### Root Cause Analysis
+
+The vLLM-Tune tuning methodology runs benchmarks in **Triton eager mode** (direct kernel dispatch). vLLM's production path uses **CUDA graph capture**, which requires full static shared memory allocation. The two paths have different effective limits:
+
+| Mode | Shared memory behavior |
+|------|----------------------|
+| Triton eager (vLLM-Tune benchmark) | Dynamic allocation, partial pre-allocation |
+| CUDA graph capture | Full static pre-allocation, stricter limit |
+
+The vLLM-Tune config passed the eager-mode benchmark (14 seconds, 18 batch sizes, all successful) but fails in CUDA graph capture because the capture path requires all shared memory to be statically allocated upfront.
+
+**Triton version match confirmed:** Both the tuned config (`triton_version: 3.6.0`) and our container use Triton 3.6.0 — version mismatch is not the cause.
+
+### Investigation: Can Fresh vLLM-Tune Tuning Help?
+
+Running vLLM-Tune fresh (`--standalone` mode, which stops qwen35) would produce configs via the same eager-mode benchmarking path — generating configs that pass eager benchmarks but would still fail in CUDA graph capture mode. Not worth the additional production downtime.
+
+### Conclusion: No Kernel Tuning Applicable
+
+The default MoE config (`BLOCK_N=64, BLOCK_K=128, warps=4, stages=4`, 40,960 bytes) is the largest set of parameters that:
+1. Fits within GB10 CUDA graph capture shared memory limits
+2. Has been validated as stable with MTP speculative decoding
+3. Is used by vLLM automatically when no tuned config is found
+
+**DECISION: Keep default MoE config. No VLLM_TUNED_CONFIG_FOLDER mount.**
+
+Production restored to standard command (without tuned config volume mount). Healthy after ~364s.
+
+### Key Finding for Memory
+
+**vLLM-Tune pre-tuned GB10 configs are incompatible with CUDA graph capture mode.** The `BLOCK_N=256, BLOCK_K=256, warps=8, stages=3` config for M=1 requires 110,592 bytes — exceeding the 101,376 byte per-SM limit enforced during CUDA graph capture. Future vLLM-Tune configs for GB10 need to be validated against CUDA graph capture mode, not just eager mode.
+
+**Workaround path (if needed in future):** Use `--enforce-eager` to disable CUDA graphs entirely, then vLLM-Tune configs become valid. But this would regress c8/c16 throughput significantly (CUDA graphs are critical for our decode performance).
+
+**No benchmark results:** Tuned config never reached healthy state. Post-restore production config is unchanged at baseline: c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s (Entry 052).

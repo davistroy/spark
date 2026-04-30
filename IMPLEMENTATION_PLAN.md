@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (11/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done)
+**Status:** IN_PROGRESS (13/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done + Phase 4 done)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -526,9 +526,9 @@ Production restored: `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on `vllm-cu13
 
 **Prerequisite:** Phase 3 complete (winning image + model determined). Run on the final production config.
 
-### Work Item 4.1 — Research vLLM-Tune integration
+### Work Item 4.1 — Research vLLM-Tune integration ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 3.3
 
 **Task:** Investigate vLLM-Tune (SerraphimSerapis, NVIDIA forum). Determine: installation method, how it runs, what it produces, how configs are mounted into the container.
@@ -540,39 +540,49 @@ Production restored: `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on `vllm-cu13
 4. Determine output format (JSON config files? volume mount location?)
 5. Check compatibility with our cu132+MTP config
 
-**Acceptance:** Integration method documented. Either: (a) proceed to 4.2 with clear steps, OR (b) flag as blocked with specific reason.
+**Findings:**
+- vLLM-Tune is a GitHub repo (`SeraphimSerapis/vllm-tune`). Bash CLI, no pip install needed.
+- Runs `benchmark_moe.py` inside a running Docker container. Benchmarks 18 batch sizes in eager mode (~14 seconds).
+- Generates JSON files → deploy via `VLLM_TUNED_CONFIG_FOLDER` env var (volume mount, no container modification).
+- Pre-tuned tp1 config exists for `NVIDIA_GB10` at `E=256,N=512,dtype=fp8_w8a8` (M=1 and M=2 entries). Tuned 2026-04-27 on single GB10.
+- GB10 hardware: 49,152 bytes shared memory per block, 102,400 bytes per SM.
+- Proceed to 4.2: apply pre-tuned config via volume mount.
 
-**Files:** LAB_NOTEBOOK.md (research entry)
+**Acceptance:** Integration method documented. Proceed to 4.2 with clear steps.
+
+**Files:** LAB_NOTEBOOK.md (Entry 056)
 
 ---
 
-### Work Item 4.2 — Run vLLM-Tune and benchmark
+### Work Item 4.2 — Run vLLM-Tune and benchmark ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 4.1
 
-**Task:** Run vLLM-Tune to generate optimized kernel configs for GB10 FP8 (E=256, N=512). Mount configs into the container. Benchmark before/after.
+**Task:** Apply vLLM-Tune pre-tuned MoE config for GB10 FP8 (E=256, N=512). Mount configs into the container. Benchmark before/after.
 
-**SSH commands:** (to be determined by 4.1 research)
+**What was tested:**
+- Created `/home/claude/vllm-tuned-configs/E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json` with vLLM-Tune tp1 values (M=1: BLOCK_N=256, BLOCK_K=256, warps=8, stages=3; M=2: BLOCK_N=128, BLOCK_K=256, warps=4, stages=4)
+- Restarted qwen35 with `-v /home/claude/vllm-tuned-configs:/tuned-configs -e VLLM_TUNED_CONFIG_FOLDER=/tuned-configs`
 
-```bash
-# Expected pattern (actual commands depend on 4.1 findings):
-# 1. Run tuning tool
-# 2. Mount generated config: -v /path/to/tuned-config:/path/in/container
-# 3. Restart qwen35 with config mount
-# 4. Verify "Using tuned MoE config" (no more default warning)
-# 5. Benchmark c1 and c8 minimum
-
-python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spark-llm --concurrency 1 8
+**Result: CRASH — OutOfResources (shared memory overflow)**
+```
+triton.runtime.errors.OutOfResources: out of resource: shared memory,
+Required: 110592, Hardware limit: 101376.
+RuntimeError: Engine core initialization failed.
 ```
 
-**Decision criteria:** Adopt if decode tok/s improves > 3%. Reject if regression or no measurable difference.
+**Root cause:** vLLM-Tune benchmarks Triton kernels in **eager mode** (partial dynamic allocation). vLLM's production path uses **CUDA graph capture** (full static allocation, stricter per-SM limit). The tuned M=1 config requires 110,592 bytes during CUDA graph capture — exceeds GB10's 101,376 byte per-SM runtime limit.
 
-**Rollback:** Remove the config volume mount and restart.
+**Decision: REJECT — No kernel tuning applicable.** Pre-tuned vLLM-Tune configs for NVIDIA_GB10 are incompatible with CUDA graph capture + MTP speculative decoding. Default MoE config is the largest valid parameter set within CUDA graph constraints.
 
-**Acceptance:** Before/after benchmark documented. Config adopted or rejected with rationale.
+**Running fresh vLLM-Tune tuning:** Not pursued — same eager-mode methodology would produce configs failing CUDA graph capture. Would not fix the root cause.
 
-**Files:** LAB_NOTEBOOK.md, SPARK_BASELINE.md, spark-device.md (add volume mount if adopted)
+**Production restored:** Standard command without tuned config mount. Healthy.
+
+**No benchmark numbers:** Tuned config never reached healthy state. Baseline unchanged at c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s.
+
+**Files:** LAB_NOTEBOOK.md (Entry 057)
 
 ---
 

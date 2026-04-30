@@ -4526,3 +4526,79 @@ Spot-checked archive contents via `docker run alpine tar tzf`:
 ### Note on Size
 
 Total backup is 106 MB, not ~1 GB as estimated. `docker system df` showed 1.068 GB total volume usage but that includes volumes for all containers including vLLM's triton cache and other data volumes. The ChromaDB + Neo4j data specifically compresses to 106 MB.
+
+---
+
+## Entry 052 — Phase 1: Post-Firmware Throughput Baseline (2026-04-30 ~16:31 UTC)
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Work Item:** 1.1
+
+### Task
+
+Run full c1/c4/c8/c16 throughput benchmark immediately after firmware recovery (Entry 050). System was rebooted for the first time post-firmware to load the new NVIDIA kernel module. This is the cleanest test environment: fresh boot, GPU at 40°C, 0% utilization, ~81 min uptime.
+
+### Pre-Benchmark State
+
+- GPU: NVIDIA GB10, 40°C, 0% utilization, memory N/A (MIG-partitioned — nvidia-smi reports [N/A] for used/total via CSV, normal for GB10 unified memory)
+- RAM: 121 GiB total, 114 GiB used, 3.4 GiB free, 5.3 GiB buff/cache, 6.7 GiB available
+- Swap: 15 GiB total, 3.9 GiB used (consistent with prior measurements)
+- Uptime: 1:21 at benchmark start
+- LLM health: `curl -sf http://localhost:8000/health` → 200 OK
+
+### Benchmark Script Deployed
+
+Script `benchmarks/throughput_bench.py` did not exist at `~/benchmarks/` on Spark (directory not yet created). Deployed from local repo:
+
+```
+mkdir -p ~/benchmarks
+scp benchmarks/throughput_bench.py claude@spark.k4jda.net:~/benchmarks/
+```
+
+### Benchmark Command
+
+```bash
+python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spark-llm --concurrency 1 4 8 16
+```
+
+Parameters: 600 max_tokens, 3 runs per concurrency level, temperature=0.
+
+### Results
+
+| Concurrency | Per-req tok/s | Aggregate tok/s | Batch time |
+|-------------|--------------|-----------------|------------|
+| c1 | 65.9 | 65.9 | 9.1s |
+| c4 | 43.9 | 174.7 | 13.8s |
+| c8 | 50.3 | 394.3 | 12.2s |
+| c16 | 39.9 | 634.0 | 15.1s |
+
+### Comparison vs Pre-Firmware Baseline (2026-04-24)
+
+| Concurrency | Pre-firmware (2026-04-24) | Post-firmware (2026-04-30) | Delta |
+|-------------|--------------------------|---------------------------|-------|
+| c1 | 59.9 tok/s | **65.9 tok/s** | **+10.0%** |
+| c4 aggregate | 166.2 tok/s | **174.7 tok/s** | **+5.1%** |
+| c8 aggregate | 373.8 tok/s | **394.3 tok/s** | **+5.5%** |
+| c16 aggregate | 564.0 tok/s | **634.0 tok/s** | **+12.4%** |
+
+### Analysis
+
+All four concurrency levels improved. The firmware team's claimed ~6% gain is confirmed and in fact conservative — actual gains range 5.1%–12.4%.
+
+- **c1 +10.0%:** Single-request decode is heavily influenced by raw token generation rate. The firmware likely includes optimizations to GPU execution efficiency or clock behavior.
+- **c16 +12.4%:** The largest gain at high concurrency. This is the most important operating point for the pipeline (c8-c16 typical). High-concurrency improvement may reflect better GPU scheduler behavior or memory bandwidth improvements.
+- **c4 +5.1%:** Lowest gain but still positive. c4 is the crossover point where batch scheduling overhead partially offsets throughput gains.
+- **c8 +5.5%:** Consistent with c4. Both fall in the mid-range where MTP spec decode acceptance slightly limits aggregate gains.
+
+**c16 634.0 tok/s is a new project record** — first time exceeding 600 tok/s at any concurrency level.
+
+### Post-Benchmark State
+
+- GPU: 55°C post-benchmark (expected; returns to ~40°C idle within a few minutes)
+- RAM: 115 GiB used, 6.5 GiB available — normal increase from inference activity
+- Swap: 3.9 GiB used — unchanged
+
+### SPARK_BASELINE.md Update
+
+Updated `SPARK_BASELINE.md` with new post-firmware baseline numbers. Previous numbers archived in prior baseline column.

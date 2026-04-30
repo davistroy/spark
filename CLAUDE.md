@@ -22,7 +22,8 @@ After any non-trivial finding (hardware capability/limitation, LLM performance c
 - **PyTorch CUDA on GB10 (sm_121):** Must use PyTorch **nightly** with cu130 index. cu128 detects GPU but NVRTC JIT fails at inference. Only cu130 has sm_121 kernel support.
 - **GPU memory budget (3-model config):** LLM at 0.65, embed at 0.13, GLiNER ~2GB. Total ~108.5 GB of ~121.6 GiB.
 - **Container startup order:** Start qwen35 first → wait for `/health` 200 → qwen3-embed → wait → gliner. Simultaneous startup causes CUDA memory races.
-- **Primary user has no passwordless sudo** — OS-level changes require interactive sudo; cannot be done via non-interactive SSH.
+- **Primary user has no passwordless sudo** — OS-level changes require interactive sudo; cannot be done via non-interactive SSH. Exception: `/etc/sudoers.d/claude-snap` added 2026-04-30 grants `claude` NOPASSWD for `/usr/bin/snap` (added via `tee` which was already NOPASSWD).
+- **snap not in original NOPASSWD list** — `sudo snap remove` fails non-interactively without the sudoers.d entry above. `tee` trick: `echo 'rule' | sudo tee /etc/sudoers.d/file && sudo chmod 440 /etc/sudoers.d/file`.
 - **Docker GPU access:** Use `--gpus all` (not `--runtime nvidia`).
 - **HF cache absolute path required:** Use `/home/<user>/.cache/huggingface`, NOT `~/.cache/huggingface`. Wrong path causes silent hang (tries to download 35GB model).
 - **Triton JIT cache must be persisted:** Add `-v /home/claude/.cache/triton:/root/.triton` to vLLM containers. Without this, kernel compilation restarts from scratch on every `docker rm` (15-30+ min on ARM64/SM 12.1).

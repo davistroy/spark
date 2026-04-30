@@ -2,6 +2,7 @@
 
 Last updated: 2026-04-30
 Last recon: 2026-04-30 (Entry 049)
+Last benchmark: 2026-04-30 (Entry 052 — post-firmware)
 
 ## Current Config
 | Field | Value |
@@ -19,10 +20,11 @@ Last recon: 2026-04-30 (Entry 049)
 | chunked_prefill | Enabled |
 | gpu_memory_utilization | 0.70 (increased from 0.65 on 2026-04-24) |
 | kv_cache_memory | 47.95 GiB (1,142,736 tokens, max concurrency 85.92x) |
-| single_request_tok_s | 59.9 (cu132+MTP, gpu_util 0.70, 2026-04-24 benchmark) |
-| c4_aggregate_tok_s | 166.2 |
-| c8_aggregate_tok_s | 373.8 |
-| c16_aggregate_tok_s | 564.0 |
+| single_request_tok_s | 65.9 (post-firmware, 2026-04-30 Entry 052) — prev: 59.9 (2026-04-24) |
+| c4_aggregate_tok_s | 174.7 — prev: 166.2 |
+| c8_aggregate_tok_s | 394.3 — prev: 373.8 |
+| c16_aggregate_tok_s | 634.0 — prev: 564.0 |
+| firmware_gain | c1 +10.0%, c4 +5.1%, c8 +5.5%, c16 +12.4% (all levels improved) |
 | startup_time | ~364s (warm Triton cache, cu132-cu132 dir) |
 | triton_cache | /home/claude/.cache/triton-cu132 (separate from cu130 cache) |
 
@@ -108,7 +110,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 
 ## Watch Items
 - **[RESOLVED 2026-04-24]** MTP=2 on Qwen3.6 — ablation benchmark (Entry 043-044): MTP degrades c4 by 14.9% but improves c8 by 24.7% and c16 by 19.6%. c1 tied (~51 tok/s). Decision: KEEP MTP. Primary workload is pipeline at c8-c16 where MTP wins.
-- **[ACTION 2026-04-30]** Firmware update: EC, UEFI, USB-PD updates available. ~6% LLM speed gain confirmed (Digital_David, wentbackward). 10-min process, must stay on AC power. Schedule for next maintenance window.
+- **[RESOLVED 2026-04-30]** Firmware update applied (Entry 050). Post-firmware benchmark (Entry 052): c1 +10.0%, c4 +5.1%, c8 +5.5%, c16 +12.4%. c16 634.0 tok/s is new project record.
 - **[ACTION 2026-04-30]** eugr v0.20.1rc1.dev96+cu132 + FlashInfer 0.6.9: published Apr 30. 2 minor versions ahead of us. Previous 0.19.2rc1 rejection doesn't apply — fresh evaluation needed.
 - **[ACTION 2026-04-30]** Pre-quant FP8 hang rule INVALIDATED for Qwen3.6: Seth Hobson's Arena entry + community forum reports + model availability all confirm Qwen3.6-35B-A3B-FP8 works on v0.20.0. Re-test on our cu132 image.
 - **[NEW 2026-04-30]** vLLM-Tune (serapis): kernel tuning CLI for Triton FP8/MoE. +58% prefill, +9.5% decode on Qwen3.6-35B-A3B-FP8. Test compatibility with cu132+MTP config.

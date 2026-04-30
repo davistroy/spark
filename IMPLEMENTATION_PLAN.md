@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (2/16 items complete)
+**Status:** IN_PROGRESS (3/16 items complete — Phase 0 + 1.1 done)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -109,9 +109,9 @@ tar tzf /home/claude/backups/*/neo4j-data.tar.gz | head -5
 
 **Prerequisite:** Phase 0 complete.
 
-### Work Item 1.1 — Post-firmware benchmark
+### Work Item 1.1 — Post-firmware benchmark ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 0.2
 
 **Task:** Run the full throughput benchmark suite against the current production config. The system was just rebooted for firmware recovery — this is the cleanest possible test environment (40C GPU, 0% utilization, 41 min uptime).
@@ -137,9 +137,9 @@ free -h
 
 ---
 
-### Work Item 1.2 — OS cleanup (parallel with 1.1)
+### Work Item 1.2 — OS cleanup (parallel with 1.1) ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** None (independent of all other items)
 
 **Task:** Remove unused desktop snaps and free RAM. **CRITICAL: Keep `firmware-updater` snap** — just used today for firmware update.

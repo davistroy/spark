@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (3/16 items complete — Phase 0 + 1.1 done)
+**Status:** IN_PROGRESS (8/16 items complete — Phase 0 + Phase 1 + Phase 2 done)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -216,9 +216,9 @@ docker images | grep eugr
 
 ---
 
-### Work Item 2.2 — Pre-flight: clean GPU state
+### Work Item 2.2 — Pre-flight: clean GPU state ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 2.1
 
 **Task:** Ensure clean GPU state before testing. Entry 045 showed eugr's stricter `request_memory()` check failed when gliner had bloated to 19.7 GiB. Stop gliner, bge-m3, and ce-service before swapping qwen35 to avoid memory contention.
@@ -246,9 +246,9 @@ nvidia-smi --query-compute-apps=pid,name,used_memory --format=csv
 
 ---
 
-### Work Item 2.3 — Benchmark eugr image
+### Work Item 2.3 — Benchmark eugr image ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 2.2
 
 **Task:** Stop production container. Start with eugr image using identical flags. Full c1/c4/c8/c16 benchmark.
@@ -310,13 +310,23 @@ python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spa
 
 **Acceptance:** Benchmark completes for all concurrency levels.
 
+**Results (2026-04-30, vLLM v0.20.1rc1.dev96+gefdc95674):**
+| Level | eugr tok/s | production tok/s | Delta |
+|-------|-----------|-----------------|-------|
+| c1    | 57.7      | 59.9            | -3.7% |
+| c4    | 176.5     | 166.2           | +6.2% |
+| c8    | 384.2     | 373.8           | +2.8% |
+| c16   | 607.1     | 564.0           | +7.6% |
+
+Startup: 342s. KV cache: 45.26 GiB / 2,656,829 tokens. CUDA graph mode: PIECEWISE (FULL_AND_PIECEWISE unavailable with FlashInfer+speculative decode in v0.20.1). MoE backend: TRITON. Startup time: 342s (vs ~364s production).
+
 **Files:** LAB_NOTEBOOK.md (Entry 052)
 
 ---
 
-### Work Item 2.4 — eugr adopt/reject decision
+### Work Item 2.4 — eugr adopt/reject decision ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 2.3
 
 **Task:** Compare eugr benchmark against Phase 1 baseline. Apply decision criteria.
@@ -341,9 +351,21 @@ docker stop qwen35 && docker rm qwen35
 docker run -d ... vllm-cu132-test:pre-eugr-v0201 ... [production flags from spark-device.md]
 ```
 
+**Decision (2026-04-30): REJECT** — eugr v0.20.1rc1 regresses against post-firmware baseline on all levels. Root cause: FlashInfer + speculative decode forces PIECEWISE-only CUDA graphs in v0.20.1rc1 (FULL_AND_PIECEWISE unsupported). Production restored from `vllm-cu132-test:pre-eugr-v0201` (same as `:latest`).
+
+Comparison vs post-firmware baseline (Entry 051):
+- c1: 57.7 vs 65.9 = -12.5%
+- c4: 176.5 vs 174.7 = +1.0%
+- c8: 384.2 vs 394.3 = -2.6%
+- c16: 607.1 vs 634.0 = -4.2%
+
+Matches REJECT criterion: "c8 OR c16 regresses > 3%" (c16: -4.2%).
+
+Re-test when FlashInfer backend gains FULL_AND_PIECEWISE support with speculative decode.
+
 **Acceptance:** Decision documented with rationale. Production container running on winning image, verified healthy.
 
-**Files:** LAB_NOTEBOOK.md (decision entry), SPARK_BASELINE.md (update if image changes), spark-device.md (update container command if changed), memory files as needed
+**Files:** LAB_NOTEBOOK.md (Entry 053)
 
 ---
 

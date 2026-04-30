@@ -4602,3 +4602,99 @@ All four concurrency levels improved. The firmware team's claimed ~6% gain is co
 ### SPARK_BASELINE.md Update
 
 Updated `SPARK_BASELINE.md` with new post-firmware baseline numbers. Previous numbers archived in prior baseline column.
+
+---
+
+## Entry 052 — eugr v0.20.1rc1 Pre-flight (Work Item 2.2) — 2026-04-30
+
+**Goal:** Clean GPU state before eugr image swap. Stop auxiliary containers to prevent memory contention.
+
+**Pre-flight GPU state:**
+- qwen35: 86,452 MiB (VLLM::EngineCore)
+- qwen3-embed: 12,236 MiB (VLLM::EngineCore)
+- gliner: 1,963 MiB (python)
+- ce-service: 1,538 MiB (python)
+- bge-m3: 1,681 MiB (VLLM::EngineCore)
+- Total active: ~104 GiB
+
+**Action:** `docker stop gliner bge-m3 ce-service && docker rm gliner bge-m3 ce-service`
+
+**Post-stop GPU state:** Only qwen35 (86,452 MiB) and qwen3-embed (12,236 MiB) remain. No orphan PIDs.
+
+**Outcome:** PASS. Clean GPU state achieved for eugr testing.
+
+---
+
+## Entry 053 — eugr v0.20.1rc1 Benchmark (Work Item 2.3) — 2026-04-30
+
+**Goal:** Benchmark eugr v0.20.1rc1 against post-firmware baseline (Entry 051). Identical container flags, image swap only.
+
+**Image:** `eugr-vllm:v0201-test` (eugr-vllm-0201:latest, v0.20.1rc1.dev96+gefdc95674.d20260430)
+**Production image:** `vllm-cu132-test:latest` (v0.19.1rc1.dev219+cu132)
+**Change:** Image only — all vLLM flags identical to production
+
+**Container command:**
+```bash
+docker run -d --name qwen35 --restart unless-stopped --gpus all --ipc host --shm-size 64gb \
+  -p 8000:8000 -e VLLM_FLASHINFER_MOE_BACKEND=latency \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 eugr-vllm:v0201-test \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B --served-model-name spark-llm \
+    --port 8000 --host 0.0.0.0 --max-model-len 32768 \
+    --gpu-memory-utilization 0.70 --quantization fp8 --kv-cache-dtype fp8 \
+    --reasoning-parser qwen3 --language-model-only \
+    --enable-auto-tool-choice --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+```
+
+**Startup:** 342s (vs ~364s production — ~6% faster startup)
+
+**Startup diagnostics:**
+- MoE backend: TRITON (auto-selected, same as production)
+- Attention backend: FLASHINFER
+- FP8 linear: CutlassFP8ScaledMMLinearKernel (same as production)
+- CUDA graph mode: **PIECEWISE** (regression — production has FULL_AND_PIECEWISE)
+  - Root cause: v0.20.1rc1 FlashInfer backend + speculative decoding → FULL_AND_PIECEWISE unsupported
+- KV cache: 45.26 GiB available (vs production 47.95 GiB — 5.6% less available)
+- KV cache tokens: **2,656,829** (vs production 1,142,736 — significantly more tokens due to different block accounting in v0.20.1)
+- Max concurrency: 81.08x at 32K tokens (vs production 85.92x)
+- Default MoE config warning (same as production — no GB10 tuned config file present)
+- New in v0.20.1: CUDA graph memory profiling enabled by default; reports effective gpu_util equivalence (0.70 → ~0.6848 effective without profiling)
+
+**Benchmark results:**
+
+| Concurrency | eugr v0.20.1rc1 | Production cu132 | Delta |
+|-------------|----------------|-----------------|-------|
+| c1 | 57.7 tok/s | 65.9 tok/s (post-fw) | -12.5% vs post-fw |
+| c1 | 57.7 tok/s | 59.9 tok/s (pre-fw baseline) | -3.7% |
+| c4 aggregate | 176.5 tok/s | 174.7 tok/s (post-fw) | +1.0% |
+| c8 aggregate | 384.2 tok/s | 394.3 tok/s (post-fw) | -2.6% |
+| c16 aggregate | 607.1 tok/s | 634.0 tok/s (post-fw) | -4.2% |
+
+*Note: Post-firmware baseline (Entry 051) is the fair comparison. Pre-firmware baseline shown for reference.*
+
+**Decision analysis (decision criteria from IMPLEMENTATION_PLAN.md 2.4):**
+- `eugr c1 within 5% AND (c8 OR c16 improves > 3%)` → ADOPT
+- `eugr within 5% at all levels` → STAY
+- `eugr c8 OR c16 regresses > 3%` → REJECT
+
+Comparing against **post-firmware baseline** (correct comparison, Entry 051):
+- c1: -12.5% — FAILS the within-5% criterion
+- c4: +1.0%
+- c8: -2.6%
+- c16: -4.2%
+
+**DECISION: REJECT**
+
+eugr v0.20.1rc1 regresses on all levels vs the post-firmware baseline. c1 drops 12.5%, c8 drops 2.6%, c16 drops 4.2%. The previous pre-fw comparison (c1 -3.7%, c4/c8/c16 positive) was misleading — it compared against an older baseline. Against the correct post-firmware numbers, eugr cannot overcome the PIECEWISE-only CUDA graph limitation in this version.
+
+Note: PIECEWISE-only mode confirmed as a regression. FlashInfer + speculative decoding prevents FULL_AND_PIECEWISE capture in v0.20.1rc1 — this may be resolved in a future vLLM version.
+
+**Decision: REJECT** — restored production immediately (image `vllm-cu132-test:pre-eugr-v0201`, same as `:latest`). Production healthy after 342s.
+
+**Post-restore state:** GPU 86,324 MiB (qwen35) + 12,236 MiB (qwen3-embed). `/health` 200 confirmed.
+
+**Key finding:** FULL_AND_PIECEWISE CUDA graph mode is incompatible with FlashInfer backend + speculative decoding in vLLM v0.20.1rc1. This forces PIECEWISE-only, which reduces batch efficiency at higher concurrency. This may be resolved in a future version — worth re-testing when FlashInfer backend gains FULL_AND_PIECEWISE support with speculative decode.

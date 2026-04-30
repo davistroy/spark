@@ -4272,3 +4272,209 @@ Only parameter changed: `--served-model-name qwen3.5-35b` → `--served-model-na
 ### Files Updated
 - `LAB_NOTEBOOK.md` — this entry
 - `IMPLEMENTATION_PLAN.md` — Work Item 4.4 marked COMPLETE 2026-04-24
+
+### Entry 047 — Spark Recon (2026-04-27)
+**Date:** 2026-04-27 ~13:20 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Check: NO CHANGE
+- Top FP8 Qwen single-node: 52.77 tok/s (Huihui-Qwen3.6-35B-A3B-Claude-4.6-Opus-abliterated-FP8, rank #14)
+- Top overall single-node: 73.33 tok/s (Qwen3-Coder-Next-int4-AutoRound) — unchanged
+- Our 59.9 tok/s (MTP) would rank ~#9 single-node
+- NVFP4 rising: Nemotron entries at 57-58 tok/s (ranks #10-12)
+- No trigger fired (top FP8 Qwen well below 89.1 threshold)
+
+#### vLLM Release Check: ACTION NEEDED — v0.20.0 GA today
+- v0.20.0 stable released 2026-04-27 (was prerelease Apr 23)
+- CUDA 13.0 default, PyTorch 2.11, Transformers v5 (breaking deps)
+- DeepGEMM integrated into wheel — no separate install needed
+- TurboQuant 2-bit KV cache compression (FA3/FA4 prefill support)
+- SM120 CUTLASS blockwise FP8 GEMM swapAB (#38325) — SM121 forward-compat
+- FlashInfer 0.6.8, FlashAttention 4 default MLA prefill
+- MTP fixes: DSA + MTP IMA fix (#40772), per-draft-model MoE backend
+- Trigger matches: DeepGEMM+Blackwell (ACTION), speculative+MoE (INFO)
+
+#### spark-vllm-docker Check: NEW BUILDS
+- vLLM wheel 0.19.2rc1.dev213+cu132 (Apr 26) — 59 commits newer than rejected dev154
+- FlashInfer 0.6.9 (Apr 26) — up from 0.6.8 in previous eval
+- gpu_memory_utilization upstream default 0.90→0.92 (we set 0.70 explicitly, no impact)
+- New recipe: MiniMax-M2.7-AWQ (Ray 2-way TP, by laudney/mmonad)
+- gemma4 memory balloon crash fix (#205)
+
+#### Qwen Model Check: NO NEW MAJOR MODELS
+- No Qwen4, no Qwen3.7 announced
+- Qwen3.6-27B: dense 27B (all active), hybrid Gated DeltaNet, Apache 2.0. Not suitable — dense 27B uses ~9x more compute per token than our MoE 3B-active
+- Qwen3.6-Max-Preview: API-only, closed weights (first for Qwen)
+- Qwen3.6-35B-A3B-FP8 pre-quant on HF: community reports working on Spark. Re-test our hang rule (established on Qwen3.5, may not reproduce on 3.6)
+- Qwen3.6-Plus: still API-only, no weights
+
+#### NVIDIA Forum Check: 30 topics since Apr 24
+- ACTION: SM121 SDPA EFFICIENT_ATTENTION silent corruption in custom PyTorch builds (FLASH backend safe)
+- ACTION: TurboQuant xfp 17% faster than Marlin int4, cosine sim 0.98 (flash3)
+- ACTION: GB10 UMA baseline — 161 GB/s idle, 90 GB/s under load (parallelArchitect nvidia-uma-fault-probe v1.2.0)
+- INFO: DFlash/DDTree progress — z-lab/Qwen3.6-27B-DFlash weights, not yet viable for MoE+FlashInfer
+- INFO: FlashInfer 0.6.9 breaks MiniMax M2.7 (numerical corruption, last stable = 0.6.7)
+- INFO: MTP quality concerns raised (wentbackward) — should be lossless but coding degradation reported
+- INFO: DeepSeek V4 released, waiting for vLLM support
+- INFO: SparkD dashboard for spark-vllm-docker deployment
+- INFO: CPU frequency pinning now works on DGX OS 7.4
+- GPU power-draw throttle bug still active (Marsy hit <10W on 4/27)
+- Thermal shutdown thread at 129 posts, new cooling solutions shared
+
+#### Cross-Correlated Findings
+1. vLLM v0.20.0 GA + eugr dev213 + FlashInfer 0.6.9 → new ecosystem builds converging
+2. TurboQuant in v0.20.0 + forum xfp 17% faster → 2-bit KV maturing from both sides
+3. FlashInfer 0.6.9 in eugr build + MiniMax broken on 0.6.9 → model-specific regressions possible
+4. Qwen3.6-FP8 pre-quant available + community reports working → re-test hang rule
+
+#### Triggered Alerts
+- `vllm_release | DeepGEMM AND Blackwell` → MATCHED (ACTION)
+- `vllm_release | speculative AND MoE` �� MATCHED (INFO)
+- `vllm_release | gemma4 AND guided` → PARTIAL (tool parser fix merged, no guided JSON fix)
+- `vllm_release | MXFP4 AND online` → PARTIAL (SM100 only)
+
+#### Overall: ACTION NEEDED
+#### Recommendations
+1. Evaluate vLLM v0.20.0 on SM121 — DeepGEMM + TurboQuant 2-bit KV + MTP fixes
+2. Re-test Qwen3.6-35B-A3B-FP8 pre-quant (community reports it works, may not reproduce Qwen3.5 hang)
+3. Watch eugr dev213 + FlashInfer 0.6.9 (newer than rejected eval, but 0.6.9 has regressions)
+4. Watch TurboQuant xfp (17% faster than int4, approaching release)
+5. Monitor MTP quality concerns (should be lossless, but reports need investigation)
+
+### Entry 048 — Spark Audit (2026-04-30)
+**Date:** 2026-04-30 ~11:55 UTC
+**Operator:** Claude Code (spark-audit skill)
+**Status:** AUDIT — no changes made
+
+#### Config Drift: SPARK_CONFIG.md severely stale
+- qwen35 running config matches SPARK_BASELINE.md (correct production state)
+- SPARK_CONFIG.md not updated for Qwen3.6, cu132+MTP, gpu_util 0.70, entrypoint override — would fail rebuild
+- qwen3-embed: minor drift (gpu_util 0.10 vs documented 0.08, max-model-len 8192 vs default)
+- 5 undocumented containers running: ce-service, bge-m3, chromadb, neo4j, node-exporter
+
+#### Missing Optimizations: --enable-prefix-caching (MEDIUM)
+- MTP, FLASHINFER_MOE_BACKEND, tool calling all present and correct
+- No anti-patterns detected
+- --enable-prefix-caching missing — could help pipeline repeated-prefix workloads
+
+#### Memory Budget: 102.1 GiB GPU allocated, headroom 19.5 GiB
+- GPU: 5 processes totaling ~102.1 GiB / 121.6 GiB (HEALTHY)
+- bge-m3 consuming 11.5 GiB GPU (unexpected for embedding model)
+- RAM: 8.0 GiB available (WARNING — at lower threshold edge)
+- Swap: 9.1 GiB (CRITICAL by threshold, but known sticky pattern; was 7.3 GiB at baseline)
+
+#### System Health: HEALTHY (core services), bge-m3 38 restarts (HIGH)
+- All 3 core endpoints returning 200
+- GPU 41C idle, 11.8W — healthy
+- 18 days uptime, load 0.13
+- Disk 38% — healthy
+- bge-m3: 38 restarts — crash-looping, needs investigation
+- ce-service: 1 restart — minor
+- No dmesg errors, sysctl tuning intact
+
+#### Version Currency: 1 minor behind (qwen35), 3 minor behind (qwen3-embed)
+- qwen35: v0.19.1rc1.dev219+cu132 vs v0.20.0 GA (Apr 27) — HIGH
+- qwen3-embed: v0.17.0rc1.dev102 vs v0.20.0 — HIGH (3 minor versions behind)
+- Driver 580.142 (known safe, staying due to 590 UMA leak)
+- PyTorch 2.11, CUDA 13.2 — current
+
+#### Overall: NEEDS ATTENTION
+#### Recommendations
+1. **[HIGH]** Investigate bge-m3 38 restarts and 11.5 GiB GPU allocation
+2. **[HIGH]** Update SPARK_CONFIG.md — disaster recovery doc is stale
+3. **[MEDIUM]** Evaluate `--enable-prefix-caching` for pipeline workloads
+4. **[MEDIUM]** Plan v0.20.0 evaluation (DeepGEMM, TurboQuant, MTP fixes)
+5. **[LOW]** Reclaim 53 GB Docker build cache
+6. **[INFO]** Monitor swap growth (9.1 GiB, up from 7.3 GiB at baseline)
+
+### Entry 049 — Spark Recon (2026-04-30)
+**Date:** 2026-04-30 ~12:15 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Check: MAJOR SHIFT — PrismaQuant INT4 at 95.11 tok/s
+- Top FP8 Qwen single-node: 60.70 tok/s (Seth Hobson, Qwen3.6-35B-A3B-FP8, v0.20.0) — joshua.dale.warner gone from board
+- Top overall single-node: 95.11 tok/s (Sean Williams, PrismaQuant INT4 4.75-bit + DFlash) — up 29.7% from 73.33
+- Our 59.9 tok/s: rank #12 single-node, #2 FP8
+- Seth config diff: v0.20.0, pre-quant FP8, MTP=1, prefix caching, VLLM_MARLIN_USE_ATOMIC_ADD=1, max_num_batched_tokens=32768
+
+#### vLLM Release Check: HOLD
+- v0.20.0 GA (Apr 27) still latest — no new releases
+- No SM121-specific improvements. DeepGEMM integrated (SM90). TurboQuant 2-bit KV (likely SM90+). MoE refactor (regression risk).
+- Recommendation: HOLD at v0.19.1rc1.dev219+cu132
+
+#### spark-vllm-docker Check: HIGH — v0.20.1rc1 available
+- vLLM v0.20.1rc1.dev96+cu132 wheel published Apr 30 (124 downloads)
+- FlashInfer 0.6.9 (up from 0.6.8)
+- Experimental b12x support commit, Gemma 4 recipe fixes
+- 2 minor versions ahead of us — previous 0.19.2rc1 rejection doesn't apply
+
+#### Qwen Model Check: NO NEW MODELS
+- No Qwen4, Qwen3.7, or Qwen3.6-Plus weights
+- Pre-quant FP8 (Qwen3.6-35B-A3B-FP8) confirmed working by Arena + forum — hang rule invalidated
+- RedHatAI NVFP4 emerging (127 tok/s w/ DFlash reported, requires nightly cu130)
+
+#### NVIDIA Forum Check: ACTION — firmware update, vLLM-Tune, DFlash
+- ~30 topics since Apr 24
+- ACTION: Firmware update — EC/UEFI/USB-PD, ~6% speed gain confirmed by community, 10 min
+- ACTION: vLLM-Tune kernel tuning CLI — +58% prefill, +9.5% decode on Qwen3.6 FP8
+- ACTION: DFlash 91-97 tok/s w/ NVFP4, alternative to MTP
+- INFO: FlashQLA 2x speedup claimed vs FlashInfer, SM90+ but GB10 may work
+- INFO: GB10 bandwidth drops 44% under load (161→90 GB/s)
+- INFO: v0.20.0 stability mixed — one revert reported on Qwen3.6-27B
+
+#### Cross-Correlated Findings
+1. v0.20.0 proven on GB10 FP8 (Arena + eugr + Forum) — incremental +1.3%
+2. Pre-quant FP8 hang rule invalidated (Arena + Model + Forum — 3 independent signals)
+3. INT4/NVFP4 tier pulling away: FP8 ceiling ~60-65, INT4 ~90-127 tok/s
+4. Firmware easiest win: 6% gain → ~63.5 tok/s, exceeding current FP8 arena top
+5. eugr v0.20.1rc1 fresh evaluation needed — 2 minor versions beyond rejected build
+
+#### Triggered Alerts
+- `forum | vLLM v0.20.0 on GB10` → MATCHED (ACTION — monitor)
+- `vllm_release | gemma4 AND guided` → PARTIAL
+- `vllm_release | speculative AND MoE` → PARTIAL
+
+#### Overall: ACTION NEEDED
+#### Recommendations
+1. **[HIGH]** Apply firmware update — 6% gain, 10 min, community-confirmed
+2. **[HIGH]** Evaluate eugr v0.20.1rc1.dev96+cu132 build
+3. **[HIGH]** Re-test Qwen3.6-35B-A3B-FP8 pre-quant (hang rule invalidated)
+4. **[MEDIUM]** Test vLLM-Tune kernel tuning (+9.5% decode)
+5. **[MEDIUM]** Investigate PrismaQuant/NVFP4 path (quality tradeoff TBD)
+6. **[LOW]** Monitor FlashQLA (no vLLM integration yet)
+
+### Entry 050 — Firmware Update Recovery: Kernel Module Fix (2026-04-30)
+**Date:** 2026-04-30 ~15:10-15:31 UTC
+**Operator:** Claude Code
+**Status:** INCIDENT RECOVERY — system restored
+
+#### Problem
+Firmware update (EC, UEFI, USB-PD) via web dashboard triggered kernel upgrade from `6.17.0-1008-nvidia` to `6.17.0-1014-nvidia`. Two automatic reboots occurred (14:53, 15:10). New kernel booted without NVIDIA driver modules — `nvidia-smi` exit code 9, nvidia-persistenced failed, all GPU containers exited (128).
+
+#### Root Cause
+Package `linux-modules-nvidia-580-open-6.17.0-1014-nvidia` was not installed when the kernel updated. The firmware update process upgraded the kernel package but did not pull in the matching driver module package. Secure Boot is enabled, so DKMS build wouldn't work without MOK enrollment — but the prebuilt package is pre-signed.
+
+#### Fix Applied
+```bash
+sudo apt install linux-modules-nvidia-580-open-6.17.0-1014-nvidia  # 7.9 MB, pre-signed
+sudo modprobe nvidia
+sudo systemctl restart nvidia-persistenced
+docker start qwen35        # waited for /health 200 (~280s)
+docker start qwen3-embed   # waited for /health 200 (~65s)
+docker start gliner        # waited for /health 200 (~25s)
+docker start bge-m3 ce-service
+```
+
+#### Result
+- GPU: 580.142, 44C, all processes loaded
+- All 3 core health endpoints: 200
+- Inference test: PASS ("Hello", 2 tokens)
+- Total downtime: ~40 minutes (from first reboot at 14:53 to full recovery at 15:31)
+
+#### Learnings
+1. **Firmware updates can change the kernel.** The DGX Spark firmware update bumped the kernel from 6.17.0-1008 to 6.17.0-1014. This was not documented in the update notes.
+2. **Kernel update does NOT auto-install matching nvidia module package.** The `linux-modules-nvidia-580-open-{version}` package must be installed manually (or via meta-package dependency).
+3. **Prebuilt module packages are pre-signed** — safe under Secure Boot, no MOK enrollment needed. DKMS would NOT work here without MOK setup.
+4. **Recovery does not require reboot** — `modprobe nvidia` after installing the module package is sufficient.

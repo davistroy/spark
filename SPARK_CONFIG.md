@@ -1,7 +1,7 @@
 # NVIDIA DGX Spark — Full System Configuration
 
 > **Purpose:** Complete configuration reference to rebuild this system from scratch after a wipe.
-> **Last verified:** 2026-03-19
+> **Last verified:** 2026-04-30
 
 ---
 
@@ -17,8 +17,8 @@
 | Storage | 3.6 TB NVMe (`/dev/nvme0n1p2`), single partition for `/` |
 | Swap | 15 GB configured |
 | OS | Ubuntu 24.04.4 LTS (Noble Numbat) |
-| Kernel | `6.17.0-1008-nvidia` (NVIDIA custom, PREEMPT_DYNAMIC) |
-| CUDA | 13.0+ (driver 590.48.01) |
+| Kernel | `6.17.0-1014-nvidia` (NVIDIA custom, PREEMPT_DYNAMIC) — updated from 1008 via firmware update 2026-04-30 |
+| CUDA | 13.0 (driver 580.142) — rolled back from 590.48.01 due to UMA memory leak |
 | Docker | 29.1.3 |
 
 ## 2. Network
@@ -68,30 +68,36 @@ Tailscale is installed and running. The machine is registered as `spark` in the 
 
 ## 5. Docker Images
 
-| Image | Tag | Size | Source |
-|-------|-----|------|--------|
-| `vllm-node` | `latest` | 25.5 GB | Custom build from `spark-vllm-docker/Dockerfile` |
-| `vllm/vllm-openai` | `cu130-nightly` | 20.3 GB | Docker Hub (used for embedding model) |
-| `gliner-ner` | `latest` | 7.71 GB | Custom build from `gliner-server/Dockerfile` |
-| `ghcr.io/berriai/litellm` | `main-latest` | 1.87 GB | GitHub Container Registry |
-| `nvidia/cuda` | `13.0.1-runtime-ubuntu24.04` | 2.55 GB | NVIDIA (GLiNER base) |
+| Image | Tag | Size | Source | Used By |
+|-------|-----|------|--------|---------|
+| `vllm-cu132-test` | `latest` | ~25 GB | Custom build (v0.19.1rc1.dev219+cu132) | qwen35 (LLM) |
+| `vllm/vllm-openai` | `cu130-known-good-20260306` | ~20 GB | Docker Hub (v0.17.0rc1) | qwen3-embed, bge-m3 |
+| `gliner-ner` | `latest` | ~7.7 GB | Custom build from `gliner-server/Dockerfile` | gliner |
+| `ce-service` | `latest` | ~15 GB | Custom build from `nvcr.io/nvidia/pytorch:24.12-py3` | ce-service |
+| `chromadb/chroma` | `latest` | ~0.5 GB | Docker Hub | chromadb |
+| `neo4j` | `5-community` | ~0.6 GB | Docker Hub | neo4j |
+| `prom/node-exporter` | `latest` | ~30 MB | Docker Hub | node-exporter |
 
 ## 6. Container Configurations
 
 ### 6.1 qwen35 — LLM Inference (Port 8000)
 
-The primary LLM serving the Qwen3.5-35B mixture-of-experts model with on-the-fly FP8 quantization.
+The primary LLM serving Qwen3.6-35B-A3B mixture-of-experts model with on-the-fly FP8 quantization and MTP speculative decoding.
 
 **Key details:**
-- **Image:** `vllm/vllm-openai:v0.19.0-aarch64-cu130` (stock vLLM v0.19.0, ARM64)
-- **Model:** `Qwen/Qwen3.5-35B-A3B` (on-the-fly FP8 quantization)
+- **Image:** `vllm-cu132-test:latest` (vLLM v0.19.1rc1.dev219+cu132, custom build)
+- **Model:** `Qwen/Qwen3.6-35B-A3B` (on-the-fly FP8 quantization) — adopted 2026-04-23
 - **Served as:** `spark-llm`
 - **Max context length:** 32768 tokens
-- **GPU memory utilization:** 0.65
+- **GPU memory utilization:** 0.70
+- **KV cache:** FP8, 47.95 GiB, 1,142,736 tokens
+- **Speculative decoding:** MTP=2 (acceptance rate 80.7%)
 - **MoE backend:** TRITON (auto-selected)
 - **FP8 kernel:** CutlassFP8ScaledMMLinearKernel (native SM121 support)
 - **Attention backend:** FLASHINFER
-- **Async scheduling:** Enabled (v0.19.0 default)
+- **Async scheduling:** Enabled
+- **Performance:** 59.9 tok/s c1, 166.2 c4, 373.8 c8, 564.0 c16 aggregate
+- **Startup time:** ~280-360s (warm Triton cache)
 - **API endpoint:** `http://192.168.10.32:8000/v1` (WiFi) or `http://192.168.10.33:8000/v1` (Ethernet)
 
 ```bash
@@ -104,46 +110,46 @@ docker run -d \
   -p 8000:8000 \
   -e VLLM_FLASHINFER_MOE_BACKEND=latency \
   -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
-  -v /home/claude/.cache/triton:/root/.triton \
-  vllm/vllm-openai:v0.19.0-aarch64-cu130 \
-  Qwen/Qwen3.5-35B-A3B \
+  -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 \
+  vllm-cu132-test:latest \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B \
     --served-model-name spark-llm \
     --port 8000 \
     --host 0.0.0.0 \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.65 \
+    --gpu-memory-utilization 0.70 \
     --quantization fp8 \
     --kv-cache-dtype fp8 \
     --reasoning-parser qwen3 \
     --language-model-only \
     --enable-auto-tool-choice \
-    --tool-call-parser qwen3_coder
+    --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
 ```
 
 **Notes:**
-- Upgraded from `vllm-custom:sm121-inject` (v0.17.0rc1) on 2026-04-11
-- v0.19.0 includes native SM121 CMake fix (#38126) — no more custom .so injection needed
-- TRITON MoE auto-selected over Marlin (tuned via PR #37340, +28% aggregate throughput)
-- CUTLASS FP8 kernel has native SM121 support (no "no native FP8" warning)
-- `VLLM_TEST_FORCE_FP8_MARLIN=1` removed — auto-select is faster on v0.19.0
-- `--no-async-scheduling` removed — async scheduling enabled by default
-- Pre-quantized `Qwen3.5-35B-A3B-FP8` model hangs on v0.19.0 — do NOT use
-- Triton cache persisted via volume mount; first startup after image change takes ~240s (kernel compilation)
-- Subsequent restarts use cached kernels (~90s)
-- Rollback image: `vllm-custom:sm121-inject` (still on disk)
+- `--entrypoint python3` required — cu132 image uses NVIDIA base entrypoint
+- `--max-num-batched-tokens 4096` required for MTP with Mamba/hybrid architecture
+- `--speculative-config` enables Multi-Token Prediction (MTP=2 speculative tokens)
+- Triton cache at `/home/claude/.cache/triton-cu132` — separate from cu130 cache (preserved for rollback)
+- `enable_thinking: false` in API requests must be at request top level (`chat_template_kwargs`), NOT inside `extra_body`
+- Pre-quantized `Qwen3.5-35B-A3B-FP8` hangs on v0.19.0 (Qwen3.6-FP8 pre-quant reportedly works — re-test pending)
+- Rollback: swap image to `vllm/vllm-openai:v0.19.0-aarch64-cu130`, remove entrypoint override + `-m` + `--max-num-batched-tokens` + `--speculative-config`, change triton mount to `/home/claude/.cache/triton`
 
 ### 6.2 qwen3-embed — Embedding Model (Port 8001)
 
 Embedding model for vector search / RAG pipelines.
 
 **Key details:**
-- **Image:** `vllm/vllm-openai:cu130-nightly`
+- **Image:** `vllm/vllm-openai:cu130-known-good-20260306` (vLLM v0.17.0rc1)
 - **Model:** `Qwen/Qwen3-Embedding-4B`
 - **Served as:** `qwen3-embedding-4b`
-- **Network mode:** `bridge` (standard port mapping)
-- **GPU memory utilization:** 0.08
+- **GPU memory utilization:** 0.10
 - **Embedding dimension:** 2560
-- **Max sequence length:** 40960 tokens (vLLM default for this model)
+- **Max sequence length:** 8192 tokens
 - **API endpoint:** `http://<spark-lan-ip>:8001/v1`
 
 ```bash
@@ -153,21 +159,21 @@ docker run -d \
   --gpus all \
   --ipc host \
   -p 8001:8001 \
-  -v /home/<user>/.cache/huggingface:/root/.cache/huggingface:ro \
-  vllm/vllm-openai:cu130-nightly \
-    --model Qwen/Qwen3-Embedding-4B \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  vllm/vllm-openai:cu130-known-good-20260306 \
+    Qwen/Qwen3-Embedding-4B \
     --served-model-name qwen3-embedding-4b \
     --runner pooling \
     --port 8001 \
     --host 0.0.0.0 \
-    --gpu-memory-utilization 0.08 \
+    --gpu-memory-utilization 0.10 \
+    --max-model-len 8192 \
     --enforce-eager
 ```
 
 **Notes:**
 - `--enforce-eager` required — pooling models don't support cudagraphs
 - `--runner pooling` sets vLLM to embedding/pooling mode
-- Uses the default HF cache (root-owned, mounted read-only)
 
 ### 6.3 gliner — Named Entity Recognition (Port 8002)
 
@@ -176,7 +182,6 @@ Custom NER service using GLiNER for domain-specific entity extraction.
 **Key details:**
 - **Image:** `gliner-ner:latest` (custom build)
 - **Model:** `urchade/gliner_large-v2.1` (~900M params, ~2 GB VRAM)
-- **Network mode:** `bridge`
 - **API endpoint:** `http://<spark-lan-ip>:8002/v1/ner`
 - **Health check:** `GET /health`
 
@@ -186,7 +191,7 @@ docker run -d \
   --restart unless-stopped \
   --gpus all \
   -p 8002:8002 \
-  -v /home/<user>/gliner-env/hf-cache:/root/.cache/huggingface \
+  -v /home/davistroy/gliner-env/hf-cache:/root/.cache/huggingface \
   -e GLINER_MODEL=urchade/gliner_large-v2.1 \
   -e GLINER_DEVICE=cuda \
   gliner-ner:latest
@@ -197,25 +202,91 @@ docker run -d \
 - Uses a separate user-writable HF cache (`gliner-env/hf-cache`), NOT the root-owned default cache
 - Falls back to CPU automatically if CUDA fails
 
-### 6.4 LiteLLM Proxy (Optional)
+### 6.4 bge-m3 — Embedding Model, Alternate (Port 8004)
 
-LiteLLM proxy configuration exists at `/home/<user>/litellm/config.yaml` but may not be running as a container currently. Config routes to the local qwen35 instance:
+Alternate embedding model with 1024-dim vectors (40% smaller FAISS index than qwen3-embed's 2560-dim).
 
-```yaml
-model_list:
-  - model_name: spark-llm
-    litellm_params:
-      model: openai/spark-llm
-      api_base: http://localhost:8000/v1
-      api_key: <your-api-key>
+**Key details:**
+- **Image:** `vllm/vllm-openai:cu130-known-good-20260306`
+- **Model:** `BAAI/bge-m3` (560M params)
+- **Served as:** `bge-m3`
+- **GPU memory utilization:** 0.05
+- **Max sequence:** 8192 tokens
+- **API endpoint:** `http://<spark-lan-ip>:8004/v1`
+- **Added:** 2026-04-19 for kb-analysis A/B vs Qwen3-Embedding-4B
 
-general_settings:
-  master_key: <your-master-key>
-
-litellm_settings:
-  drop_params: true
-  set_verbose: false
+```bash
+docker run -d \
+  --name bge-m3 \
+  --restart unless-stopped \
+  --gpus all \
+  --ipc host \
+  -p 8004:8004 \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  vllm/vllm-openai:cu130-known-good-20260306 \
+    --model BAAI/bge-m3 \
+    --served-model-name bge-m3 \
+    --runner pooling \
+    --port 8004 \
+    --host 0.0.0.0 \
+    --gpu-memory-utilization 0.05 \
+    --max-model-len 8192 \
+    --enforce-eager
 ```
+
+### 6.5 ce-service — Cross-Encoder Reranker (Port 8005)
+
+Cross-encoder for semantic similarity scoring / duplicate detection.
+
+**Key details:**
+- **Image:** `ce-service:latest` (custom build from `nvcr.io/nvidia/pytorch:24.12-py3`)
+- **Model:** `cross-encoder/stsb-roberta-large` (~1.4 GB)
+- **API endpoint:** `http://<spark-lan-ip>:8005/ce/score` (POST), `/ce/health` (GET)
+- **Inference:** ~14ms for 2 pairs on GPU
+- **Max batch:** 512 pairs
+- **Added:** 2026-04-19
+
+```bash
+docker run -d \
+  --name ce-service \
+  --restart unless-stopped \
+  --gpus all \
+  -p 8005:8005 \
+  ce-service:latest
+```
+
+**Note:** Requires `transformers<4.49` pin — NVIDIA 24.12 ships PyTorch 2.5 incompatible with 4.49+.
+
+### 6.6 Supporting Services
+
+```bash
+# ChromaDB — vector database (Port 8003)
+docker run -d \
+  --name chromadb \
+  --restart unless-stopped \
+  -p 8003:8000 \
+  -v chromadb-data:/chroma/chroma \
+  chromadb/chroma:latest
+
+# Neo4j — graph database (Ports 7474, 7687)
+docker run -d \
+  --name neo4j \
+  --restart unless-stopped \
+  -p 7474:7474 -p 7687:7687 \
+  -v neo4j-data:/data \
+  neo4j:5-community
+
+# Node Exporter — Prometheus metrics
+docker run -d \
+  --name node-exporter \
+  --restart unless-stopped \
+  --net host \
+  prom/node-exporter:latest
+```
+
+### 6.7 LiteLLM Proxy (Not Running)
+
+LiteLLM proxy configuration exists at `/home/<user>/litellm/config.yaml` but is not currently deployed.
 
 ## 7. Container Startup Order
 
@@ -314,15 +385,17 @@ The file `/home/<user>/gliner-server/server.py` implements:
 
 ## 11. GPU Memory Budget
 
-With the current 3-container configuration:
+With the current 8-container configuration (5 use GPU):
 
-| Component | GPU Memory | Notes |
-|-----------|-----------|-------|
-| qwen35 (Qwen3.5-35B-A3B FP8) | ~91 GB | 0.75 × 121.6 GiB (weights + KV cache) |
-| qwen3-embed (Qwen3-Embedding-4B) | ~10 GB | 0.08 × 121.6 GiB |
-| gliner (gliner_large-v2.1) | ~2 GB | On CUDA |
-| **Total allocated** | **~103 GB** | |
-| **Remaining for OS/buffers** | **~19 GB** | |
+| Component | GPU MiB | Notes |
+|-----------|---------|-------|
+| qwen35 (Qwen3.6-35B-A3B FP8 + MTP) | ~87,500 | 0.70 × 121.6 GiB (weights + KV cache + MTP drafter) |
+| bge-m3 (BAAI/bge-m3) | ~12,200 | 0.05 × 121.6 GiB |
+| gliner (gliner_large-v2.1) | ~2,000 | On CUDA |
+| qwen3-embed (Qwen3-Embedding-4B) | ~1,700 | 0.10 × 121.6 GiB |
+| ce-service (stsb-roberta-large) | ~1,500 | On CUDA |
+| **Total allocated** | **~104,900 MiB** (~102 GiB) | |
+| **Remaining for OS/buffers** | **~19.5 GiB** | |
 
 ## 12. Known Gotchas & Operational Rules
 
@@ -338,9 +411,9 @@ These are hard-won lessons. Do not ignore them.
 
 5. **FlashInfer MoE backend:** Set `VLLM_FLASHINFER_MOE_BACKEND=latency` if using environment-based configuration. The throughput backend has sm_121 kernel issues.
 
-6. **NVFP4 is broken on GB10:** SM 12.1 lacks the hardware instruction support for NVFP4 quantization.
+6. **NVFP4 quantization:** Community reports NVFP4 working on GB10 via nightly cu130 with flashinfer_cutlass backend (as of Apr 2026). Previously believed broken on SM 12.1.
 
-7. **Pre-quantized FP8 vs on-the-fly:** The pre-quantized checkpoint (`Qwen3.5-35B-A3B-FP8`) is currently in use. Previously, on-the-fly FP8 quantization from the BF16 model worked but the pre-quantized checkpoint was getting stuck during weight loading — this may have been resolved in newer vLLM builds.
+7. **Pre-quantized FP8:** `Qwen3.5-35B-A3B-FP8` hangs on v0.19.0. `Qwen3.6-35B-A3B-FP8` reportedly works (community-confirmed Apr 2026). Current config uses on-the-fly FP8 from BF16 model.
 
 8. **Startup order is critical:** See Section 7. Simultaneous container startup causes CUDA memory allocation races and transient hangs.
 
@@ -373,24 +446,46 @@ curl http://<spark-lan-ip>:8001/health
 curl http://<spark-lan-ip>:8002/health
 ```
 
-## 14. Disaster Recovery Checklist
+## 14. Firmware Update Procedure
+
+Firmware updates (EC, UEFI, USB-PD) are applied via the DGX Spark web dashboard. **Critical: firmware updates can change the kernel version**, and the matching NVIDIA driver module package is NOT auto-installed.
+
+**Post-firmware-update recovery:**
+```bash
+# 1. Check if nvidia-smi works after reboot
+nvidia-smi
+# 2. If exit code 9: install matching module package
+sudo apt install linux-modules-nvidia-580-open-$(uname -r)
+# 3. Load module (no reboot needed)
+sudo modprobe nvidia
+sudo systemctl restart nvidia-persistenced
+# 4. Restart containers in order (Section 7)
+```
+
+Prebuilt module packages are pre-signed for Secure Boot — no MOK enrollment risk. See LAB_NOTEBOOK Entry 050 for incident details (2026-04-30, kernel 1008→1014).
+
+## 15. Disaster Recovery Checklist
 
 To rebuild from scratch:
 
-1. **Install Ubuntu 24.04** with NVIDIA kernel (`6.17.0-1008-nvidia` or later)
+1. **Install Ubuntu 24.04** with NVIDIA kernel (`6.17.0-1014-nvidia` or later)
 2. **Install Docker** (29.x+), ensure `--gpus all` works
-3. **Install Tailscale**, join `<tailnet>`, set hostname to `spark`
-4. **Create user** `<user>`, add SSH ed25519 public key
-5. **Create directories:**
+3. **Install NVIDIA driver modules:** `apt install linux-modules-nvidia-580-open-$(uname -r)`
+4. **Install Tailscale**, join `<tailnet>`, set hostname to `spark`
+5. **Create user** `<user>`, add SSH ed25519 public key
+6. **Create directories:**
    ```bash
    mkdir -p ~/spark-vllm-docker ~/gliner-server ~/gliner-env/hf-cache ~/hf_cache/hub ~/litellm
    ```
-6. **Clone/copy `spark-vllm-docker`** build system, build `vllm-node:latest`
-7. **Download models** into `~/hf_cache/hub/`:
-   - `Qwen/Qwen3.5-35B-A3B-FP8`
+7. **Build or load `vllm-cu132-test:latest`** (custom cu132+MTP image from `spark-vllm-docker`)
+8. **Download models** into `~/.cache/huggingface/`:
+   - `Qwen/Qwen3.6-35B-A3B`
    - `Qwen/Qwen3-Embedding-4B`
+   - `BAAI/bge-m3`
    - `urchade/gliner_large-v2.1` (into `~/gliner-env/hf-cache/`)
-8. **Pull embedding image:** `docker pull vllm/vllm-openai:cu130-nightly`
-9. **Build GLiNER image:** copy `server.py` + `Dockerfile` to `~/gliner-server/`, run `docker build -t gliner-ner:latest .`
-10. **Start containers in order** (Section 7), verifying health between each
-11. **Verify all endpoints** (Section 13)
+   - `cross-encoder/stsb-roberta-large`
+9. **Pull embedding image:** `docker pull vllm/vllm-openai:cu130-known-good-20260306`
+10. **Build custom images:** `gliner-ner:latest` and `ce-service:latest`
+11. **Apply sysctl tuning:** `vm.swappiness=1`, `vm.min_free_kbytes=262144` in `/etc/sysctl.d/99-spark-tuning.conf`
+12. **Start containers in order** (Section 7), verifying health between each
+13. **Verify all endpoints** (Section 13)

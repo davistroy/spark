@@ -40,6 +40,7 @@ After any non-trivial finding (hardware capability/limitation, LLM performance c
 - **`--tool-call-parser qwen3_coder` is correct for Qwen3.6:** Despite the name, `qwen3_coder` parses XML tool calls (`<tool_call><function=...>`), which is what Qwen3.6's chat template uses. `qwen3_xml` also works (expat-based) but switching is unnecessary.
 - **Production image is cu132+MTP** (adopted 2026-04-23). Image: `vllm-cu132-test:latest`. Requires `--entrypoint python3` override (cu132 image uses NVIDIA base entrypoint), `--num-speculative-tokens 2`, `--speculative-model [MTP]`, and `--max-num-batched-tokens 4096`.
 - **Separate Triton caches per CUDA toolkit:** cu130 uses `/home/claude/.cache/triton:/root/.triton`, cu132 uses `/home/claude/.cache/triton-cu132:/root/.triton`. Never mix — rollback requires the original cache intact.
+- **Firmware updates change the kernel.** DGX Spark firmware (EC/UEFI/USB-PD) can bump the kernel (e.g., 6.17.0-1008→6.17.0-1014). The matching NVIDIA module package (`linux-modules-nvidia-580-open-{kernel-version}`) is NOT auto-installed. After firmware update: `apt install linux-modules-nvidia-580-open-$(uname -r)` → `modprobe nvidia` → `systemctl restart nvidia-persistenced`. No reboot needed. Prebuilt packages are pre-signed (Secure Boot safe).
 
 ## Configuration Safety Rules — MANDATORY
 

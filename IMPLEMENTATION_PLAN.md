@@ -40,9 +40,9 @@
 
 **Goal:** Back up non-recoverable data before any container experiments. This phase is a prerequisite for all subsequent work.
 
-### Work Item 0.1 — Create data backup script
+### Work Item 0.1 — Create data backup script ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** None
 
 **Task:** Create `/home/claude/backup-data.sh` that backs up ChromaDB and Neo4j Docker volumes to timestamped local directories. Neo4j requires a brief stop for consistent snapshot.

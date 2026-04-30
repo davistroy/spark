@@ -180,9 +180,9 @@ df -h /
 
 **Prerequisite:** Phase 1 complete (clean post-firmware baseline established).
 
-### Work Item 2.1 — Pull and build eugr v0.20.1rc1 image
+### Work Item 2.1 — Pull and build eugr v0.20.1rc1 image ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 1.1
 
 **Task:** Pull the latest eugr/spark-vllm-docker and build the runner image. Tag current production image for rollback.

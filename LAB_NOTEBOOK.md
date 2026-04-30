@@ -4698,3 +4698,106 @@ Note: PIECEWISE-only mode confirmed as a regression. FlashInfer + speculative de
 **Post-restore state:** GPU 86,324 MiB (qwen35) + 12,236 MiB (qwen3-embed). `/health` 200 confirmed.
 
 **Key finding:** FULL_AND_PIECEWISE CUDA graph mode is incompatible with FlashInfer backend + speculative decoding in vLLM v0.20.1rc1. This forces PIECEWISE-only, which reduces batch efficiency at higher concurrency. This may be resolved in a future version — worth re-testing when FlashInfer backend gains FULL_AND_PIECEWISE support with speculative decode.
+
+---
+
+## Entry 054 — Phase 3: Pre-Quantized FP8 Benchmark (Work Item 3.2) — 2026-04-30
+
+**Goal:** Test `Qwen/Qwen3.6-35B-A3B-FP8` (pre-quantized FP8 weights) vs current production (`Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on-the-fly).
+
+**Motivation:** CLAUDE.md pre-quant hang rule was based on v0.19.0 experience with Qwen3.5. Three independent signals suggested the bug may be fixed in v0.19.1rc1 (Seth Hobson Arena entry, forum reports, model repo usage). Phase 3.1 confirmed model already cached. Testing with same production image (`vllm-cu132-test:latest`) and added `VLLM_MARLIN_USE_ATOMIC_ADD=1` (Seth's Arena config, also suggested by our own startup logs).
+
+**Container command tested:**
+```bash
+docker run -d \
+  --name qwen35 \
+  --restart unless-stopped \
+  --gpus all \
+  --ipc host \
+  --shm-size 64gb \
+  -p 8000:8000 \
+  -e VLLM_FLASHINFER_MOE_BACKEND=latency \
+  -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 \
+  vllm-cu132-test:latest \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B-FP8 \
+    --served-model-name spark-llm \
+    --port 8000 --host 0.0.0.0 \
+    --max-model-len 32768 \
+    --gpu-memory-utilization 0.70 \
+    --kv-cache-dtype fp8 \
+    --reasoning-parser qwen3 \
+    --language-model-only \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+```
+
+**Changes vs production:** Model changed to `-FP8` variant; `--quantization fp8` removed (weights already quantized); `VLLM_MARLIN_USE_ATOMIC_ADD=1` added.
+
+**Startup outcome:** LOADED SUCCESSFULLY — no hang. Startup time: 391s (42 safetensors shards at ~5s/shard).
+
+**Startup diagnostics:**
+- vLLM version: 0.19.1rc1.dev219+g72ff142c3.d20260412 (same as production)
+- FP8 linear kernel: `CutlassFp8BlockScaledMMKernel` (block-scaled, vs production's `CutlassFP8ScaledMMLinearKernel` row-wise)
+- MoE backend: TRITON (auto-selected, same as production)
+- Attention backend: FLASHINFER
+- CUDA graph mode: **PIECEWISE** (same FlashInfer + speculative decode limitation)
+- KV cache available: 46.43 GiB (vs production 47.95 GiB — 3.2% less)
+- KV cache tokens: **1,104,432** (vs production 1,142,736 — 3.4% fewer)
+- Max concurrency: 83.16x at 32K tokens (vs production 85.92x)
+- KV cache scale warnings: uncalibrated q_scale=1.0 (checkpoint does not provide q scaling factor — potential accuracy issue)
+- Default MoE config warning (same as production)
+
+**Benchmark results:**
+
+| Concurrency | Pre-quant FP8 | Production (post-fw, Entry 051) | Delta |
+|-------------|--------------|--------------------------------|-------|
+| c1 | 58.1 tok/s | 65.9 tok/s | **-11.8%** |
+| c4 aggregate | 157.8 tok/s | 174.7 tok/s | **-9.7%** |
+| c8 aggregate | 393.9 tok/s | 394.3 tok/s | -0.1% |
+| c16 aggregate | 541.0 tok/s | 634.0 tok/s | **-14.7%** |
+
+**Finding:** Pre-quant FP8 does not hang on v0.19.1rc1 (hang bug is version-specific to v0.19.0). However, performance is substantially worse across all concurrency levels.
+
+---
+
+## Entry 055 — Phase 3: Pre-Quant FP8 Adopt/Reject Decision (Work Item 3.3) — 2026-04-30
+
+**Decision: REJECT**
+
+**Decision criteria (from IMPLEMENTATION_PLAN.md 3.3):**
+- `Pre-quant starts AND c1 within 5% of on-the-fly` → ADOPT
+- `Pre-quant starts AND c1 regresses > 5%` → Test without MARLIN_ATOMIC_ADD to isolate
+- `Pre-quant hangs (timeout)` → REJECT, document vLLM version constraint
+
+**Result vs criteria:**
+- Pre-quant started: YES (hang bug not present in v0.19.1rc1)
+- c1 within 5%: NO — c1 regresses 11.8%
+- c1 > 5% regression: YES — triggers "test without MARLIN_ATOMIC_ADD" branch
+
+**Assessment of MARLIN_ATOMIC_ADD isolation:**
+The plan calls for isolating `VLLM_MARLIN_USE_ATOMIC_ADD=1` vs the model change when c1 regresses > 5%. However, the regression pattern rules this out:
+- c8 is flat (-0.1%) while c1 drops 11.8% and c16 drops 14.7%
+- This pattern is inconsistent with a simple env var effect — MARLIN_ATOMIC_ADD affects MoE kernel dispatch, not attention decode at different concurrencies
+- The KV cache token reduction (3.4% fewer tokens), different FP8 kernel path (block-scaled vs row-wise), and uncalibrated KV scale factors (q_scale=1.0) are the structural differences
+- Most importantly: even if MARLIN_ATOMIC_ADD is responsible for c8 being flat while others regress, the pre-quant model still underperforms production at c1 (-11.8%) and c16 (-14.7%)
+
+**Root cause hypothesis:**
+1. Pre-quant uses block-scaled FP8 (`CutlassFp8BlockScaledMMKernel`) which has different throughput characteristics than on-the-fly row-wise FP8 on SM121
+2. KV cache scaling factors are uncalibrated (q_scale=1.0 fallback) in the FP8 checkpoint — no q/prob scaling factors provided, which may affect attention quality and could affect the effective KV utilization
+3. Fewer KV tokens (1,104,432 vs 1,142,736) slightly reduces effective concurrency ceiling
+
+**MARLIN_ATOMIC_ADD standalone test:** Not worth pursuing. The 11.8% c1 regression is from the pre-quant model path, not the env var. Reverting the env var won't recover that regression.
+
+**Decision: REJECT.** Continue on `Qwen/Qwen3.6-35B-A3B` + on-the-fly `--quantization fp8` as production.
+
+**Key finding (CLAUDE.md rule update):** Pre-quant Qwen3.6-35B-A3B-FP8 **does not hang** on vLLM v0.19.1rc1 (hang was v0.19.0-specific). However, it underperforms on-the-fly FP8 across most concurrency levels. The hang rule in CLAUDE.md has been updated to reflect version specificity.
+
+**Production restore:** Stopped test container, restarted `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on `vllm-cu132-test:latest`. Healthy after 360s.
+
+**Post-restore GPU state:** Production running, /health 200 confirmed.

@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-30
 **Branch:** main
-**Status:** IN_PROGRESS (9/16 items complete — Phase 0 + Phase 1 + Phase 2 done + 3.1)
+**Status:** IN_PROGRESS (11/16 items complete — Phase 0 + Phase 1 + Phase 2 done + Phase 3 done)
 **Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
 **Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
@@ -400,9 +400,9 @@ ls -la /home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B-FP8/
 
 ---
 
-### Work Item 3.2 — Benchmark pre-quant FP8 with MARLIN_ATOMIC_ADD
+### Work Item 3.2 — Benchmark pre-quant FP8 with MARLIN_ATOMIC_ADD ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 3.1
 
 **Task:** Swap to pre-quantized FP8 model. Remove `--quantization fp8` (weights are already quantized). Also test `VLLM_MARLIN_USE_ATOMIC_ADD=1` (Seth's Arena config; our own startup logs recommended it).
@@ -473,13 +473,27 @@ python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spa
 
 **Acceptance:** Either: (a) benchmark completes and results recorded, OR (b) hang confirmed and production config restored.
 
-**Files:** LAB_NOTEBOOK.md (Entry 053)
+**Results (2026-04-30, vLLM v0.19.1rc1.dev219+cu132):**
+- Startup: 391s — **NO HANG** (hang was v0.19.0-specific, not present in v0.19.1rc1)
+- KV cache: 46.43 GiB available / 1,104,432 tokens (vs production 47.95 GiB / 1,142,736 — 3.4% fewer)
+- CUDA graph mode: PIECEWISE (same FlashInfer + speculative decode limitation as eugr test)
+- FP8 kernel: `CutlassFp8BlockScaledMMKernel` (block-scaled, vs on-the-fly row-wise)
+- KV scale warning: q_scale uncalibrated (1.0 fallback) — checkpoint does not provide q scaling factors
+
+| Level | Pre-quant FP8 tok/s | Production (post-fw) | Delta |
+|-------|--------------------|--------------------|-------|
+| c1    | 58.1               | 65.9               | -11.8% |
+| c4    | 157.8              | 174.7              | -9.7% |
+| c8    | 393.9              | 394.3              | -0.1% |
+| c16   | 541.0              | 634.0              | -14.7% |
+
+**Files:** LAB_NOTEBOOK.md (Entry 054)
 
 ---
 
-### Work Item 3.3 — Pre-quant adopt/reject decision
+### Work Item 3.3 — Pre-quant adopt/reject decision ✅ Completed 2026-04-30
 
-**Status:** PENDING
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 3.2
 
 **Task:** Compare pre-quant FP8 results against Phase 1/2 baseline.
@@ -494,9 +508,15 @@ python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spa
 
 **If REJECT:** Restore on-the-fly FP8 from Phase 2 winning config.
 
+**Decision (2026-04-30): REJECT** — pre-quant FP8 regresses vs post-firmware baseline at all levels except c8 (flat -0.1%). c1 -11.8%, c4 -9.7%, c16 -14.7%. Root causes: (1) block-scaled FP8 kernel (`CutlassFp8BlockScaledMMKernel`) vs on-the-fly row-wise — different throughput profile on SM121; (2) uncalibrated KV scale factors (q_scale=1.0 fallback); (3) 3.4% fewer KV tokens.
+
+Key finding: **Pre-quant Qwen3.6-35B-A3B-FP8 does NOT hang on v0.19.1rc1** — hang was v0.19.0-specific. CLAUDE.md hang rule updated to reflect version specificity.
+
+Production restored: `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on `vllm-cu132-test:latest`. Healthy after 360s.
+
 **Acceptance:** Decision documented. Production container running on winning model, verified healthy.
 
-**Files:** LAB_NOTEBOOK.md, SPARK_BASELINE.md, spark-device.md, CLAUDE.md (update pre-quant hang rule if invalidated)
+**Files:** LAB_NOTEBOOK.md (Entry 055), CLAUDE.md (hang rule updated)
 
 ---
 

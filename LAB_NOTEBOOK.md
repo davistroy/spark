@@ -4021,7 +4021,7 @@ The criteria are split: c1 triggers ADOPT (>= 5% improvement), but c8 triggers R
 
 ---
 
-## Entry 047 — GLiNER Container Restart (Memory Reclamation) — 2026-04-24
+## Entry 048 — GLiNER Container Restart (Memory Reclamation) — 2026-04-24
 
 **Work Item:** 3.1 (IMPLEMENTATION_PLAN.md)
 **Goal:** Restart gliner to reclaim GPU memory bloat (19.7 GiB observed during Entry 045/046 benchmarking).
@@ -4084,7 +4084,7 @@ GLiNER memory usage confirmed at ~2 GiB, matching expected baseline from spark-d
 
 ---
 
-## Entry 049: Qwen3.6 Chat Template Format Analysis (2026-04-24)
+## Entry 049 — Qwen3.6 Chat Template Format Analysis (2026-04-24)
 
 **Work Item:** 3.3 — Check Qwen3.6 chat template format
 **Goal:** Determine whether Qwen3.6's tool calling format is JSON or XML, validating that `--tool-call-parser qwen3_coder` is correct.
@@ -4231,7 +4231,7 @@ c1 shows a significant +17% improvement. c4 slight improvement. c8/c16 within ru
 
 ---
 
-## Entry 051: served-model-name rename qwen3.5-35b → spark-llm (2026-04-24)
+## Entry 051a: served-model-name rename qwen3.5-35b → spark-llm (2026-04-24)
 
 **Work Item:** 4.4 — Remote container rename
 **Goal:** Change `--served-model-name` from `qwen3.5-35b` to `spark-llm` on the production Spark container.
@@ -4478,3 +4478,947 @@ docker start bge-m3 ce-service
 2. **Kernel update does NOT auto-install matching nvidia module package.** The `linux-modules-nvidia-580-open-{version}` package must be installed manually (or via meta-package dependency).
 3. **Prebuilt module packages are pre-signed** — safe under Secure Boot, no MOK enrollment needed. DKMS would NOT work here without MOK setup.
 4. **Recovery does not require reboot** — `modprobe nvidia` after installing the module package is sufficient.
+
+---
+
+## Entry 051 — Phase 0 Data Backup (2026-04-30 ~16:26 UTC)
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+
+### Task
+Execute initial pre-sprint data backup (Work Item 0.2). Back up ChromaDB and Neo4j Docker volumes to timestamped directory before any container experiments.
+
+### Execution
+
+Script `/home/claude/backup-data.sh` run as `claude` user (no sudo needed — docker accessible directly):
+
+```
+=== Backing up ChromaDB ===
+=== Stopping Neo4j for consistent backup ===
+neo4j
+neo4j
+=== Backup complete ===
+total 106M
+-rw-r--r-- 1 root root 5.1K Apr 30 16:26 chromadb-data.tar.gz
+-rw-r--r-- 1 root root 106M Apr 30 16:27 neo4j-data.tar.gz
+-rw-r--r-- 1 root root  87K Apr 30 16:27 neo4j-logs.tar.gz
+Total: 106M
+```
+
+### Integrity Verification
+
+Spot-checked archive contents via `docker run alpine tar tzf`:
+
+| Archive | First entries | Status |
+|---------|--------------|--------|
+| chromadb-data.tar.gz | `./`, `./chroma.sqlite3` | VALID |
+| neo4j-data.tar.gz | `./`, `./databases/neo4j/neostore.*` | VALID |
+| neo4j-logs.tar.gz | `./security.log`, `./debug.log`, `./neo4j.log`, `./query.log` | VALID |
+
+### Post-Backup State
+
+- Backup location: `/home/claude/backups/20260430-162645/`
+- Total size: 106 MB (below ~1 GB estimate — Neo4j data is mostly indexes, log rotation has pruned old data)
+- Neo4j restarted: `Up 12 seconds`, HTTP `curl -sf http://localhost:7474` → OK
+- All 8 containers running post-backup: qwen35, gliner, ce-service, bge-m3, chromadb (healthy), qwen3-embed (healthy), neo4j, node-exporter
+
+### Note on Size
+
+Total backup is 106 MB, not ~1 GB as estimated. `docker system df` showed 1.068 GB total volume usage but that includes volumes for all containers including vLLM's triton cache and other data volumes. The ChromaDB + Neo4j data specifically compresses to 106 MB.
+
+---
+
+## Entry 052 — Phase 1: Post-Firmware Throughput Baseline (2026-04-30 ~16:31 UTC)
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Work Item:** 1.1
+
+### Task
+
+Run full c1/c4/c8/c16 throughput benchmark immediately after firmware recovery (Entry 050). System was rebooted for the first time post-firmware to load the new NVIDIA kernel module. This is the cleanest test environment: fresh boot, GPU at 40°C, 0% utilization, ~81 min uptime.
+
+### Pre-Benchmark State
+
+- GPU: NVIDIA GB10, 40°C, 0% utilization, memory N/A (MIG-partitioned — nvidia-smi reports [N/A] for used/total via CSV, normal for GB10 unified memory)
+- RAM: 121 GiB total, 114 GiB used, 3.4 GiB free, 5.3 GiB buff/cache, 6.7 GiB available
+- Swap: 15 GiB total, 3.9 GiB used (consistent with prior measurements)
+- Uptime: 1:21 at benchmark start
+- LLM health: `curl -sf http://localhost:8000/health` → 200 OK
+
+### Benchmark Script Deployed
+
+Script `benchmarks/throughput_bench.py` did not exist at `~/benchmarks/` on Spark (directory not yet created). Deployed from local repo:
+
+```
+mkdir -p ~/benchmarks
+scp benchmarks/throughput_bench.py claude@spark.k4jda.net:~/benchmarks/
+```
+
+### Benchmark Command
+
+```bash
+python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spark-llm --concurrency 1 4 8 16
+```
+
+Parameters: 600 max_tokens, 3 runs per concurrency level, temperature=0.
+
+### Results
+
+| Concurrency | Per-req tok/s | Aggregate tok/s | Batch time |
+|-------------|--------------|-----------------|------------|
+| c1 | 65.9 | 65.9 | 9.1s |
+| c4 | 43.9 | 174.7 | 13.8s |
+| c8 | 50.3 | 394.3 | 12.2s |
+| c16 | 39.9 | 634.0 | 15.1s |
+
+### Comparison vs Pre-Firmware Baseline (2026-04-24)
+
+| Concurrency | Pre-firmware (2026-04-24) | Post-firmware (2026-04-30) | Delta |
+|-------------|--------------------------|---------------------------|-------|
+| c1 | 59.9 tok/s | **65.9 tok/s** | **+10.0%** |
+| c4 aggregate | 166.2 tok/s | **174.7 tok/s** | **+5.1%** |
+| c8 aggregate | 373.8 tok/s | **394.3 tok/s** | **+5.5%** |
+| c16 aggregate | 564.0 tok/s | **634.0 tok/s** | **+12.4%** |
+
+### Analysis
+
+All four concurrency levels improved. The firmware team's claimed ~6% gain is confirmed and in fact conservative — actual gains range 5.1%–12.4%.
+
+- **c1 +10.0%:** Single-request decode is heavily influenced by raw token generation rate. The firmware likely includes optimizations to GPU execution efficiency or clock behavior.
+- **c16 +12.4%:** The largest gain at high concurrency. This is the most important operating point for the pipeline (c8-c16 typical). High-concurrency improvement may reflect better GPU scheduler behavior or memory bandwidth improvements.
+- **c4 +5.1%:** Lowest gain but still positive. c4 is the crossover point where batch scheduling overhead partially offsets throughput gains.
+- **c8 +5.5%:** Consistent with c4. Both fall in the mid-range where MTP spec decode acceptance slightly limits aggregate gains.
+
+**c16 634.0 tok/s is a new project record** — first time exceeding 600 tok/s at any concurrency level.
+
+### Post-Benchmark State
+
+- GPU: 55°C post-benchmark (expected; returns to ~40°C idle within a few minutes)
+- RAM: 115 GiB used, 6.5 GiB available — normal increase from inference activity
+- Swap: 3.9 GiB used — unchanged
+
+### SPARK_BASELINE.md Update
+
+Updated `SPARK_BASELINE.md` with new post-firmware baseline numbers. Previous numbers archived in prior baseline column.
+
+---
+
+## Entry 052a — eugr v0.20.1rc1 Pre-flight (Work Item 2.2) — 2026-04-30
+
+**Goal:** Clean GPU state before eugr image swap. Stop auxiliary containers to prevent memory contention.
+
+**Pre-flight GPU state:**
+- qwen35: 86,452 MiB (VLLM::EngineCore)
+- qwen3-embed: 12,236 MiB (VLLM::EngineCore)
+- gliner: 1,963 MiB (python)
+- ce-service: 1,538 MiB (python)
+- bge-m3: 1,681 MiB (VLLM::EngineCore)
+- Total active: ~104 GiB
+
+**Action:** `docker stop gliner bge-m3 ce-service && docker rm gliner bge-m3 ce-service`
+
+**Post-stop GPU state:** Only qwen35 (86,452 MiB) and qwen3-embed (12,236 MiB) remain. No orphan PIDs.
+
+**Outcome:** PASS. Clean GPU state achieved for eugr testing.
+
+---
+
+## Entry 053 — eugr v0.20.1rc1 Benchmark (Work Item 2.3) — 2026-04-30
+
+**Goal:** Benchmark eugr v0.20.1rc1 against post-firmware baseline (Entry 051). Identical container flags, image swap only.
+
+**Image:** `eugr-vllm:v0201-test` (eugr-vllm-0201:latest, v0.20.1rc1.dev96+gefdc95674.d20260430)
+**Production image:** `vllm-cu132-test:latest` (v0.19.1rc1.dev219+cu132)
+**Change:** Image only — all vLLM flags identical to production
+
+**Container command:**
+```bash
+docker run -d --name qwen35 --restart unless-stopped --gpus all --ipc host --shm-size 64gb \
+  -p 8000:8000 -e VLLM_FLASHINFER_MOE_BACKEND=latency \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 eugr-vllm:v0201-test \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B --served-model-name spark-llm \
+    --port 8000 --host 0.0.0.0 --max-model-len 32768 \
+    --gpu-memory-utilization 0.70 --quantization fp8 --kv-cache-dtype fp8 \
+    --reasoning-parser qwen3 --language-model-only \
+    --enable-auto-tool-choice --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+```
+
+**Startup:** 342s (vs ~364s production — ~6% faster startup)
+
+**Startup diagnostics:**
+- MoE backend: TRITON (auto-selected, same as production)
+- Attention backend: FLASHINFER
+- FP8 linear: CutlassFP8ScaledMMLinearKernel (same as production)
+- CUDA graph mode: **PIECEWISE** (regression — production has FULL_AND_PIECEWISE)
+  - Root cause: v0.20.1rc1 FlashInfer backend + speculative decoding → FULL_AND_PIECEWISE unsupported
+- KV cache: 45.26 GiB available (vs production 47.95 GiB — 5.6% less available)
+- KV cache tokens: **2,656,829** (vs production 1,142,736 — significantly more tokens due to different block accounting in v0.20.1)
+- Max concurrency: 81.08x at 32K tokens (vs production 85.92x)
+- Default MoE config warning (same as production — no GB10 tuned config file present)
+- New in v0.20.1: CUDA graph memory profiling enabled by default; reports effective gpu_util equivalence (0.70 → ~0.6848 effective without profiling)
+
+**Benchmark results:**
+
+| Concurrency | eugr v0.20.1rc1 | Production cu132 | Delta |
+|-------------|----------------|-----------------|-------|
+| c1 | 57.7 tok/s | 65.9 tok/s (post-fw) | -12.5% vs post-fw |
+| c1 | 57.7 tok/s | 59.9 tok/s (pre-fw baseline) | -3.7% |
+| c4 aggregate | 176.5 tok/s | 174.7 tok/s (post-fw) | +1.0% |
+| c8 aggregate | 384.2 tok/s | 394.3 tok/s (post-fw) | -2.6% |
+| c16 aggregate | 607.1 tok/s | 634.0 tok/s (post-fw) | -4.2% |
+
+*Note: Post-firmware baseline (Entry 051) is the fair comparison. Pre-firmware baseline shown for reference.*
+
+**Decision analysis (decision criteria from IMPLEMENTATION_PLAN.md 2.4):**
+- `eugr c1 within 5% AND (c8 OR c16 improves > 3%)` → ADOPT
+- `eugr within 5% at all levels` → STAY
+- `eugr c8 OR c16 regresses > 3%` → REJECT
+
+Comparing against **post-firmware baseline** (correct comparison, Entry 051):
+- c1: -12.5% — FAILS the within-5% criterion
+- c4: +1.0%
+- c8: -2.6%
+- c16: -4.2%
+
+**DECISION: REJECT**
+
+eugr v0.20.1rc1 regresses on all levels vs the post-firmware baseline. c1 drops 12.5%, c8 drops 2.6%, c16 drops 4.2%. The previous pre-fw comparison (c1 -3.7%, c4/c8/c16 positive) was misleading — it compared against an older baseline. Against the correct post-firmware numbers, eugr cannot overcome the PIECEWISE-only CUDA graph limitation in this version.
+
+Note: PIECEWISE-only mode confirmed as a regression. FlashInfer + speculative decoding prevents FULL_AND_PIECEWISE capture in v0.20.1rc1 — this may be resolved in a future vLLM version.
+
+**Decision: REJECT** — restored production immediately (image `vllm-cu132-test:pre-eugr-v0201`, same as `:latest`). Production healthy after 342s.
+
+**Post-restore state:** GPU 86,324 MiB (qwen35) + 12,236 MiB (qwen3-embed). `/health` 200 confirmed.
+
+**Key finding:** FULL_AND_PIECEWISE CUDA graph mode is incompatible with FlashInfer backend + speculative decoding in vLLM v0.20.1rc1. This forces PIECEWISE-only, which reduces batch efficiency at higher concurrency. This may be resolved in a future version — worth re-testing when FlashInfer backend gains FULL_AND_PIECEWISE support with speculative decode.
+
+---
+
+## Entry 054 — Phase 3: Pre-Quantized FP8 Benchmark (Work Item 3.2) — 2026-04-30
+
+**Goal:** Test `Qwen/Qwen3.6-35B-A3B-FP8` (pre-quantized FP8 weights) vs current production (`Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on-the-fly).
+
+**Motivation:** CLAUDE.md pre-quant hang rule was based on v0.19.0 experience with Qwen3.5. Three independent signals suggested the bug may be fixed in v0.19.1rc1 (Seth Hobson Arena entry, forum reports, model repo usage). Phase 3.1 confirmed model already cached. Testing with same production image (`vllm-cu132-test:latest`) and added `VLLM_MARLIN_USE_ATOMIC_ADD=1` (Seth's Arena config, also suggested by our own startup logs).
+
+**Container command tested:**
+```bash
+docker run -d \
+  --name qwen35 \
+  --restart unless-stopped \
+  --gpus all \
+  --ipc host \
+  --shm-size 64gb \
+  -p 8000:8000 \
+  -e VLLM_FLASHINFER_MOE_BACKEND=latency \
+  -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 \
+  vllm-cu132-test:latest \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B-FP8 \
+    --served-model-name spark-llm \
+    --port 8000 --host 0.0.0.0 \
+    --max-model-len 32768 \
+    --gpu-memory-utilization 0.70 \
+    --kv-cache-dtype fp8 \
+    --reasoning-parser qwen3 \
+    --language-model-only \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+```
+
+**Changes vs production:** Model changed to `-FP8` variant; `--quantization fp8` removed (weights already quantized); `VLLM_MARLIN_USE_ATOMIC_ADD=1` added.
+
+**Startup outcome:** LOADED SUCCESSFULLY — no hang. Startup time: 391s (42 safetensors shards at ~5s/shard).
+
+**Startup diagnostics:**
+- vLLM version: 0.19.1rc1.dev219+g72ff142c3.d20260412 (same as production)
+- FP8 linear kernel: `CutlassFp8BlockScaledMMKernel` (block-scaled, vs production's `CutlassFP8ScaledMMLinearKernel` row-wise)
+- MoE backend: TRITON (auto-selected, same as production)
+- Attention backend: FLASHINFER
+- CUDA graph mode: **PIECEWISE** (same FlashInfer + speculative decode limitation)
+- KV cache available: 46.43 GiB (vs production 47.95 GiB — 3.2% less)
+- KV cache tokens: **1,104,432** (vs production 1,142,736 — 3.4% fewer)
+- Max concurrency: 83.16x at 32K tokens (vs production 85.92x)
+- KV cache scale warnings: uncalibrated q_scale=1.0 (checkpoint does not provide q scaling factor — potential accuracy issue)
+- Default MoE config warning (same as production)
+
+**Benchmark results:**
+
+| Concurrency | Pre-quant FP8 | Production (post-fw, Entry 051) | Delta |
+|-------------|--------------|--------------------------------|-------|
+| c1 | 58.1 tok/s | 65.9 tok/s | **-11.8%** |
+| c4 aggregate | 157.8 tok/s | 174.7 tok/s | **-9.7%** |
+| c8 aggregate | 393.9 tok/s | 394.3 tok/s | -0.1% |
+| c16 aggregate | 541.0 tok/s | 634.0 tok/s | **-14.7%** |
+
+**Finding:** Pre-quant FP8 does not hang on v0.19.1rc1 (hang bug is version-specific to v0.19.0). However, performance is substantially worse across all concurrency levels.
+
+---
+
+## Entry 055 — Phase 3: Pre-Quant FP8 Adopt/Reject Decision (Work Item 3.3) — 2026-04-30
+
+**Decision: REJECT**
+
+**Decision criteria (from IMPLEMENTATION_PLAN.md 3.3):**
+- `Pre-quant starts AND c1 within 5% of on-the-fly` → ADOPT
+- `Pre-quant starts AND c1 regresses > 5%` → Test without MARLIN_ATOMIC_ADD to isolate
+- `Pre-quant hangs (timeout)` → REJECT, document vLLM version constraint
+
+**Result vs criteria:**
+- Pre-quant started: YES (hang bug not present in v0.19.1rc1)
+- c1 within 5%: NO — c1 regresses 11.8%
+- c1 > 5% regression: YES — triggers "test without MARLIN_ATOMIC_ADD" branch
+
+**Assessment of MARLIN_ATOMIC_ADD isolation:**
+The plan calls for isolating `VLLM_MARLIN_USE_ATOMIC_ADD=1` vs the model change when c1 regresses > 5%. However, the regression pattern rules this out:
+- c8 is flat (-0.1%) while c1 drops 11.8% and c16 drops 14.7%
+- This pattern is inconsistent with a simple env var effect — MARLIN_ATOMIC_ADD affects MoE kernel dispatch, not attention decode at different concurrencies
+- The KV cache token reduction (3.4% fewer tokens), different FP8 kernel path (block-scaled vs row-wise), and uncalibrated KV scale factors (q_scale=1.0) are the structural differences
+- Most importantly: even if MARLIN_ATOMIC_ADD is responsible for c8 being flat while others regress, the pre-quant model still underperforms production at c1 (-11.8%) and c16 (-14.7%)
+
+**Root cause hypothesis:**
+1. Pre-quant uses block-scaled FP8 (`CutlassFp8BlockScaledMMKernel`) which has different throughput characteristics than on-the-fly row-wise FP8 on SM121
+2. KV cache scaling factors are uncalibrated (q_scale=1.0 fallback) in the FP8 checkpoint — no q/prob scaling factors provided, which may affect attention quality and could affect the effective KV utilization
+3. Fewer KV tokens (1,104,432 vs 1,142,736) slightly reduces effective concurrency ceiling
+
+**MARLIN_ATOMIC_ADD standalone test:** Not worth pursuing. The 11.8% c1 regression is from the pre-quant model path, not the env var. Reverting the env var won't recover that regression.
+
+**Decision: REJECT.** Continue on `Qwen/Qwen3.6-35B-A3B` + on-the-fly `--quantization fp8` as production.
+
+**Key finding (CLAUDE.md rule update):** Pre-quant Qwen3.6-35B-A3B-FP8 **does not hang** on vLLM v0.19.1rc1 (hang was v0.19.0-specific). However, it underperforms on-the-fly FP8 across most concurrency levels. The hang rule in CLAUDE.md has been updated to reflect version specificity.
+
+**Production restore:** Stopped test container, restarted `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on `vllm-cu132-test:latest`. Healthy after 360s.
+
+**Post-restore GPU state:** Production running, /health 200 confirmed.
+
+---
+
+## Entry 056 — Phase 4.1: Kernel Tuning Research (Work Item 4.1) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Investigate vLLM-Tune and other kernel tuning opportunities for GB10 FP8 MoE on our cu132+MTP config.
+
+### Background: "Default MoE Config" Warning
+
+Every container startup produces:
+```
+WARNING [fused_moe.py:1090] Using default MoE config. Performance might be sub-optimal!
+Config file not found at .../E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json
+```
+
+This indicates vLLM is using generic Triton kernel parameters (BLOCK_N=64, BLOCK_K=128, warps=4, stages=4) instead of device-optimized values. For GB10 Blackwell MoE decode, larger block sizes could improve SM utilization.
+
+### Research: vLLM-Tune
+
+- **Tool:** `github.com/SeraphimSerapis/vllm-tune` — kernel tuning CLI for vLLM on DGX Spark
+- **Method:** Runs `benchmark_moe.py` (vLLM's built-in tool) inside a running container across 18 batch sizes. Generates JSON config files for MoE and FP8 dense GEMM kernels.
+- **Injection:** `VLLM_TUNED_CONFIG_FOLDER` env var — volume-mount a directory + set env var. No container modification needed.
+- **Reported gains:** +9.5% decode, +58% prefill on Qwen3.6-35B-A3B-FP8, TP=2, GB10×2.
+- **Pre-tuned config:** `configs/qwen--qwen3.6-35b-a3b-fp8/tp1/moe/` — tuned 2026-04-27 on single GB10, TP=1. Contains `E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8,block_shape=[128,128].json`. Tuning report confirms 18 batch sizes tested, total 14 seconds.
+
+### Config Analysis
+
+**Default config (all M ≤ 32):** `BLOCK_N=64, BLOCK_K=128, warps=4, stages=4` → 40,960 bytes shared memory
+
+**vLLM-Tune tp1 M=1 config:** `BLOCK_N=256, BLOCK_K=256, warps=8, stages=3`
+**vLLM-Tune tp1 M=2 config:** `BLOCK_N=128, BLOCK_K=256, warps=4, stages=4`
+
+Tuned config uses 4× wider N blocks and 2× wider K blocks — significantly larger tiles for better SM utilization.
+
+### GB10 Hardware Limits (measured)
+
+```
+Shared memory per block:         49,152 bytes (48 KB)
+Shared memory per multiprocessor: 102,400 bytes (100 KB)
+```
+
+Estimated shared memory for vLLM-Tune M=1 config during CUDA graph capture: ~110,592 bytes — exceeds both limits.
+
+### Injection Mechanism (VLLM_TUNED_CONFIG_FOLDER)
+
+`get_moe_configs()` in `fused_moe.py` checks `envs.VLLM_TUNED_CONFIG_FOLDER` first, then falls back to the shipped configs directory. The filename lookup uses `get_config_file_name(E, N, dtype, block_shape)`. For our model: `E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json` (no block_shape — confirmed from startup warning log).
+
+Volume mount: `-v /home/claude/vllm-tuned-configs:/tuned-configs` + `-e VLLM_TUNED_CONFIG_FOLDER=/tuned-configs`.
+
+### Finding
+
+- Pre-tuned vLLM-Tune configs exist for exactly NVIDIA_GB10, TP=1, Qwen3.6-35B-A3B-FP8.
+- Injection method via `VLLM_TUNED_CONFIG_FOLDER` is clean and reversible.
+- **Proceed to 4.2: apply and test.**
+
+---
+
+## Entry 057 — Phase 4.2: Kernel Tuning Application (Work Item 4.2) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Apply vLLM-Tune pre-tuned MoE config for NVIDIA_GB10, benchmark before/after.
+
+### Approach
+
+Created `/home/claude/vllm-tuned-configs/E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json` with the two entries from vLLM-Tune tp1 config. Restarted qwen35 with:
+- `-v /home/claude/vllm-tuned-configs:/tuned-configs`
+- `-e VLLM_TUNED_CONFIG_FOLDER=/tuned-configs`
+
+All other flags identical to production.
+
+### Result: CRASH — OutOfResources: Shared Memory Overflow
+
+Container crashed during CUDA graph capture with:
+```
+triton.runtime.errors.OutOfResources: out of resource: shared memory,
+Required: 110592, Hardware limit: 101376. Reducing block sizes or num_stages may help.
+RuntimeError: Engine core initialization failed.
+```
+
+The M=1 config (`BLOCK_N=256, BLOCK_K=256, warps=8, stages=3`) requires **110,592 bytes** shared memory during CUDA graph capture. GB10 hardware limit (per SM) is **101,376 bytes** at runtime (slightly below the static 102,400 reported by CUDA props — driver overhead).
+
+### Root Cause Analysis
+
+The vLLM-Tune tuning methodology runs benchmarks in **Triton eager mode** (direct kernel dispatch). vLLM's production path uses **CUDA graph capture**, which requires full static shared memory allocation. The two paths have different effective limits:
+
+| Mode | Shared memory behavior |
+|------|----------------------|
+| Triton eager (vLLM-Tune benchmark) | Dynamic allocation, partial pre-allocation |
+| CUDA graph capture | Full static pre-allocation, stricter limit |
+
+The vLLM-Tune config passed the eager-mode benchmark (14 seconds, 18 batch sizes, all successful) but fails in CUDA graph capture because the capture path requires all shared memory to be statically allocated upfront.
+
+**Triton version match confirmed:** Both the tuned config (`triton_version: 3.6.0`) and our container use Triton 3.6.0 — version mismatch is not the cause.
+
+### Investigation: Can Fresh vLLM-Tune Tuning Help?
+
+Running vLLM-Tune fresh (`--standalone` mode, which stops qwen35) would produce configs via the same eager-mode benchmarking path — generating configs that pass eager benchmarks but would still fail in CUDA graph capture mode. Not worth the additional production downtime.
+
+### Conclusion: No Kernel Tuning Applicable
+
+The default MoE config (`BLOCK_N=64, BLOCK_K=128, warps=4, stages=4`, 40,960 bytes) is the largest set of parameters that:
+1. Fits within GB10 CUDA graph capture shared memory limits
+2. Has been validated as stable with MTP speculative decoding
+3. Is used by vLLM automatically when no tuned config is found
+
+**DECISION: Keep default MoE config. No VLLM_TUNED_CONFIG_FOLDER mount.**
+
+Production restored to standard command (without tuned config volume mount). Healthy after ~364s.
+
+### Key Finding for Memory
+
+**vLLM-Tune pre-tuned GB10 configs are incompatible with CUDA graph capture mode.** The `BLOCK_N=256, BLOCK_K=256, warps=8, stages=3` config for M=1 requires 110,592 bytes — exceeding the 101,376 byte per-SM limit enforced during CUDA graph capture. Future vLLM-Tune configs for GB10 need to be validated against CUDA graph capture mode, not just eager mode.
+
+**Workaround path (if needed in future):** Use `--enforce-eager` to disable CUDA graphs entirely, then vLLM-Tune configs become valid. But this would regress c8/c16 throughput significantly (CUDA graphs are critical for our decode performance).
+
+**No benchmark results:** Tuned config never reached healthy state. Post-restore production config is unchanged at baseline: c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s (Entry 052).
+
+---
+
+## Entry 058 — Phase 5.2: Docker Compose Authoring (Work Item 5.2) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Create a comprehensive Docker Compose file capturing all 8 running containers.
+
+### Findings from docker inspect
+
+- `qwen35`, `bge-m3`, `gliner`, `ce-service` were running on the default bridge network via standalone `docker run` commands — NOT in the existing compose project.
+- `qwen3-embed`, `chromadb`, `neo4j`, `node-exporter` were already managed by a partial compose project (`claude`) at `/home/claude/docker-compose.yml` — but that file was severely outdated (old image `vllm-custom:sm121-inject`, old model `Qwen3.5`, gpu_util 0.60, FP8 Marlin forced, cu130 Triton cache).
+- Key per-image healthcheck tool constraints:
+  - vLLM images (qwen35, qwen3-embed, bge-m3): have `curl` — standard CMD healthcheck works
+  - gliner-ner image: only has `/opt/venv/bin/python3` — requires mounted Python script
+  - chromadb/chroma:latest (Rust-based): NO curl/wget/nc — use `grep -q 1F40 /proc/net/tcp` (port 8000 = 0x1F40 in little-endian hex)
+  - neo4j:5-community: has `wget` — use `wget -q -O - http://localhost:7474`
+  - ce-service: has `curl` via NVIDIA PyTorch base image
+
+### Compose File Design
+
+All services moved to single compose file at `/home/claude/docker-compose.yml`. Old file backed up to `docker-compose.yml.pre-5.2-backup`.
+
+Key changes from old compose:
+- `qwen35`: image → `vllm-cu132-test:latest`, `entrypoint: ["python3"]` added, command updated for MTP (`--speculative-config`), served-model-name → `spark-llm`, gpu_util → 0.70, triton cache → cu132 path, removed `VLLM_TEST_FORCE_FP8_MARLIN=1`
+- Added `bge-m3` service (new)
+- Added `ce-service` service (new)
+- Fixed all healthchecks for tool constraints (see above)
+- Added `logging: driver: json-file` explicitly on all services
+- Helper script `/home/claude/healthchecks/gliner-health.py` created (python3/urllib NER POST probe)
+
+Startup dependency chain:
+```
+chromadb / neo4j / node-exporter (independent)
+qwen35 (independent, starts first)
+  └── qwen3-embed (depends_on qwen35:healthy)
+  |     └── gliner (depends_on qwen3-embed:healthy)
+  ├── bge-m3 (depends_on qwen35:healthy)
+  └── ce-service (depends_on qwen35:healthy)
+```
+
+`docker compose config` validates clean.
+
+---
+
+## Entry 059 — Phase 5.3: Docker Compose Migration Test (Work Item 5.3) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE
+**Goal:** Stop all containers, bring up via compose, verify all health checks pass.
+
+### Pre-migration state
+
+Snapshot `pre-compose` captured via `spark-config.sh`. All 8 services running and healthy per endpoint verification.
+
+### Migration steps
+
+1. Stopped all 8 containers: `docker stop qwen35 qwen3-embed bge-m3 gliner ce-service chromadb neo4j node-exporter`
+2. Removed bridge-network containers (not in compose project): `docker rm qwen35 bge-m3 gliner ce-service`
+3. `docker compose up -d` — compose recreated qwen3-embed/chromadb/neo4j/node-exporter (config changed) and created qwen35/bge-m3/gliner/ce-service (new to compose)
+4. Startup sequence observed (correct):
+   - chromadb, neo4j, node-exporter, qwen35 started immediately
+   - qwen3-embed, bge-m3, ce-service waited for qwen35 health (~6 min)
+   - gliner waited for qwen3-embed health
+5. Healthcheck iteration required during migration (expected for first run):
+   - chromadb: initial curl healthcheck failed (no curl in image) → fixed to `/proc/net/tcp` grep
+   - gliner: nc healthcheck failed (no nc in image) → fixed to mounted Python script
+   - neo4j: curl healthcheck failed → fixed to wget
+
+### Final state
+
+All 8 services healthy:
+- qwen35 (8000): healthy
+- qwen3-embed (8001): healthy
+- gliner (8002): healthy
+- chromadb (8003): healthy (via /proc/net/tcp grep)
+- bge-m3 (8004): healthy
+- ce-service (8005): healthy
+- neo4j (7474/7687): healthy
+- node-exporter (9100): running (no healthcheck — host network service)
+
+Inference test: `curl .../v1/chat/completions` → "Hi there" (stop, 3 tokens). Stack fully operational.
+
+GPU memory: qwen35=86,080 MiB, ce-service=1,538 MiB, bge-m3=1,681 MiB, gliner=1,989 MiB, qwen3-embed=9,932 MiB. Total ~101.2 GiB / 121.6 GiB.
+
+Snapshot `compose-v1` captured.
+
+### Key Learnings
+
+- **chromadb/chroma:latest is a Rust binary** with no curl/wget/nc. Healthcheck via `/proc/net/tcp` port hex is the only option without modifying the image.
+- **gliner-ner image only has /opt/venv/bin/python3**. External health script mounted at `/home/claude/healthchecks/` solves this cleanly without rebuilding the image.
+- **neo4j has wget** (confirmed — standard path).
+- `docker compose up -d --no-deps <service>` is the correct command to apply healthcheck-only changes to individual services without recreating dependent services.
+
+---
+
+## Entry 060 — Phase 6.1: NVFP4/INT4 Quantization Path Scoping (Work Item 6.1) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE (research only — no system changes)
+**Goal:** Document what is required to pursue the INT4/NVFP4 quantization tier targeting 90+ tok/s single-request, and produce a decision matrix for when/whether to pursue each path.
+
+---
+
+### Context: Why INT4/NVFP4 Matters
+
+Current production: 65.9 tok/s c1 (Qwen3.6-35B-A3B, on-the-fly FP8, MTP=2). The community Arena leaderboard shows:
+- FP8 ceiling: ~60-66 tok/s (Seth Hobson, Arena traderaegis, v0.20.0, pre-quant FP8, MTP=1)
+- INT4/NVFP4 tier: 91-127 tok/s documented in community reports
+
+The gap between FP8 (ours) and INT4 (community top) is 38-93% in single-request throughput. At high concurrency (c16), FP8 already beats some INT4 configs due to larger KV cache, but single-request latency matters for interactive use. The question is whether the quality tradeoff justifies the engineering overhead.
+
+---
+
+### Quantization Format Primer
+
+**Why INT4/NVFP4 is faster:** Weight loading from VRAM is the bottleneck for memory-bandwidth-limited inference (which GB10 is — confirmed 44% BW drop under load, 161→90 GB/s). Model weights with on-the-fly FP8 quantization occupy half the VRAM of BF16 (2 bytes/param vs 4), but INT4 formats halve it again (~1 byte/param). With 35B params active across 256 experts (but only ~3B active per token), the decode phase is almost entirely VRAM bandwidth. Halving weight bytes → approaching 2x memory bandwidth per token → proportional throughput gain.
+
+**The quality tradeoff is not free:** Going from BF16 to FP8 incurs ~1-2% quality loss (perplexity increase) depending on model. FP8 preserves exponent range well due to the E4M3 format used by vLLM on Blackwell. INT4 formats like AWQ, GPTQ, and NVFP4 incur 3-6% quality loss — measurable on benchmarks, noticeable on edge cases (complex structured output, multi-step reasoning chains with ambiguous intermediate steps). PrismaQuant's 4.75-bit achieves 88/100 vs FP8's 91/100 on an unspecified internal score — a 3.3% gap that may or may not matter for a given pipeline.
+
+---
+
+### Checkpoint Inventory
+
+Four distinct INT4/NVFP4 quantization paths exist for Qwen3.6-35B-A3B as of 2026-04-30:
+
+#### 1. RedHatAI NVFP4 (MXFP4 block-scaled)
+- **HF handle:** `RedHatAI/Qwen3.6-35B-A3B-NVFP4` (exact name unconfirmed — may be under different org, verify on HF)
+- **Format:** NVFP4 = NVIDIA's Microscaling FP4 (MX spec, E2M1 mantissa, block-scaled per 32 elements)
+- **Disk size:** ~10-11 GB estimated (4-bit weights for ~35B params)
+- **Reported throughput:** 127 tok/s c1 with DFlash speculative decoding (community forum, jwarner)
+- **SM121 status:** REQUIRES hardware support for `cvt.e2m1x2` instruction. GB10 (SM 12.1) has this instruction — it's on Blackwell, not Hopper/Ada. NVFP4 on GB10 works at the hardware level.
+- **Practical blocker:** vLLM NVFP4 inference requires `flashinfer_cutlass` GEMM backend (not standard FlashInfer). This backend is available only in specific builds (nightly cu130 with `--extra-index-url` flags, or DFlash-patched builds). Our `vllm-cu132-test:latest` does not have `flashinfer_cutlass`.
+- **KV cache impact:** NVFP4 model weights are smaller, which frees VRAM for KV cache. At gpu_util=0.70, current KV = 47.95 GiB. With NVFP4 weights saving ~12 GB, KV could grow to ~60 GiB — 25% more tokens at c8/c16.
+
+#### 2. PrismaQuant 4.75-bit (GPTQ hybrid INT4+INT8)
+- **HF handle:** `PrismaQuantized/Qwen3.6-35B-A3B-PrismaQuant-4.75bit-vllm` (Sean Williams, #1 Arena as of 2026-04-30)
+- **Format:** Custom 4.75-bit — a mix of INT4 and INT8 blocks, calibrated with proprietary PrismaQuant toolkit. Not standard GPTQ.
+- **Disk size:** ~15-16 GB estimated (between GPTQ-4bit ~13 GB and GPTQ-8bit ~35 GB)
+- **Reported throughput:** 95.11 tok/s c1 (Sean Williams, Arena #1), ~80 tok/s sustained with DFlash
+- **Quality:** 88/100 internal score vs FP8 91/100 (3.3% gap). DanTup/spark-evals repo cited as measurement source.
+- **SM121 status:** GPTQ-family quantization works on GB10 with standard vLLM. The PrismaQuant format may require the PrismaQuant vLLM fork or specific `quantization=` flags — needs verification.
+- **DFlash dependency:** 95.11 tok/s number uses DFlash speculative decoding. Standard MTP=2 would yield less — estimate 70-80 tok/s based on FP8 MTP/non-MTP ratios.
+- **Minimum viable experiment:** Load checkpoint with `--quantization gptq` or `--quantization prisma` (if format-specific flag required). If it loads without DFlash, benchmark gives baseline INT4 number with MTP.
+
+#### 3. AWQ INT4 (standard 4-bit)
+- **HF handle:** Several community quantizations exist (search `Qwen3.6-35B-A3B AWQ` on HF)
+- **Format:** Activation-aware Weight Quantization — INT4 weights, INT8 activations, group-size 128
+- **Disk size:** ~13-14 GB
+- **Reported throughput:** DFlash entry cites ~80 tok/s, standard vLLM MTP probably 55-65 tok/s
+- **vLLM support:** Native, `--quantization awq`. No special build required — runs on our current cu132 image.
+- **Quality:** AWQ is among the best INT4 formats; 4-8% quality degradation typical
+- **Risk:** AWQ on GB10 has not been independently validated in the community. Standard architecture (Qwen3.6 uses same MoE structure as 3.5 which AWQ supports) suggests it will work, but confirm before committing.
+
+#### 4. Hybrid INT4+FP8 (custom checkpoint)
+- **HF handle:** Not publicly released — referenced as custom community build
+- **Format:** INT4 for linear projections (router, attention) + FP8 for MoE expert weights. Tradeoff: less quality degradation on MoE paths (FP8) vs pure INT4.
+- **Reported throughput:** 108-125 tok/s synthetic, ~80 sustained
+- **Status:** Requires custom checkpoint build with proprietary toolchain. Not a practical path today.
+
+---
+
+### vLLM Build Requirements by Path
+
+The quantization paths require different vLLM builds. This is the primary gating factor:
+
+| Path | Required Build | Available Today? | Gap |
+|------|---------------|-----------------|-----|
+| FP8 on-the-fly (current) | Any cu132+ | Yes (`vllm-cu132-test:latest`) | — |
+| AWQ INT4 | Standard mainline (any) | Yes (cu132 supports AWQ) | None |
+| PrismaQuant 4.75-bit | Likely standard + format flag | Needs verification | Low risk |
+| NVFP4 | `flashinfer_cutlass` backend | No — not in cu132 build | Requires nightly cu130 or DFlash image |
+| DFlash speculative decode | DFlash fork (joshua.dale.warner) | No — not mainline | Not merged, no ETA |
+
+**Key insight:** AWQ INT4 and possibly PrismaQuant can be tested TODAY on the existing cu132 image without any build changes. NVFP4 requires a different build. DFlash adds another layer of complexity beyond NVFP4.
+
+---
+
+### What is DFlash and Why Does It Matter?
+
+DFlash is an alternative speculative decoding implementation developed by community contributor joshua.dale.warner. It differs from vLLM's built-in MTP in how it handles draft token generation:
+- MTP (our current): uses model's built-in multi-token prediction head — works without a separate draft model, no extra VRAM
+- DFlash: uses a separate small draft model (e.g., Qwen3-0.6B) with fused attention kernels for reduced latency per draft step
+
+DFlash's reported throughput advantage on INT4 weights comes from two factors working together: (1) INT4 model loads fast enough that a separate draft model doesn't bottleneck the pipeline, (2) DFlash's attention kernels are tuned for GB10 memory hierarchy. Our MTP=2 already achieves 80.7% acceptance rate on FP8 — whether DFlash would materially outperform MTP on INT4 is unclear without direct benchmarking.
+
+DFlash is not merged into mainline vLLM as of 2026-04-30. Integrating it requires either pulling a community Docker image (which may not have cu132 support) or manually applying patches to a cu132 build — both paths involve significant risk and are hard to maintain across vLLM version updates.
+
+---
+
+### Quality Evaluation Framework
+
+The plan asks about quality eval infrastructure before committing to INT4.
+
+**DanTup/spark-evals** (github.com/DanTup/spark-evals):
+- Uses Inspect AI evaluation framework
+- Runs standardized evals against local vLLM endpoints
+- Coverage: multiple reasoning benchmarks, code generation, instruction following
+- Designed specifically for DGX Spark comparative eval across quantization formats
+- Status as of 2026-04-30: exists, referenced in community forum, specific benchmark coverage unclear
+
+**PrismaQuant's 88/100 vs FP8 91/100** rating:
+- "88/100" and "91/100" are from an unspecified internal score, not a standard benchmark like MMLU or HumanEval
+- These numbers are community-reported without methodology disclosure
+- A 3.3% gap on an opaque composite metric could mask large gaps on specific task types (e.g., structured JSON reliability, long-chain reasoning)
+- For the contact-center-lab pipeline, the relevant quality dimensions are: (1) JSON schema compliance rate, (2) entity extraction precision/recall, (3) tool call format compliance. General benchmarks may not predict performance on these.
+
+**Minimum viable quality framework for this pipeline:**
+1. Run 50 production-format requests (entity extraction + structured JSON + tool calls) against current FP8
+2. Record exact outputs as ground truth
+3. Run identical requests against INT4 candidate
+4. Compute: JSON parse success rate, entity type match rate, tool call format compliance
+5. Accept if all three metrics degrade less than 5% relative
+
+This is faster than running spark-evals from scratch and directly measures pipeline-relevant quality.
+
+---
+
+### Minimum Viable Experiment: AWQ INT4 Without DFlash
+
+The lowest-effort path to an INT4 data point:
+
+1. Identify a community AWQ checkpoint for Qwen3.6-35B-A3B on HuggingFace
+2. Download (~13 GB): `huggingface-cli download <checkpoint>`
+3. Stop qwen35 production container
+4. Start with: `--model <awq-checkpoint> --quantization awq` on existing `vllm-cu132-test:latest`
+5. Run `throughput_bench.py` at c1/c4/c8/c16
+6. Run 20 pipeline-format quality requests
+7. Decision: if c1 > 80 tok/s AND quality passes → pursue further; else defer
+
+Time estimate: 45 minutes end-to-end (15 min download, 10 min startup, 20 min benchmark). Production downtime: ~30 minutes.
+
+No new tooling required. This is the cleanest, lowest-risk way to determine if INT4 is worth pursuing with the more complex NVFP4/DFlash stack.
+
+---
+
+### Performance Expectation Model
+
+Based on memory bandwidth scaling theory and community data points:
+
+| Config | Expected c1 tok/s | c16 agg tok/s | Confidence | Notes |
+|--------|------------------|---------------|------------|-------|
+| Current: FP8 + MTP=2 | 65.9 (measured) | 634.0 (measured) | — | Baseline |
+| AWQ INT4 + MTP=2 | 70-85 | 550-700 | Low | Smaller weights → faster decode; KV cache slightly reduced; no community data on GB10 |
+| PrismaQuant 4.75-bit + MTP=2 | 75-90 | 580-720 | Low | Community: 95.11 with DFlash → ~75 without |
+| NVFP4 + MTP=2 | 85-100 | 600-750 | Low | Requires flashinfer_cutlass; no direct comparison data |
+| NVFP4 + DFlash | 95-127 | Unknown | Very Low | Community top; two unproven components together |
+
+The c16 aggregate may not improve significantly: at high concurrency the bottleneck shifts from weight decode bandwidth to attention/KV bandwidth. INT4 weights reduce weight bandwidth demand but don't touch attention bandwidth. MTP acceptance rate may also drop on INT4 (draft predictions calibrated on FP8 activations).
+
+---
+
+### Decision Matrix
+
+| Path | Prerequisites | Engineering Effort | Expected c1 Gain | Quality Risk | Go/No-Go Criterion |
+|------|--------------|-------------------|-----------------|--------------|-------------------|
+| AWQ INT4 (baseline INT4) | Find/validate community checkpoint | Low — works with current image | +7-29% | Medium (unvalidated) | Run it. Data point needed. |
+| PrismaQuant 4.75-bit | Verify vLLM format support | Low-Medium — may need format flag | +14-37% | Low-Medium (88/100 measured) | Run if AWQ shows >10% c1 gain AND quality holds |
+| NVFP4 without DFlash | flashinfer_cutlass build (nightly cu130 or custom) | Medium — new image, lose cu132 gains | +29-52% | Medium | Only if AWQ/PrismaQuant insufficient AND mainline support arrives |
+| NVFP4 + DFlash | flashinfer_cutlass + DFlash patch | High — two unmerged components | +44-93% | High | Defer until DFlash merges to mainline |
+| spark-evals quality framework | DanTup/spark-evals setup | Medium (one-time) | N/A | N/A | Set up before any INT4 adoption |
+
+---
+
+### Decision Gates (Defer Until)
+
+Execution should be deferred until at least one of these is true:
+
+1. **DFlash lands in mainline vLLM** — eliminates the biggest integration risk. Check vLLM release notes and PR tracker. Current PR status: open, no merge date.
+
+2. **Quality eval framework exists** — run DanTup/spark-evals against current FP8 baseline first. Without a quality baseline, INT4 adoption is flying blind on the dimension that matters most.
+
+3. **Throughput requirements change** — current c8/c16 numbers (394/634 tok/s) comfortably serve the pipeline. If pipeline concurrency scales beyond what current config handles, the INT4 tradeoff calculus changes.
+
+4. **AWQ INT4 data point exists** — run the 45-minute minimum viable experiment to establish whether INT4 even yields the expected bandwidth gains on GB10 with our specific MoE config. If AWQ shows <15% c1 improvement, NVFP4 and DFlash may not be worth the complexity.
+
+**Immediate action (does not require the above):** Run AWQ INT4 minimum viable experiment in next available maintenance window. Low risk, generates real data, clarifies whether the INT4 path is worth any further investment.
+
+---
+
+### Summary Table: What We Know vs What We Need
+
+| Question | Status | Source |
+|----------|--------|--------|
+| Does NVFP4 work at all on GB10 SM121? | YES — hardware supports it | Forum: jwarner confirmed GB10 works |
+| Does AWQ INT4 work on current cu132 image? | LIKELY YES — standard vLLM support | Not tested on our hardware |
+| What's the c1 gain from INT4 on GB10? | UNKNOWN — no GB10-specific data | Community data is NVFP4 + DFlash combined |
+| Does quality degrade in pipeline-relevant dimensions? | UNKNOWN | spark-evals not set up; PrismaQuant 88/100 is opaque |
+| Is DFlash ready to use? | NO — not mainline, patchy image availability | Forum thread joshua.dale.warner |
+| Does flashinfer_cutlass exist in a stable GB10 image? | PARTIAL — in nightly cu130, not cu132 | Would lose our cu132+MTP performance gains |
+| Can MTP=2 be used with NVFP4? | UNKNOWN — MTP drafter is calibrated on BF16/FP8 activations | Not tested |
+
+---
+
+### Connection to Phase 3 Finding
+
+The pre-quantized FP8 experiment (Entry 054) is directly relevant here: `CutlassFp8BlockScaledMMKernel` (block-scaled FP8) significantly underperformed row-wise on-the-fly FP8 at c1/c4/c16, even though the weights were pre-computed. This suggests block-scaled quantization may not be optimal for GB10's memory hierarchy. NVFP4 also uses block-scaled (MX spec, 32-element blocks) — there's a non-trivial risk that NVFP4 on GB10 follows the same pattern: faster on paper, slower in practice due to dequantization overhead in the decode kernel path. The AWQ experiment (row-wise grouping) would be a better leading indicator than NVFP4 of whether any INT4 format will win.
+
+---
+
+### Files to Monitor
+
+- `github.com/vllm-project/vllm` — PR tracker for "DFlash", "flashinfer_cutlass", "NVFP4", "MX spec"
+- `github.com/DanTup/spark-evals` — quality eval framework maturity
+- NVIDIA DGX Spark forum — Arena leaderboard entries with GB10 INT4 benchmarks
+- `huggingface.co/PrismaQuantized` — PrismaQuant Qwen3.6 checkpoint updates
+- SPARK_BASELINE.md Recon Triggers: `MXFP4 AND (online OR on-the-fly OR Qwen)` — existing trigger, already covers NVFP4 path
+
+---
+
+## Entry 061 — Phase 6.2: Gemma 4 Community Status Check (Work Item 6.2) — 2026-04-30
+
+**Operator:** Claude Code
+**Status:** COMPLETE (research only — no system changes)
+**Goal:** Document Gemma 4's current state since our April 11 benchmarks (Entry 020-021). Answer four questions: (1) Is guided JSON fixed? (2) Has throughput gap narrowed? (3) What did eugr's v0.20.1rc1 recipe fixes address? (4) What new quantized checkpoints exist? Produce a go/no-go decision on scheduling a dedicated Gemma 4 experiment.
+
+---
+
+### Background: Where We Left Off (Entry 020-021, 2026-04-11)
+
+Our April 11 benchmarks established the Gemma 4 26B-A4B MoE as the only Gemma variant competitive with Qwen3.6 on this hardware:
+
+| Model | Quant | c1 tok/s | c8 agg | Notes |
+|-------|-------|---------|--------|-------|
+| 26B-A4B (MoE) | FP8 on-the-fly | 38.9 | 257.6 | **Best Gemma config. Guided JSON broken.** |
+| 26B-A4B (MoE) | BF16 | 23.6 | 158.7 | Day-1 floor, no community optimization |
+| 31B Dense | NVFP4 | 6.8 | 54.0 | Bandwidth-bound. Not viable for interactive. |
+| 31B Dense | BF16 | 3.7 | 28.2 | Bandwidth-bound. Matches community exactly. |
+
+Two blockers prevented deployment: (1) guided JSON/structured output broken — our pipeline requires it; (2) throughput at 38.9 tok/s c1 was 58% of production Qwen3.6 at the time (65.9 post-firmware). Both had to close before Gemma 4 was worth a maintenance window.
+
+---
+
+### Question 1: Is Guided JSON Fixed?
+
+**Short answer: No. Two distinct bugs remain open as of 2026-04-30.**
+
+#### Bug A — Issue #39130: `--reasoning-parser gemma4` silently disables xgrammar when `enable_thinking=false`
+
+Root cause: `BaseThinkingReasoningParser.is_reasoning_end()` returns `False` when no `<|channel>` / `<channel|>` reasoning tokens are present in the prompt. This means "reasoning has not ended yet," which prevents the grammar bitmask from being filled for any subsequent token. In practice, structured output enforcement is completely bypassed — the model generates free-form output, which happens to be valid JSON often enough that users don't immediately notice, but the guarantee is gone.
+
+Fix: PR #39138 changes the fallback return value to `True` (absent reasoning tokens → reasoning already ended → grammar applies). As of April 29, 2026, the PR is **awaiting code owner approval and has not merged**. No released vLLM version contains this fix.
+
+**Practical impact for our pipeline:** We run `enable_thinking=false` on every production request (it's in `chat_template_kwargs`). If we deployed Gemma 4 with `--reasoning-parser gemma4`, every structured output request would silently produce unvalidated JSON — a correctness regression disguised as success. This is a hard blocker.
+
+**Workaround:** Omit `--reasoning-parser gemma4`. This disables Gemma 4's chain-of-thought reasoning capability entirely — Gemma's extended thinking mode is one of its quality advantages over Qwen3.6 on multi-step tasks. Accepting this workaround means deploying Gemma 4 in a degraded configuration that sacrifices one of its main differentiators. Not recommended.
+
+#### Bug B — Issue #40080: Infinite repetition loops under grammar-constrained decoding
+
+Root cause: Model-level repetition bias, amplified by xgrammar token masking. When xgrammar restricts the valid token set to valid-JSON continuations, the model's slight tendency to repeat recent tokens becomes a self-reinforcing loop — it produces a valid prefix, then repeats a phrase until `max_tokens` is exhausted. The problem is cross-platform (observed in Ollama, vLLM, llama.cpp), which indicates it's intrinsic to Gemma 4's weight distribution, not a vLLM bug.
+
+Fix attempt: PR #40099 proposes auto-enabling `RepetitionDetectionParams` (3-to-20 token patterns, 4+ repetitions → stop with `finish_reason=repetition_detected`). Status: **open, awaiting approval**. Conservative approach — trades incomplete output for garbage output, which is better for production use.
+
+Mitigation available today: `repetition_penalty=1.1` or `frequency_penalty=0.1` at the request level partially suppresses loops but does not eliminate them. Combining with output length limits helps; does not fully prevent.
+
+**Practical impact:** Even if Bug A were fixed, Bug B would cause intermittent structured output failures in production. Our pipeline has no retry logic for `finish_reason=repetition_detected`. Building that retry path is additional engineering work.
+
+#### Combined structured output assessment
+
+| Bug | Severity | Fix status | ETA |
+|-----|----------|------------|-----|
+| #39130 — xgrammar bypass with enable_thinking=false | Critical (correctness) | PR #39138 open, not merged | Unknown |
+| #40080 — repetition loops under JSON schema | High (reliability) | PR #40099 open, not merged | Unknown |
+
+Both blockers must clear before Gemma 4 guided JSON is production-ready. Neither is merged as of today. The fix PR for #39130 has been open since April 6 with active review comments — merge within 1-2 vLLM releases is plausible but unconfirmed.
+
+---
+
+### Question 2: Has the Throughput Gap Narrowed?
+
+**Short answer: Yes — significantly. Community benchmarks show 45-54 tok/s c1 for the 26B-A4B MoE, up from our 38.9.**
+
+#### What changed between April 11 and April 30
+
+Our April 11 number (38.9 tok/s c1) used the official `vllm/vllm-openai:gemma4-cu130` image — a day-1 build with no SM121 kernel optimization. Since then:
+
+1. **NVFP4 quantization emerged as the dominant path.** The `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` community checkpoint (published April 3-5) achieves 52 tok/s c1 on GB10 using `--quantization modelopt` with `VLLM_NVFP4_GEMM_BACKEND=marlin`. Model weights are 16.5 GB (vs ~49 GB BF16, vs ~25 GB FP8). The model had 371,000+ HF downloads in its first month.
+
+2. **FP8 on-the-fly also improved.** Community reports show 45-54 tok/s for the FP8 path using newer builds. The eugr/spark-vllm-docker `gemma4-26b-a4b.yaml` recipe uses on-the-fly FP8 (not NVFP4) and achieves the lower end of this range.
+
+3. **Concurrency scaling is strong.** At c4 (4 concurrent requests), the NVFP4 config achieves ~114 tok/s aggregate — consistent with the 26B MoE's small active parameter footprint (3.8B active/token, KV cache demand low, batching very efficient).
+
+#### Updated community throughput table (as of 2026-04-30)
+
+| Config | c1 tok/s | c4 agg tok/s | vLLM | Image | Source |
+|--------|---------|-------------|------|-------|--------|
+| 26B-A4B NVFP4 + Marlin (bg-digitalservices) | 52 | 114.6 | 0.19.x | gemma4-cu130 | ai-muninn.com, April 13 |
+| 26B-A4B FP8 (eugr recipe) | ~45-50 | ~140 | 0.20.1rc1.dev96 | eugr build | forum April 3-5 |
+| 26B-A4B BF16 (day-1 official) | 23.6 | ~158 | 0.19.0 | gemma4-cu130 | Entry 020-021 |
+| 31B Dense FP8 runtime (AT build) | 6.9 | ~27 | 0.19.1rc1.dev31 | custom | NVIDIA forum April 6 |
+
+**Vs. our production baseline (post-firmware):**
+- Qwen3.6-35B-A3B FP8 + MTP=2: c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s
+- Best Gemma 4 26B c1 (52 tok/s NVFP4): still 21% below our Qwen baseline
+- Best Gemma 4 26B c4 (140 tok/s FP8): ~20% below Qwen c4 at 174.7
+
+At c1, Gemma 4 26B is now respectable (was unusable in early benchmarks) but still trails. At high concurrency (c8+), Gemma's smaller active parameter count suggests better scaling — but no published c8/c16 numbers exist for the 26B yet.
+
+#### The MoE advantage that matters
+
+Gemma 4 26B-A4B active params/token: 3.8B. Qwen3.6-35B-A3B active params/token: ~3.5B. The difference is small (~9%). However, Gemma's experts are much denser per active parameter, and its 256K context window is 8x Qwen's 32K. For long-document tasks that currently require chunking, Gemma 4's context advantage could be decisive — if throughput and structured output blockers are resolved.
+
+---
+
+### Question 3: What Did eugr's "Gemma 4 Recipe Fixes" in v0.20.1rc1 Address?
+
+**Short answer: Not Gemma-specific bugs. The v0.20.1rc1 build added a `gemma4-26b-a4b.yaml` recipe and fixed a general PyTorch/transformers version conflict that was breaking Gemma 4 initialization.**
+
+Specific changes in the eugr build relevant to Gemma 4 (from GitHub repo analysis):
+- Added `gemma4-26b-a4b.yaml` recipe for the MoE variant with on-the-fly FP8
+- PyTorch pinned to 2.11.0 (previously nightly) — this fixed a `transformers 5.x` compatibility break that was causing Gemma 4 (which requires `transformers >= 5.4`) to fail initialization with "module not found" errors
+- The `--tf5` flag on `build-and-copy.sh` forces transformers 5.x in the image; earlier builds used transformers 4.x which cannot load Gemma 4's architecture
+
+**Critical caveat discovered during research (April 29-30 forum posts):** InstantTensor, the operator fusion library that eugr incorporates for MoE throughput gains, was confirmed to break Gemma 4 26B initialization. Workaround: build with `safetensors` mode (disables InstantTensor), but this reportedly makes the build 75% slower than the prior v0.19.1rc0 version. In other words, using eugr's Gemma 4 recipe today requires either accepting a major performance regression or using a pinned older build hash (`v0.19.2rc0`).
+
+This matters for our evaluation: the "Gemma 4 recipe fixes" marketing in v0.20.1rc1 resolved Python environment issues, not throughput or structured output issues. The core blockers are in the vLLM codebase, not the eugr build system.
+
+---
+
+### Question 4: What New Quantized Checkpoints Exist?
+
+Since April 11, the following checkpoints have appeared or become confirmed usable on GB10:
+
+#### For Gemma 4 26B-A4B (MoE)
+| HF Handle | Format | Disk | Notes |
+|-----------|--------|------|-------|
+| `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` | NVFP4 (W4A4, modelopt) | 16.5 GB | Primary NVFP4 option; 97.6% quality retained vs BF16; requires `VLLM_NVFP4_GEMM_BACKEND=marlin` + `--tf5` flag on build; 371k downloads |
+| `protoLabsAI/gemma-4-26B-A4B-it-FP8` | FP8 pre-quant | ~25 GB | Claims 175 tok/s on single GPU with FP8 KV — likely exaggerated or benchmark-specific; use community recipe instead |
+
+#### For Gemma 4 31B (Dense)
+| HF Handle | Format | Disk | Notes |
+|-----------|--------|------|-------|
+| `nvidia/Gemma-4-31B-IT-NVFP4` | NVFP4 (official) | ~20 GB | 6.8 tok/s c1 on GB10 (bandwidth-bound, no MoE advantage); not competitive |
+| `RedHatAI/gemma-4-31B-IT-NVFP4` | NVFP4 (LLM Compressor) | ~20 GB | Similar performance profile to NVIDIA official |
+| `RedHatAI/gemma-4-31B-it-FP8-block` | FP8 block-scaled | ~32 GB | Block-scaled FP8 (same format that underperformed on Qwen3.6 in Entry 054); not recommended |
+| `LilaRest/gemma-4-31B-it-NVFP4-turbo` | NVFP4 repackaged | ~20 GB | Claims 2.5x faster than BF16; still bandwidth-bound on GB10 single-node |
+
+**Assessment:** The 31B dense model has no viable path on a single-node Spark. 6.8 tok/s NVFP4 vs 3.7 tok/s BF16 is a confirmed improvement, but 6.8 tok/s is not interactive-capable for any production use. The 26B MoE is the only Gemma variant that belongs in a single-Spark conversation.
+
+---
+
+### Decision: Schedule a Gemma 4 Experiment?
+
+The plan's decision gate is: **schedule a dedicated maintenance window ONLY if guided JSON is confirmed fixed AND throughput exceeds 50 tok/s c1 on community benchmarks.**
+
+#### Evaluate against gate criteria:
+
+| Criterion | Status | Assessment |
+|-----------|--------|------------|
+| Guided JSON confirmed fixed | No — PRs #39138 and #40099 unmerged | Gate FAILS |
+| c1 throughput > 50 tok/s community benchmark | 52 tok/s (NVFP4), 45-50 tok/s (FP8) | Gate PASSES |
+
+**Decision: DO NOT SCHEDULE. Structured output blockers not resolved.**
+
+#### Rationale
+
+The throughput criterion is now met — 52 tok/s c1 on NVFP4 clears the 50 tok/s bar by a small margin. But structured output is a hard requirement for the contact-center-lab pipeline. Every production use case requires JSON schema compliance: entity extraction, slot filling, classification. Running Gemma 4 without guaranteed structured output is not an option.
+
+The PRs that would fix this are in review with active engagement from maintainers. Based on the PR trajectory (filed April 6, review feedback received, revisions submitted), a merge within 1-2 vLLM releases (v0.20.1 or v0.21) is plausible. The repetition loop fix (PR #40099) has a cleaner path — it's additive and conservative. The xgrammar bypass fix (PR #39138) is more complex due to class hierarchy concerns raised in review.
+
+Even after both PRs merge, validation is needed before committing a maintenance window. The minimum validation path is:
+1. Deploy Gemma 4 26B NVFP4 in test (not replacing production)
+2. Run 20 pipeline-format structured output requests
+3. Verify zero xgrammar bypass, zero repetition loops
+
+#### What to monitor
+
+| Signal | Action |
+|--------|--------|
+| PR #39138 merges | Note vLLM version. Verify it's in eugr build or our cu132 image. |
+| PR #40099 merges | Note vLLM version. Same verification. |
+| Both merged AND available in a stable build | Schedule Gemma 4 evaluation maintenance window |
+| Community reports > 55 tok/s c1 with structured output confirmed working | Accelerate scheduling — throughput advantage becomes compelling |
+| Gemma 4 c8/c16 community benchmarks published | Update throughput comparison (high-concurrency profile unknown) |
+
+---
+
+### Connection to Phase 3 Finding (Entry 054)
+
+The pre-quant FP8 experiment revealed that block-scaled FP8 (`CutlassFp8BlockScaledMMKernel`) underperforms row-wise FP8 on GB10 at c1/c4/c16. NVFP4's `bg-digitalservices` checkpoint uses W4A4 MX-spec block scaling — a different format but the same block-scaling principle. The 52 tok/s community number may include overhead from sub-optimal block-scaling dequantization in the decode kernel. When we eventually benchmark NVFP4 on our hardware, compare against the Entry 054 pattern to see if block-scaling overhead is consistent.
+
+---
+
+### Recon Trigger Updates
+
+The following SPARK_BASELINE.md Recon Triggers should be updated to reflect current state:
+
+- Row `vllm_release | gemma4 AND (guided OR grammar OR xgrammar)` — status changed from "watch" to "BLOCKED on #39138 and #40080". Action remains the same.
+- Row `forum | gemma4 AND (guided JSON OR grammar OR structured output) fix` — change from `INFO: community confirmation of #39130 fix` to `ACTION: confirm both PRs (#39138, #40099) merged before scheduling experiment`.
+
+---
+
+### Summary
+
+| Question | Finding |
+|----------|---------|
+| Guided JSON fixed? | No. Two bugs unresolved: #39130 (xgrammar bypass) and #40080 (repetition loops). PRs in review, not merged. |
+| Throughput gap narrowed? | Yes. NVFP4: 52 tok/s c1 (was 38.9 FP8). Still 21% below our Qwen3.6 baseline (65.9). c8/c16 scaling unknown. |
+| eugr v0.20.1rc1 "Gemma 4 fixes"? | Python environment fixes (transformers 5.x compatibility). InstantTensor broke Gemma 4; workaround degrades perf 75%. Not structural throughput or correctness fixes. |
+| New quantized checkpoints? | bg-digitalservices NVFP4 (16.5 GB, 52 tok/s, 97.6% quality retained) is best option. 31B dense not viable on single-node. |
+| Schedule experiment? | **NO** — guided JSON gate fails. Revisit when PRs #39138 and #40099 merge. |

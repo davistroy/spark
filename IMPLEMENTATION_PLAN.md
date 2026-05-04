@@ -1,182 +1,263 @@
-# Implementation Plan: DGX Spark — MTP Validation, Image Eval, Ops Improvements, Rename
+# Implementation Plan: DGX Spark — Performance Sprint, Infrastructure Hardening, Research Scoping
 
-**Created:** 2026-04-24
-**Branch:** spark-optimization-2026-04-24
-**Status:** COMPLETE (15/16 items done, 1 skipped) — finalized 2026-04-24
+**Created:** 2026-04-30
+**Branch:** main
+**Status:** COMPLETE (18/18 items complete — Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 all done)
+**Prior plan:** Archived to `docs/archive/IMPLEMENT_MTP_EUGR_OPS_RENAME-v1.md` (COMPLETE 2026-04-24)
 
-**Context:** Spark-recon Entry 042 (2026-04-24) found multiple community reports that MTP speculative decoding degrades performance on Qwen3.6. Our MTP=2 was validated on Qwen3.5 and carried forward without re-benchmark. Additionally, eugr's spark-vllm-docker has a newer build (0.19.2rc1+cu132 with flashinfer_cutlass re-enabled), gliner memory bloat blocked the gpu_util 0.70 tuning attempt, and the legacy served-model-name `qwen3.5-35b` needs updating.
+**Context:** Spark-recon Entry 049 (2026-04-30) identified 6 actionable items: firmware just updated (Entry 050, ~6% gain expected), eugr v0.20.1rc1 available (2 minor versions ahead), pre-quant FP8 hang rule invalidated by 3 independent signals, vLLM-Tune kernel tuning reported +9.5% decode. Additionally, infrastructure items from LATER_PLAN remain unfinished: Docker Compose, OS cleanup, data backup. Ultra-plan analysis grouped these into 3 change sets with clear ordering dependencies.
 
-**Scope:** SSH operations on the DGX Spark + in-repo documentation/config changes. Does NOT cover contact-center-lab consumer updates (separate repo, flagged as follow-up).
+**Scope:** SSH operations on the DGX Spark + in-repo documentation/config changes. Research items (NVFP4/INT4, Gemma 4) are scoped as documentation only — no system changes.
+
+**Exclusions:**
+- Contact-center-lab consumer updates (separate repo)
+- Grafana dashboard modifications (existing dashboards work)
+- Driver upgrade (staying on 580.142 — driver 590 has UMA memory leak)
+- Shelly Plug remote power setup (separate project)
 
 **Risk Summary:**
 
 | Phase | Risk | Rollback |
 |-------|------|----------|
-| 1 (MTP) | Removing MTP may halve c8 throughput | Re-add --speculative-config flag |
-| 2 (Image) | New image may regress | docker tag current image before swap |
-| 3 (Ops) | gpu_util 0.70 OOM under load | Set back to 0.65, restart |
-| 4 (Rename) | Missed consumer → "model not found" | Change name back |
+| 0 (Backup) | Near zero | N/A |
+| 1 (Baseline) | Near zero | N/A |
+| 2 (eugr eval) | Medium — c8/c16 regression possible (seen in v0.19.2rc1) | Restore tagged production image |
+| 3 (Pre-quant FP8) | Medium — silent hang possible (seen on v0.19.0) | Swap back to BF16 model + `--quantization fp8` |
+| 4 (vLLM-Tune) | Low — additive config, removable | Remove config volume mount |
+| 5 (Infra) | Low — codifying existing behavior | Individual `docker run` commands in spark-device.md |
+| 6 (Research) | Zero — documentation only | N/A |
 
 **Execution notes:**
 - All SSH commands: `ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net`
 - Container restart time: ~6 min (model load + Triton JIT warm)
 - Benchmark tool: `benchmarks/throughput_bench.py` (600 max_tokens, 3 runs/level, c1/c4/c8/c16)
 - Every experiment → LAB_NOTEBOOK.md entry before proceeding
+- Current baseline (pre-firmware, 2026-04-24): c1=59.9, c4=166.2, c8=373.8, c16=564.0 tok/s
 
 ---
 
-## Phase 1: MTP Validation on Qwen3.6
+## Phase 0: Safety Net
 
-**Goal:** Determine definitively whether MTP=2 helps or hurts Qwen3.6 on our cu132 build. This gates all subsequent config decisions.
+**Goal:** Back up non-recoverable data before any container experiments. This phase is a prerequisite for all subsequent work.
 
-**Current state:** MTP=2 active, acceptance rate 80.7%, benchmarks: c1=51.2, c4=160.8, c8=384.4, c16=576.0 tok/s.
+### Work Item 0.1 — Create data backup script ✅ Completed 2026-04-30
 
-### Work Item 1.1 — Tag current image for rollback ✅ Completed 2026-04-24
+**Status:** COMPLETE 2026-04-30
+**Depends on:** None
 
-**Status:** COMPLETE 2026-04-24
-
-**Task:** Tag the current production image so it can be restored if anything goes wrong during testing.
+**Task:** Create `/home/claude/backup-data.sh` that backs up ChromaDB and Neo4j Docker volumes to timestamped local directories. Neo4j requires a brief stop for consistent snapshot.
 
 **SSH commands:**
 ```bash
-docker tag vllm-cu132-test:latest vllm-cu132-test:pre-optimization-2026-04-24
-docker images | grep vllm-cu132
+cat > /home/claude/backup-data.sh << 'SCRIPTEOF'
+#!/bin/bash
+set -euo pipefail
+
+BACKUP_DIR=/home/claude/backups/$(date +%Y%m%d-%H%M%S)
+mkdir -p "$BACKUP_DIR"
+
+echo "=== Backing up ChromaDB ==="
+docker run --rm -v chromadb-data:/data -v "$BACKUP_DIR":/backup alpine \
+  tar czf /backup/chromadb-data.tar.gz -C /data .
+
+echo "=== Stopping Neo4j for consistent backup ==="
+docker stop neo4j
+docker run --rm -v neo4j-data:/data -v "$BACKUP_DIR":/backup alpine \
+  tar czf /backup/neo4j-data.tar.gz -C /data .
+docker run --rm -v neo4j-logs:/data -v "$BACKUP_DIR":/backup alpine \
+  tar czf /backup/neo4j-logs.tar.gz -C /data .
+docker start neo4j
+
+echo "=== Backup complete ==="
+ls -lh "$BACKUP_DIR/"
+echo "Total: $(du -sh "$BACKUP_DIR" | cut -f1)"
+SCRIPTEOF
+chmod +x /home/claude/backup-data.sh
 ```
 
-**Acceptance:** `docker images` shows both `:latest` and `:pre-optimization-2026-04-24` tags pointing to the same image ID.
+**Acceptance:** Script exists and is executable. Dry-read the script to verify volume names match (`chromadb-data`, `neo4j-data`, `neo4j-logs` — confirmed via `docker system df`).
 
 **Files:** None (remote only)
 
 ---
 
-### Work Item 1.2 — Benchmark WITHOUT MTP ✅ Completed 2026-04-24
+### Work Item 0.2 — Run initial backup ✅ Completed 2026-04-30
 
-**Status:** COMPLETE 2026-04-24
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 0.1
+
+**Task:** Execute the backup script. Verify backup sizes are reasonable (total ~1 GB based on `docker system df` showing 1.068 GB in volumes).
+
+**SSH commands:**
+```bash
+/home/claude/backup-data.sh
+
+# Verify backup integrity (spot-check)
+tar tzf /home/claude/backups/*/chromadb-data.tar.gz | head -5
+tar tzf /home/claude/backups/*/neo4j-data.tar.gz | head -5
+```
+
+**Acceptance:** Backup completes without error. Total size ~1 GB. Neo4j restarts and returns to healthy state (`curl -sf http://localhost:7474`).
+
+**Files:** LAB_NOTEBOOK.md (append brief entry)
+
+---
+
+## Phase 1: Post-Firmware Baseline
+
+**Goal:** Establish clean throughput baseline after today's firmware update (Entry 050). All subsequent experiments reference these numbers.
+
+**Prerequisite:** Phase 0 complete.
+
+### Work Item 1.1 — Post-firmware benchmark ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 0.2
+
+**Task:** Run the full throughput benchmark suite against the current production config. The system was just rebooted for firmware recovery — this is the cleanest possible test environment (40C GPU, 0% utilization, 41 min uptime).
+
+**SSH commands:**
+```bash
+# Verify health
+curl -sf http://localhost:8000/health && echo "LLM OK"
+
+# Full benchmark
+python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spark-llm --concurrency 1 4 8 16
+
+# Record GPU state
+nvidia-smi
+free -h
+```
+
+**Expected results:** ~63.5 tok/s c1 (59.9 × 1.06 from firmware gain). c4/c8/c16 should scale proportionally.
+
+**Acceptance:** Benchmark completes for all concurrency levels. Results recorded in LAB_NOTEBOOK.md as Entry 051.
+
+**Files:** LAB_NOTEBOOK.md (Entry 051), SPARK_BASELINE.md (update if numbers change)
+
+---
+
+### Work Item 1.2 — OS cleanup (parallel with 1.1) ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** None (independent of all other items)
+
+**Task:** Remove unused desktop snaps and free RAM. **CRITICAL: Keep `firmware-updater` snap** — just used today for firmware update.
+
+**SSH commands:**
+```bash
+# Remove desktop snaps (NOT firmware-updater, NOT core/snapd)
+sudo snap remove gnome-46-2404
+sudo snap remove gtk-common-themes
+sudo snap remove mesa-2404
+
+# Verify firmware-updater is still present
+snap list | grep firmware
+
+# Check RAM improvement
+free -h
+
+# Check disk freed
+df -h /
+```
+
+**What NOT to remove:**
+- `firmware-updater` — needed for future firmware updates (just used today)
+- `bare`, `core22`, `core24`, `snapd` — required by snap ecosystem and firmware-updater
+- `dgx-dashboard`, `dgx-dashboard-admin` — useful monitoring
+- `nvidia-dgx-telemetry` — keep for now (provides system telemetry)
+- `avahi-daemon`, `multipathd` — not shown as running in `systemctl` output; skip
+
+**Acceptance:** `snap list` shows firmware-updater still present. gnome-46-2404, gtk-common-themes, mesa-2404 removed. RAM available increases (~100-200 MB).
+
+**Files:** LAB_NOTEBOOK.md (brief entry), CLAUDE.md (add note if relevant)
+
+---
+
+## Phase 2: Image Evaluation (eugr v0.20.1rc1+cu132)
+
+**Goal:** Determine if eugr's latest build yields measurable improvement. Key differences from our v0.19.1rc1: FlashInfer 0.6.9 (up from 0.6.8-ish), experimental b12x support, vLLM v0.20.1rc1. Previous rejection (Entry 045-046) was v0.19.2rc1 — different build, specific KV cache and CUDA graph regressions.
+
+**Prerequisite:** Phase 1 complete (clean post-firmware baseline established).
+
+### Work Item 2.1 — Pull and build eugr v0.20.1rc1 image ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 1.1
 
-**Task:** Stop the production container. Start a new qwen35 container identical to production but WITHOUT `--speculative-config` and `--max-num-batched-tokens 4096`. Run the full throughput benchmark suite.
+**Task:** Pull the latest eugr/spark-vllm-docker and build the runner image. Tag current production image for rollback.
 
 **SSH commands:**
 ```bash
-# Stop production
-docker stop qwen35 && docker rm qwen35
+# Tag current production image for rollback
+docker tag vllm-cu132-test:latest vllm-cu132-test:pre-eugr-v0201
 
-# Start WITHOUT MTP (note: remove --max-num-batched-tokens and --speculative-config)
-docker run -d \
-  --name qwen35 \
-  --restart unless-stopped \
-  --gpus all \
-  --ipc host \
-  --shm-size 64gb \
-  -p 8000:8000 \
-  -e VLLM_FLASHINFER_MOE_BACKEND=latency \
-  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
-  -v /home/claude/.cache/triton-cu132:/root/.triton \
-  --entrypoint python3 \
-  vllm-cu132-test:latest \
-  -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen3.6-35B-A3B \
-    --served-model-name qwen3.5-35b \
-    --port 8000 \
-    --host 0.0.0.0 \
-    --max-model-len 32768 \
-    --gpu-memory-utilization 0.65 \
-    --quantization fp8 \
-    --kv-cache-dtype fp8 \
-    --reasoning-parser qwen3 \
-    --language-model-only \
-    --enable-auto-tool-choice \
-    --tool-call-parser qwen3_coder
+# Update or clone eugr repo
+cd /home/claude/spark-vllm-docker && git pull || \
+  git clone https://github.com/eugr/spark-vllm-docker.git /home/claude/spark-vllm-docker
 
-# Wait for health
-until curl -sf http://localhost:8000/health; do sleep 10; done
+# Check what version is available
+cat /home/claude/spark-vllm-docker/README.md | head -30
 
-# Run benchmark
-python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwen3.5-35b --concurrency 1 4 8 16
+# Build runner image (Stage 6 only — prebuilt wheels, no source compile)
+cd /home/claude/spark-vllm-docker
+bash build-and-copy.sh -t eugr-vllm-0201 --full-log 2>&1 | tee /tmp/eugr-build.log
+
+# Tag for testing
+docker tag eugr-vllm-0201:latest eugr-vllm:v0201-test
+
+# Verify
+docker images | grep eugr
 ```
 
-**Acceptance:** Benchmark completes for all concurrency levels. Results recorded.
-
-**Files:** LAB_NOTEBOOK.md (append entry)
-
----
-
-### Work Item 1.3 — MTP A/B comparison and decision ✅ Completed 2026-04-24
-
-**Status:** COMPLETE 2026-04-24
-**Depends on:** 1.2
-
-**Task:** Compare no-MTP results (1.2) against existing MTP results. Make adopt/drop decision using these criteria:
-
-| Scenario | Decision |
-|----------|----------|
-| No-MTP c1 ≥ MTP c1 AND no-MTP c8 within 80% of MTP c8 | DROP MTP (simpler config, community-aligned) |
-| MTP clearly wins c8 by >20% | KEEP MTP |
-| Mixed results | Keep MTP — proven throughput at high concurrency |
-
-**Reference baselines (MTP=2, Entry 039):**
-- c1: 51.2 tok/s
-- c4: 160.8 tok/s (aggregate)
-- c8: 384.4 tok/s (aggregate)
-- c16: 576.0 tok/s (aggregate)
-
-**Acceptance:** Decision documented with rationale. If MTP dropped: production container restarted without MTP flags and verified healthy. If MTP kept: production container restored with MTP flags.
-
-**Files:** LAB_NOTEBOOK.md (decision entry), SPARK_BASELINE.md (update if config changes), spark-device.md (update container command if config changes)
-
----
-
-## Phase 2: Image Evaluation (eugr 0.19.2rc1+cu132)
-
-**Goal:** Determine if eugr's newer build yields measurable improvement over our current image. Key differences: FlashInfer 0.6.8, flashinfer_cutlass re-enabled, PR #40191 torch fix.
-
-**Prerequisite:** Phase 1 complete (we know the winning MTP config).
-
-### Work Item 2.1 — Pull eugr's 0.19.2rc1 build ✅ Completed 2026-04-24
-
-**Status:** COMPLETE 2026-04-24
-**Depends on:** 1.3
-
-**Task:** Pull the prebuilt vLLM and FlashInfer wheels from eugr's GitHub releases and build a test image, OR pull eugr's Docker image directly if available.
-
-**What was done:** No GHCR image available. Cloned repo, build script auto-downloaded prebuilt wheels from GitHub releases, built runner image (Stage 6 only — no source compilation). Build time: 4:53.
-
-**SSH commands used:**
-```bash
-git clone https://github.com/eugr/spark-vllm-docker.git /tmp/svd
-cd /tmp/svd
-bash build-and-copy.sh -t eugr-vllm-0192 --full-log
-docker tag eugr-vllm-0192:latest eugr-vllm:test
-```
-
-**Result:**
-- Image: `eugr-vllm-0192:latest` / `eugr-vllm:test` (same image ID: `83aec1653cd6`)
-- Size: 19.3 GB
-- vLLM: `0.19.2rc1.dev154+g1c2c1eb8b.d20260423.cu132`
-- FlashInfer: 0.6.8 (cubin + jit_cache + python wheels)
-- Base: `nvidia/cuda:13.2.0-devel-ubuntu24.04`
-- Entrypoint: `/opt/nvidia/nvidia_entrypoint.sh` (needs `--entrypoint python3` override, same as current image)
-- Python: 3.12, transformers 5.6.2, torch 2.11.0
-- Note: Includes custom NCCL with mesh support (dgxspark-3node-ring), ray, fastsafetensors, instanttensor
-
-**Acceptance:** `docker images | grep eugr` shows both tags. Entrypoint confirmed via `docker inspect`. Production containers untouched.
+**Acceptance:** `docker images` shows `eugr-vllm-0201:latest` and `eugr-vllm:v0201-test`. Rollback tag `vllm-cu132-test:pre-eugr-v0201` exists.
 
 **Files:** None (remote only)
 
 ---
 
-### Work Item 2.2 — Benchmark eugr image ✅ Completed 2026-04-24
+### Work Item 2.2 — Pre-flight: clean GPU state ✅ Completed 2026-04-30
 
-**Status:** COMPLETE 2026-04-24
+**Status:** COMPLETE 2026-04-30
 **Depends on:** 2.1
 
-**Task:** Stop production container. Start with eugr's image using the winning MTP config from Phase 1. Benchmark.
+**Task:** Ensure clean GPU state before testing. Entry 045 showed eugr's stricter `request_memory()` check failed when gliner had bloated to 19.7 GiB. Stop gliner, bge-m3, and ce-service before swapping qwen35 to avoid memory contention.
+
+**SSH commands:**
+```bash
+# Check current GPU state
+nvidia-smi
+
+# Stop auxiliary GPU containers
+docker stop gliner bge-m3 ce-service
+docker rm gliner bge-m3 ce-service
+
+# Verify GPU memory freed
+nvidia-smi
+
+# Check for orphan processes holding GPU memory
+nvidia-smi --query-compute-apps=pid,name,used_memory --format=csv
+# If orphan PIDs exist: docker run --rm --pid=host --privileged alpine kill -9 <PID>
+```
+
+**Acceptance:** Only qwen35 and qwen3-embed show GPU memory usage. No orphan PIDs.
+
+**Files:** None (remote only)
+
+---
+
+### Work Item 2.3 — Benchmark eugr image ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 2.2
+
+**Task:** Stop production container. Start with eugr image using identical flags. Full c1/c4/c8/c16 benchmark.
 
 **SSH commands:**
 ```bash
 docker stop qwen35 && docker rm qwen35
 
-# Start with eugr image + winning MTP config from Phase 1
+# Start with eugr image — IDENTICAL FLAGS to production (spark-device.md)
 docker run -d \
   --name qwen35 \
   --restart unless-stopped \
@@ -188,293 +269,582 @@ docker run -d \
   -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
   -v /home/claude/.cache/triton-cu132:/root/.triton \
   --entrypoint python3 \
-  vllm-eugr-0192:test \
+  eugr-vllm:v0201-test \
   -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3.6-35B-A3B \
-    --served-model-name qwen3.5-35b \
+    --served-model-name spark-llm \
     --port 8000 \
     --host 0.0.0.0 \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.65 \
+    --gpu-memory-utilization 0.70 \
     --quantization fp8 \
     --kv-cache-dtype fp8 \
     --reasoning-parser qwen3 \
     --language-model-only \
     --enable-auto-tool-choice \
-    --tool-call-parser qwen3_coder
+    --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
 
-# Wait + benchmark
-until curl -sf http://localhost:8000/health; do sleep 10; done
-python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwen3.5-35b --concurrency 1 4 8 16
+# Monitor startup (watch for errors, MoE backend, KV cache tokens)
+for i in $(seq 1 60); do
+  HEALTH=$(curl -sf http://localhost:8000/health > /dev/null 2>&1 && echo "HEALTHY" || echo "loading")
+  echo "[$i] $HEALTH"
+  if [ "$HEALTH" = "HEALTHY" ]; then break; fi
+  sleep 10
+done
+
+# Capture startup log details
+docker logs qwen35 2>&1 | grep -iE "MoE backend|attention|FP8|cache|graph|version|specul" | head -20
+
+# Full benchmark
+python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spark-llm --concurrency 1 4 8 16
 ```
 
-**Note:** `--entrypoint python3` IS needed — eugr image uses NVIDIA base entrypoint (`/opt/nvidia/nvidia_entrypoint.sh`), same as our cu132 image. Confirmed via `docker inspect eugr-vllm:test`. Also: eugr image ships with transformers 5.6.2 (vs our image's transformers 4.x) — monitor for any behavioral differences.
+**Key metrics to compare against Phase 1 baseline:**
+- KV cache token count (production: 1,142,736 — Entry 046 showed eugr v0.19.2rc1 had 929,936, 8.2% fewer)
+- CUDA graph mode (production: FULL_AND_PIECEWISE — eugr v0.19.2rc1 had PIECEWISE only)
+- MoE backend (expect TRITON; check if FLASHINFER_CUTLASS is available/selected)
+- FlashInfer version (expect 0.6.9)
+- Startup time
 
-**Acceptance:** Benchmark completes. Results compared against Phase 1 winner.
+**Acceptance:** Benchmark completes for all concurrency levels.
 
-**Files:** LAB_NOTEBOOK.md (append entry)
+**Results (2026-04-30, vLLM v0.20.1rc1.dev96+gefdc95674):**
+| Level | eugr tok/s | production tok/s | Delta |
+|-------|-----------|-----------------|-------|
+| c1    | 57.7      | 59.9            | -3.7% |
+| c4    | 176.5     | 166.2           | +6.2% |
+| c8    | 384.2     | 373.8           | +2.8% |
+| c16   | 607.1     | 564.0           | +7.6% |
+
+Startup: 342s. KV cache: 45.26 GiB / 2,656,829 tokens. CUDA graph mode: PIECEWISE (FULL_AND_PIECEWISE unavailable with FlashInfer+speculative decode in v0.20.1). MoE backend: TRITON. Startup time: 342s (vs ~364s production).
+
+**Files:** LAB_NOTEBOOK.md (Entry 052)
 
 ---
 
-### Work Item 2.3 — Image adopt/reject decision ✅ Completed 2026-04-24
+### Work Item 2.4 — eugr adopt/reject decision ✅ Completed 2026-04-30
 
-**Status:** COMPLETE 2026-04-24
-**Depends on:** 2.2
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 2.3
 
-**Task:** Compare eugr benchmark results against Phase 1 winner.
+**Task:** Compare eugr benchmark against Phase 1 baseline. Apply decision criteria.
 
 | Scenario | Decision |
 |----------|----------|
-| eugr ≥5% improvement at c1 or c8 | ADOPT eugr image |
-| eugr within 5% | STAY on current image (avoid unnecessary change) |
-| eugr regresses | REJECT, restore current image |
+| eugr c1 within 5% AND (c8 OR c16 improves > 3%) | ADOPT |
+| eugr within 5% at all levels | STAY on current image (avoid unnecessary change) |
+| eugr c8 OR c16 regresses > 3% | REJECT |
 
-If ADOPT: update production container to eugr image. Tag appropriately.
-If REJECT: restore from `vllm-cu132-test:pre-optimization-2026-04-24`.
+**If ADOPT:**
+```bash
+docker tag eugr-vllm:v0201-test vllm-cu132-test:latest
+# Take snapshot
+/home/claude/spark-config.sh snapshot post-eugr-v0201 "eugr v0.20.1rc1 adopted"
+```
 
-**Acceptance:** Decision documented. Production container running on winning image, verified healthy.
+**If REJECT:**
+```bash
+docker stop qwen35 && docker rm qwen35
+# Restore production image
+docker run -d ... vllm-cu132-test:pre-eugr-v0201 ... [production flags from spark-device.md]
+```
 
-**Files:** LAB_NOTEBOOK.md, SPARK_BASELINE.md (update image if changed), spark-device.md (update container command if changed), CLAUDE.md (add rule if new image has different entrypoint behavior)
+**Decision (2026-04-30): REJECT** — eugr v0.20.1rc1 regresses against post-firmware baseline on all levels. Root cause: FlashInfer + speculative decode forces PIECEWISE-only CUDA graphs in v0.20.1rc1 (FULL_AND_PIECEWISE unsupported). Production restored from `vllm-cu132-test:pre-eugr-v0201` (same as `:latest`).
+
+Comparison vs post-firmware baseline (Entry 051):
+- c1: 57.7 vs 65.9 = -12.5%
+- c4: 176.5 vs 174.7 = +1.0%
+- c8: 384.2 vs 394.3 = -2.6%
+- c16: 607.1 vs 634.0 = -4.2%
+
+Matches REJECT criterion: "c8 OR c16 regresses > 3%" (c16: -4.2%).
+
+Re-test when FlashInfer backend gains FULL_AND_PIECEWISE support with speculative decode.
+
+**Acceptance:** Decision documented with rationale. Production container running on winning image, verified healthy.
+
+**Files:** LAB_NOTEBOOK.md (Entry 053)
 
 ---
 
-## Phase 3: Operational Improvements
+## Phase 3: Model Evaluation (Pre-Quantized FP8)
 
-**Goal:** Reclaim wasted GPU memory and determine the correct tool-calling parser for Qwen3.6.
+**Goal:** Test pre-quantized FP8 weights (`Qwen/Qwen3.6-35B-A3B-FP8`) on the winning image from Phase 2. Hang rule invalidated by 3 independent signals (Seth Hobson Arena entry, forum reports, model repo).
 
-### Work Item 3.1 — Restart gliner, verify memory reclamation ✅ Completed 2026-04-24
+**Prerequisite:** Phase 2 complete (winning image determined).
 
-**Status:** COMPLETE 2026-04-24
+### Work Item 3.1 — Download pre-quant FP8 model ✅ Completed 2026-04-30
 
-**Task:** Restart the gliner container to reclaim accumulated GPU memory (19.7 GiB → expected ~2 GiB). Prerequisite for retrying gpu_util 0.70.
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 2.4
+
+**Task:** Download the pre-quantized FP8 model weights if not already cached.
 
 **SSH commands:**
 ```bash
-# Check current memory before restart
-nvidia-smi
+# Check if already cached
+ls /home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B-FP8/ 2>/dev/null && echo "CACHED" || echo "NEED DOWNLOAD"
 
-# Restart gliner
-docker restart gliner
+# If not cached — download (~25 GB)
+huggingface-cli download Qwen/Qwen3.6-35B-A3B-FP8
 
-# Wait and verify
-sleep 30
-nvidia-smi
-
-# Check free GPU memory specifically
-python3 -c "import torch; f,t=torch.cuda.mem_get_info(); print(f'Free: {f/1024**3:.1f} GiB / Total: {t/1024**3:.1f} GiB')"
+# Verify
+ls -la /home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B-FP8/snapshots/*/
 ```
 
-**Acceptance:** gliner memory usage drops from ~19.7 GiB to <4 GiB. Available GPU memory increases correspondingly.
+**Acceptance:** Model files exist in HF cache.
 
-**Files:** LAB_NOTEBOOK.md (document before/after)
+**Files:** None (remote only)
 
 ---
 
-### Work Item 3.2 — Retry gpu_util 0.70 ✅ Completed 2026-04-24
+### Work Item 3.2 — Benchmark pre-quant FP8 with MARLIN_ATOMIC_ADD ✅ Completed 2026-04-30
 
-**Status:** COMPLETE 2026-04-24
-**Depends on:** 3.1, Phase 2 complete (final image + MTP config known)
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 3.1
 
-**Task:** Restart qwen35 with `--gpu-memory-utilization 0.70`. Now feasible since gliner memory reclaimed.
+**Task:** Swap to pre-quantized FP8 model. Remove `--quantization fp8` (weights are already quantized). Also test `VLLM_MARLIN_USE_ATOMIC_ADD=1` (Seth's Arena config; our own startup logs recommended it).
+
+**CRITICAL: 10-minute startup timeout.** If no `/health` 200 within 600 seconds, the hang bug is still present on this vLLM version. Kill and revert.
 
 **SSH commands:**
 ```bash
 docker stop qwen35 && docker rm qwen35
 
-# Start with 0.70 — use final winning config from Phases 1-2
-# ONLY change: --gpu-memory-utilization 0.65 → 0.70
-[winning docker run command with 0.70]
+# Start with pre-quant FP8 model + MARLIN_ATOMIC_ADD
+# Changes vs production:
+#   - Model: Qwen/Qwen3.6-35B-A3B → Qwen/Qwen3.6-35B-A3B-FP8
+#   - REMOVED: --quantization fp8 (weights already quantized)
+#   - ADDED: -e VLLM_MARLIN_USE_ATOMIC_ADD=1
+docker run -d \
+  --name qwen35 \
+  --restart unless-stopped \
+  --gpus all \
+  --ipc host \
+  --shm-size 64gb \
+  -p 8000:8000 \
+  -e VLLM_FLASHINFER_MOE_BACKEND=latency \
+  -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
+  -v /home/davistroy/.cache/huggingface:/root/.cache/huggingface \
+  -v /home/claude/.cache/triton-cu132:/root/.triton \
+  --entrypoint python3 \
+  [WINNING_IMAGE_FROM_PHASE_2] \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-35B-A3B-FP8 \
+    --served-model-name spark-llm \
+    --port 8000 \
+    --host 0.0.0.0 \
+    --max-model-len 32768 \
+    --gpu-memory-utilization 0.70 \
+    --kv-cache-dtype fp8 \
+    --reasoning-parser qwen3 \
+    --language-model-only \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --max-num-batched-tokens 4096 \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
 
-until curl -sf http://localhost:8000/health; do sleep 10; done
+# === 10-MINUTE TIMEOUT ===
+TIMEOUT=600
+START=$(date +%s)
+while true; do
+  if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+    echo "HEALTHY after $(($(date +%s) - START))s"
+    break
+  fi
+  ELAPSED=$(($(date +%s) - START))
+  if [ $ELAPSED -gt $TIMEOUT ]; then
+    echo "TIMEOUT after ${TIMEOUT}s — HANG CONFIRMED"
+    docker logs qwen35 2>&1 | tail -30
+    docker stop qwen35 && docker rm qwen35
+    echo "Reverting to on-the-fly FP8..."
+    # Restore production config
+    break
+  fi
+  echo "[$ELAPSED/${TIMEOUT}s] waiting..."
+  sleep 15
+done
 
-# Quick benchmark
-python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwen3.5-35b --concurrency 1 8
+# If healthy — benchmark
+python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model spark-llm --concurrency 1 4 8 16
+```
 
-# Stability test (5 rounds, 1 min apart)
-for i in $(seq 1 5); do
-  python3 ~/benchmarks/throughput_bench.py --url http://localhost:8000 --model qwen3.5-35b --concurrency 8 --runs 1
-  sleep 60
+**Acceptance:** Either: (a) benchmark completes and results recorded, OR (b) hang confirmed and production config restored.
+
+**Results (2026-04-30, vLLM v0.19.1rc1.dev219+cu132):**
+- Startup: 391s — **NO HANG** (hang was v0.19.0-specific, not present in v0.19.1rc1)
+- KV cache: 46.43 GiB available / 1,104,432 tokens (vs production 47.95 GiB / 1,142,736 — 3.4% fewer)
+- CUDA graph mode: PIECEWISE (same FlashInfer + speculative decode limitation as eugr test)
+- FP8 kernel: `CutlassFp8BlockScaledMMKernel` (block-scaled, vs on-the-fly row-wise)
+- KV scale warning: q_scale uncalibrated (1.0 fallback) — checkpoint does not provide q scaling factors
+
+| Level | Pre-quant FP8 tok/s | Production (post-fw) | Delta |
+|-------|--------------------|--------------------|-------|
+| c1    | 58.1               | 65.9               | -11.8% |
+| c4    | 157.8              | 174.7              | -9.7% |
+| c8    | 393.9              | 394.3              | -0.1% |
+| c16   | 541.0              | 634.0              | -14.7% |
+
+**Files:** LAB_NOTEBOOK.md (Entry 054)
+
+---
+
+### Work Item 3.3 — Pre-quant adopt/reject decision ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 3.2
+
+**Task:** Compare pre-quant FP8 results against Phase 1/2 baseline.
+
+| Scenario | Decision |
+|----------|----------|
+| Pre-quant starts AND c1 within 5% of on-the-fly | ADOPT (simpler, faster startup) |
+| Pre-quant starts AND c1 regresses > 5% | Test without MARLIN_ATOMIC_ADD to isolate variables |
+| Pre-quant hangs (timeout) | REJECT, document vLLM version constraint |
+
+**If ADOPT:** Update production config. Also test MARLIN_ATOMIC_ADD separately if pre-quant was tested with it (isolate which change helped).
+
+**If REJECT:** Restore on-the-fly FP8 from Phase 2 winning config.
+
+**Decision (2026-04-30): REJECT** — pre-quant FP8 regresses vs post-firmware baseline at all levels except c8 (flat -0.1%). c1 -11.8%, c4 -9.7%, c16 -14.7%. Root causes: (1) block-scaled FP8 kernel (`CutlassFp8BlockScaledMMKernel`) vs on-the-fly row-wise — different throughput profile on SM121; (2) uncalibrated KV scale factors (q_scale=1.0 fallback); (3) 3.4% fewer KV tokens.
+
+Key finding: **Pre-quant Qwen3.6-35B-A3B-FP8 does NOT hang on v0.19.1rc1** — hang was v0.19.0-specific. CLAUDE.md hang rule updated to reflect version specificity.
+
+Production restored: `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` on `vllm-cu132-test:latest`. Healthy after 360s.
+
+**Acceptance:** Decision documented. Production container running on winning model, verified healthy.
+
+**Files:** LAB_NOTEBOOK.md (Entry 055), CLAUDE.md (hang rule updated)
+
+---
+
+## Phase 4: Kernel Tuning (vLLM-Tune)
+
+**Goal:** Apply auto-tuned Triton MoE kernel configs for GB10 FP8. Both our image and eugr's show "Using default MoE config" — tuned configs should improve decode throughput.
+
+**Prerequisite:** Phase 3 complete (winning image + model determined). Run on the final production config.
+
+### Work Item 4.1 — Research vLLM-Tune integration ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 3.3
+
+**Task:** Investigate vLLM-Tune (SerraphimSerapis, NVIDIA forum). Determine: installation method, how it runs, what it produces, how configs are mounted into the container.
+
+**Research steps:**
+1. Search NVIDIA DGX Spark forum for "vLLM-Tune" posts by serapis
+2. Check if it's a GitHub repo, pip package, or Docker image
+3. Determine input requirements (running model? GPU access? model config?)
+4. Determine output format (JSON config files? volume mount location?)
+5. Check compatibility with our cu132+MTP config
+
+**Findings:**
+- vLLM-Tune is a GitHub repo (`SeraphimSerapis/vllm-tune`). Bash CLI, no pip install needed.
+- Runs `benchmark_moe.py` inside a running Docker container. Benchmarks 18 batch sizes in eager mode (~14 seconds).
+- Generates JSON files → deploy via `VLLM_TUNED_CONFIG_FOLDER` env var (volume mount, no container modification).
+- Pre-tuned tp1 config exists for `NVIDIA_GB10` at `E=256,N=512,dtype=fp8_w8a8` (M=1 and M=2 entries). Tuned 2026-04-27 on single GB10.
+- GB10 hardware: 49,152 bytes shared memory per block, 102,400 bytes per SM.
+- Proceed to 4.2: apply pre-tuned config via volume mount.
+
+**Acceptance:** Integration method documented. Proceed to 4.2 with clear steps.
+
+**Files:** LAB_NOTEBOOK.md (Entry 056)
+
+---
+
+### Work Item 4.2 — Run vLLM-Tune and benchmark ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 4.1
+
+**Task:** Apply vLLM-Tune pre-tuned MoE config for GB10 FP8 (E=256, N=512). Mount configs into the container. Benchmark before/after.
+
+**What was tested:**
+- Created `/home/claude/vllm-tuned-configs/E=256,N=512,device_name=NVIDIA_GB10,dtype=fp8_w8a8.json` with vLLM-Tune tp1 values (M=1: BLOCK_N=256, BLOCK_K=256, warps=8, stages=3; M=2: BLOCK_N=128, BLOCK_K=256, warps=4, stages=4)
+- Restarted qwen35 with `-v /home/claude/vllm-tuned-configs:/tuned-configs -e VLLM_TUNED_CONFIG_FOLDER=/tuned-configs`
+
+**Result: CRASH — OutOfResources (shared memory overflow)**
+```
+triton.runtime.errors.OutOfResources: out of resource: shared memory,
+Required: 110592, Hardware limit: 101376.
+RuntimeError: Engine core initialization failed.
+```
+
+**Root cause:** vLLM-Tune benchmarks Triton kernels in **eager mode** (partial dynamic allocation). vLLM's production path uses **CUDA graph capture** (full static allocation, stricter per-SM limit). The tuned M=1 config requires 110,592 bytes during CUDA graph capture — exceeds GB10's 101,376 byte per-SM runtime limit.
+
+**Decision: REJECT — No kernel tuning applicable.** Pre-tuned vLLM-Tune configs for NVIDIA_GB10 are incompatible with CUDA graph capture + MTP speculative decoding. Default MoE config is the largest valid parameter set within CUDA graph constraints.
+
+**Running fresh vLLM-Tune tuning:** Not pursued — same eager-mode methodology would produce configs failing CUDA graph capture. Would not fix the root cause.
+
+**Production restored:** Standard command without tuned config mount. Healthy.
+
+**No benchmark numbers:** Tuned config never reached healthy state. Baseline unchanged at c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s.
+
+**Files:** LAB_NOTEBOOK.md (Entry 057)
+
+---
+
+## Phase 5: Infrastructure Hardening
+
+**Goal:** Codify the winning configuration as a Docker Compose stack with health checks, startup ordering, and log rotation. Restore auxiliary containers stopped in Phase 2.
+
+**Prerequisite:** Phases 2-4 complete (final production config is settled).
+
+### Work Item 5.1 — Restore auxiliary containers ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 4.2 (or 3.3 if Phase 4 is skipped/blocked)
+
+**Task:** Restart gliner, bge-m3, ce-service (stopped in Work Item 2.2 for clean GPU state). Verify all endpoints healthy.
+
+**SSH commands:**
+```bash
+# Restart in order (GPU services first)
+docker start gliner
+sleep 30
+curl -sf http://localhost:8002/v1/ner -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"texts":["test"],"labels":["PERSON"],"threshold":0.5}' && echo "GLiNER OK"
+
+docker start bge-m3
+until curl -sf http://localhost:8004/health > /dev/null 2>&1; do sleep 5; done
+echo "BGE-M3 OK"
+
+docker start ce-service
+sleep 10
+curl -sf http://localhost:8005/ce/health && echo "CE-Service OK"
+
+# Full health check
+for port in 8000 8001 8002 8003 8004 8005; do
+  curl -sf http://localhost:$port/health > /dev/null 2>&1 || \
+  curl -sf http://localhost:$port/ > /dev/null 2>&1 || \
+  curl -sf http://localhost:$port/api/v1/heartbeat > /dev/null 2>&1 || \
+  curl -sf http://localhost:$port/ce/health > /dev/null 2>&1
+  echo "Port $port: $?"
 done
 ```
 
-**Fallback if startup fails:**
-```bash
-docker rm qwen35
-# Restart with 0.65
-```
+**Acceptance:** All 6 service endpoints healthy. nvidia-smi shows expected GPU memory allocation.
 
-**Alternative if 0.70 fails even after gliner restart:** Try `--gpu-memory-utilization 0.6770` with `-e VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1`.
+**Results (2026-04-30):** Containers re-created with `docker run` (were removed in 2.2, not just stopped). Startup sequence: gliner (~10s), bge-m3 (~110s), ce-service (~15s). All endpoints healthy: 8000 (qwen35), 8001 (qwen3-embed), 8002 (gliner), 8004 (bge-m3), 8005 (ce-service), 8003 (chromadb healthy per docker ps). GPU memory: qwen35=87,292 MiB, qwen3-embed=12,236 MiB, gliner=1,989 MiB, bge-m3=1,681 MiB, ce-service=1,538 MiB; total ~104.7 GiB / 121.6 GiB available.
 
-**Acceptance:** Container starts at 0.70. num_gpu_blocks increased. 5-round stability test passes.
-
-**Files:** LAB_NOTEBOOK.md, SPARK_BASELINE.md (update gpu_util + blocks), spark-device.md (update command)
+**Files:** None (remote only)
 
 ---
 
-### Work Item 3.3 — Check Qwen3.6 chat template format ✅ Completed 2026-04-24
+### Work Item 5.2 — Create docker-compose.yml ✅ Completed 2026-04-30
 
-**Status:** COMPLETE 2026-04-24
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 5.1
 
-**Task:** Determine whether Qwen3.6's chat template uses XML or JSON format for tool calls. Zero-risk pre-test — no container restart needed.
-
-**What was done:** Read `chat_template.jinja` from the HF cache snapshot (`/home/davistroy/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B/snapshots/53c43178507d69762986fbfa314f6e8d4d859409/chat_template.jinja`). Note: Qwen3.6 ships the template as a standalone `.jinja` file, not embedded in `tokenizer_config.json`.
-
-**Result:** XML format confirmed -- template uses `<tool_call><function=...><parameter=...>` tags. The current `--tool-call-parser qwen3_coder` is correct because `Qwen3CoderToolParser` parses exactly this XML format (despite the `coder` name). A separate `qwen3_xml` parser also exists (expat-based, more robust streaming) and parses the same format -- testable at a future maintenance window but not required.
-
-**Decision:** No change needed. Watch item resolved. Work Item 3.4 SKIPPED.
-
-**Acceptance:** Format determined (XML). Current parser validated. Documented in LAB_NOTEBOOK.md Entry 049.
-
-**Files:** LAB_NOTEBOOK.md (Entry 049), SPARK_BASELINE.md (watch item resolved)
-
----
-
-### Work Item 3.4 — Live test qwen3_xml parser (conditional) -- SKIPPED
-
-**Status:** SKIPPED 2026-04-24
-**Reason:** Work Item 3.3 confirmed that `qwen3_coder` already correctly parses Qwen3.6's XML tool call format. Both `qwen3_coder` (regex) and `qwen3_xml` (expat) handle the same `<tool_call><function=...><parameter=...>` tags. No parser change needed.
-
-**Future consideration:** `qwen3_xml` (1295 LOC, expat-based) may offer better streaming robustness than `qwen3_coder` (683 LOC, regex-based). Can be tested at a future maintenance window without urgency.
-
----
-
-## Phase 4: Model Rename
-
-**Goal:** Change `--served-model-name` from `qwen3.5-35b` to `spark-llm` across this repo and on the remote Spark.
-
-**Prerequisite:** Phases 1-3 complete (config stable, no more container restarts expected).
-
-### Work Item 4.1 — Update benchmark script defaults ✅ Completed 2026-04-24
-
-**Status:** COMPLETE 2026-04-24
-
-**Task:** Change default `--model` argument in both benchmark scripts.
-
-**Changes:**
-- `benchmarks/throughput_bench.py` line 99: `default="qwen3.5-35b"` → `default="spark-llm"`
-- `benchmarks/quality_test.py` line 8: docstring `--model qwen3.5-35b` → `--model spark-llm`
-- `benchmarks/quality_test.py` line 117: `default="qwen3.5-35b"` → `default="spark-llm"`
-
-**Acceptance:** `grep -r "qwen3.5-35b" benchmarks/` returns no results.
-
-**Files:** `benchmarks/throughput_bench.py`, `benchmarks/quality_test.py`
-
----
-
-### Work Item 4.2 — Update SPARK_CONFIG.md ✅ Completed 2026-04-24
-
-**Status:** COMPLETE 2026-04-24
-
-**Task:** Update all model name references.
-
-**Changes:**
-- Line 88: `qwen3.5-35b` → `spark-llm`
-- Line 110: `--served-model-name qwen3.5-35b` → `--served-model-name spark-llm`
-- Lines 206, 208: LiteLLM config `qwen3.5-35b` → `spark-llm`
-- Line 355: curl example `qwen3.5-35b` → `spark-llm`
-
-**Acceptance:** `grep "qwen3.5-35b" SPARK_CONFIG.md` returns no results.
-
-**Files:** `SPARK_CONFIG.md`
-
----
-
-### Work Item 4.3 — Update spark-dashboard.json ✅ Completed 2026-04-24
-
-**Status:** COMPLETE 2026-04-24
-
-**Task:** Replace all 19 Prometheus metric label references.
-
-**Changes:** Global find-and-replace `qwen3.5-35b` → `spark-llm` in all PromQL expressions.
-
-**Acceptance:** `grep -c "qwen3.5-35b" spark-dashboard.json` returns 0. JSON is valid: `python3 -c "import json; json.load(open('spark-dashboard.json'))"`.
-
-**Note:** Per CLAUDE.md — NEVER modify the live Grafana dashboard. Import updated JSON as a new dashboard.
-
-**Files:** `spark-dashboard.json`
-
----
-
-### Work Item 4.4 — Change served-model-name on remote Spark ✅ Completed 2026-04-24
-
-**Status:** COMPLETE 2026-04-24
-**Depends on:** 4.1, 4.2, 4.3
-
-**Task:** Restart qwen35 with `--served-model-name spark-llm`. Verify API responds.
+**Task:** Create a Docker Compose file that captures the complete running state of all containers. Use `docker inspect` to extract exact flags for each container.
 
 **SSH commands:**
 ```bash
-docker stop qwen35 && docker rm qwen35
-
-# Restart with --served-model-name spark-llm (all other flags same)
-[current winning docker run command with spark-llm]
-
-until curl -sf http://localhost:8000/health; do sleep 10; done
-
-# Verify new name
-curl -s http://localhost:8000/v1/models | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])"
-# Expected: spark-llm
-
-# Verify old name fails
-curl -s http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"qwen3.5-35b","messages":[{"role":"user","content":"test"}],"max_tokens":5}'
-# Expected: model not found error
+# Extract current config for each container
+for c in qwen35 qwen3-embed bge-m3 gliner ce-service chromadb neo4j node-exporter; do
+  echo "=== $c ==="
+  docker inspect $c --format '{{json .Config}}' | python3 -m json.tool > /tmp/inspect_$c.json
+  docker inspect $c --format '{{json .HostConfig}}' | python3 -m json.tool > /tmp/hostconfig_$c.json
+done
 ```
 
-**Acceptance:** `/v1/models` returns `spark-llm`. Old name returns error.
+**Compose file requirements:**
+- All 8 containers defined as services
+- Health checks for every service (using existing health endpoints)
+- `depends_on` with `condition: service_healthy`:
+  - qwen35: no deps (starts first)
+  - qwen3-embed: depends_on qwen35 healthy
+  - gliner: depends_on qwen3-embed healthy
+  - bge-m3, ce-service: depends_on qwen35 healthy
+  - chromadb, neo4j, node-exporter: no deps
+- Log rotation on all services: `logging: { driver: json-file, options: { max-size: "100m", max-file: "3" } }`
+- All volume mounts with absolute paths (never `~`)
+- Restart policy: `unless-stopped`
+- Any vLLM-Tune config mounts from Phase 4
 
-**Files:** spark-device.md, LAB_NOTEBOOK.md
+**Acceptance:** `docker compose config` validates without errors. All services match their current `docker inspect` output (same image, same flags, same mounts, same ports).
+
+**Results (2026-04-30):** Compose file authored at `/home/claude/docker-compose.yml`. All 8 services defined. New services added: bge-m3, ce-service (not in old compose). qwen35 updated to cu132+MTP image with `entrypoint: ["python3"]` override. Health checks use image-native tools: vLLM services use curl, gliner uses mounted `/home/claude/healthchecks/gliner-health.py` (python3/urllib), chromadb uses `/proc/net/tcp` grep (port 0x1F40), neo4j uses wget. `docker compose config` validates clean.
+
+**Files:** `/home/claude/docker-compose.yml` (remote), LAB_NOTEBOOK.md
 
 ---
 
-### Work Item 4.5 — Update memory files and baseline ✅ Completed 2026-04-24
+### Work Item 5.3 — Test Docker Compose migration ✅ Completed 2026-04-30
 
-**Status:** COMPLETE 2026-04-24
-**Depends on:** 4.4
+**Status:** COMPLETE 2026-04-30
+**Depends on:** 5.2
 
-**Task:** Update spark-device.md container command and any SPARK_BASELINE.md / CLAUDE.md references.
+**Task:** Stop all containers. Start via `docker compose up -d`. Verify startup order and all health checks pass.
 
-**Files:** spark-device.md, SPARK_BASELINE.md, CLAUDE.md
+**SSH commands:**
+```bash
+# Take pre-compose snapshot
+/home/claude/spark-config.sh snapshot pre-compose "Before Docker Compose migration"
 
-**Acceptance:** `grep "qwen3.5-35b"` returns no results in any of these files (except historical context).
+# Stop all existing containers
+docker stop qwen35 qwen3-embed bge-m3 gliner ce-service chromadb neo4j node-exporter
+docker rm qwen35 qwen3-embed bge-m3 gliner ce-service chromadb neo4j node-exporter
+
+# Start via compose
+cd /home/claude
+docker compose up -d
+
+# Watch startup order
+docker compose logs -f --tail=0 2>&1 | head -100 &
+LOGPID=$!
+
+# Wait for all services healthy (timeout 15 min for full stack)
+TIMEOUT=900
+START=$(date +%s)
+while true; do
+  HEALTHY=$(docker compose ps --format json | python3 -c "import json,sys; data=[json.loads(l) for l in sys.stdin]; print(sum(1 for d in data if d.get('Health','')=='healthy' or d.get('State')=='running'))")
+  TOTAL=$(docker compose ps -q | wc -l)
+  ELAPSED=$(($(date +%s) - START))
+  echo "[$ELAPSED/${TIMEOUT}s] $HEALTHY/$TOTAL services up"
+  if [ "$HEALTHY" -ge "$TOTAL" ]; then echo "ALL UP"; break; fi
+  if [ "$ELAPSED" -gt "$TIMEOUT" ]; then echo "TIMEOUT"; break; fi
+  sleep 15
+done
+kill $LOGPID 2>/dev/null
+
+# Full health verification
+curl -sf http://localhost:8000/health && echo "qwen35 OK"
+curl -sf http://localhost:8001/health && echo "qwen3-embed OK"
+curl -sf http://localhost:8004/health && echo "bge-m3 OK"
+curl -sf http://localhost:8003/api/v1/heartbeat && echo "chromadb OK"
+curl -sf http://localhost:8005/ce/health && echo "ce-service OK"
+
+# Quick inference test
+curl -s http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"spark-llm","messages":[{"role":"user","content":"Hello"}],"max_tokens":5}' | python3 -m json.tool | head -10
+
+# Take post-compose snapshot
+/home/claude/spark-config.sh snapshot compose-v1 "Docker Compose migration complete"
+```
+
+**Rollback if compose fails:**
+```bash
+docker compose down
+# Restart individually using spark-device.md commands
+```
+
+**Acceptance:** All 8 services start in correct order via `docker compose up -d`. All health checks pass. Inference test returns valid response. Snapshot captured.
+
+**Results (2026-04-30):** Full migration tested. Stopped all 8 containers, removed bridge-network ones, ran `docker compose up -d`. Startup sequence: chromadb/neo4j/node-exporter/qwen35 started immediately; qwen3-embed/bge-m3/ce-service waited for qwen35 health (6 min); gliner waited for qwen3-embed health. All 8 services healthy after ~8 minutes. Inference test passed ("Hi there" response). Snapshots: `pre-compose` and `compose-v1` both captured. GPU memory: qwen35=86GB, qwen3-embed+bge-m3+gliner+ce-service=~14GB total, ~104.7 GiB / 121.6 GiB.
+
+Note: healthcheck iterative fixes required during test: chromadb uses `/proc/net/tcp` grep (no curl in Rust image), gliner uses mounted Python script at `/home/claude/healthchecks/gliner-health.py`, neo4j uses `wget` (available in neo4j image).
+
+**Files:** LAB_NOTEBOOK.md, spark-device.md (note compose management)
 
 ---
 
-### Work Item 4.6 — Flag contact-center-lab for update ✅ Completed 2026-04-24
+## Phase 6: Research Documentation
 
-**Status:** COMPLETE 2026-04-24
-**Depends on:** 4.4
+**Goal:** Document the NVFP4/INT4 and Gemma 4 paths for future decision-making. No system changes.
 
-**Task:** Document required changes in contact-center-lab as follow-up. Do NOT modify the other repo from this plan.
+### Work Item 6.1 — Scope NVFP4/INT4 quantization path ✅ Completed 2026-04-30
 
-**Grep results:** Searched `contact-center-lab` for `qwen3.5-35b` and `qwen3.5` (as model name). Found **10 actionable references** across 4 files, plus 2 non-actionable bibliographic citations.
+**Status:** COMPLETE 2026-04-30
+**Depends on:** None (can run anytime)
 
-#### Actionable — Must update `qwen3.5-35b` → `spark-llm`
+**Task:** Document what's required to pursue the INT4/NVFP4 tier (90+ tok/s). This is a decision-support document, not an action plan.
 
-| # | File | Line | Context | Change |
-|---|------|------|---------|--------|
-| 1 | `pipeline/config.yaml` | 24 | Comment: `# Available models: spark-qwen3.5-35b` | Update comment to `spark-llm` |
-| 2 | `pipeline/config.yaml` | 30 | LiteLLM proxy model: `model: "spark-qwen3.5-35b"` | → `"spark-llm"` (must also match LiteLLM proxy config) |
-| 3 | `pipeline/config.yaml` | 77 | Direct DGX Spark model: `model: "qwen3.5-35b"` | → `"spark-llm"` |
-| 4 | `pipeline/tests/unit/test_llm_client.py` | 63 | Test fixture: `model="qwen3.5-35b"` | → `"spark-llm"` |
-| 5 | `pipeline/tests/unit/test_llm_client.py` | 98 | Assertion: `assert client._model == "qwen3.5-35b"` | → `"spark-llm"` |
-| 6 | `pipeline/tests/unit/test_llm_client.py` | 126 | Assertion: `assert client._model == "qwen3.5-35b"` | → `"spark-llm"` |
-| 7 | `experiments/knowledge-base/augmented_knowledge_extraction_complete.ipynb` | 336 | Output cell: `"DGX Spark model: qwen3.5-35b\n"` | Update output text |
-| 8 | `experiments/knowledge-base/augmented_knowledge_extraction_complete.ipynb` | 364 | Config class: `dgx_spark_model: str = "qwen3.5-35b"` | → `"spark-llm"` |
-| 9 | `experiments/knowledge-base/servicenow_sampling_and_evaluation.ipynb` | 2011 | Curl example: `"model": "qwen3.5-35b"` | → `"spark-llm"` |
-| 10 | `pipeline/config.yaml` | 30 | The LiteLLM proxy route `spark-qwen3.5-35b` must also be updated on the proxy side | Coordinate with LiteLLM proxy config |
+**Research:**
+1. What model checkpoints exist? (RedHatAI NVFP4, PrismaQuant 4.75-bit, AWQ)
+2. What vLLM builds are required? (DFlash, nightly cu130, flashinfer_cutlass)
+3. What's the quality tradeoff? (PrismaQuant 88/100 vs FP8 91/100 — how was this measured?)
+4. What quality evaluation framework exists? (DanTup/spark-evals, custom benchmarks)
+5. What's the minimum viable experiment? (single model swap, no DFlash, just NVFP4?)
 
-#### Non-actionable — Bibliographic / upstream model references (no change needed)
+**Document in:** LAB_NOTEBOOK.md research entry. Include a decision matrix with prerequisites, effort, expected gain, and quality risk for each path.
 
-| File | Line | Context | Reason |
-|------|------|---------|--------|
-| `research/LLM for Structured JSON Extraction.md` | 204 | Citation: `qwen3.5-397b-a17b` on NVIDIA NIM | Different model (397B), upstream reference |
-| `research/LLM for Structured JSON Extraction.md` | 246 | Citation: `Qwen3.5-35B-A3B` on OpenRouter | Upstream model name, not our served-model-name |
+**Decision gate:** Defer execution until: (a) DFlash lands in mainline vLLM, OR (b) quality eval framework exists, OR (c) throughput requirements change.
 
-#### Dependency note
-Item #2/#10: The LiteLLM proxy config at `llm.troy-davis.com` routes `spark-qwen3.5-35b` to the Spark backend. That proxy route must be updated to `spark-llm` BEFORE or simultaneously with the `config.yaml` change, or the pipeline will fail to connect.
+**Acceptance:** Research entry written. Path documented with clear prerequisites and decision criteria.
 
-**Acceptance:** Follow-up documented with file paths, line numbers, and dependency notes. ✅
+**Files:** LAB_NOTEBOOK.md, SPARK_BASELINE.md (update watch items)
 
-**Files:** `IMPLEMENTATION_PLAN.md`
+---
+
+### Work Item 6.2 — Check Gemma 4 community status ✅ Completed 2026-04-30
+
+**Status:** COMPLETE 2026-04-30
+**Depends on:** None (can run anytime)
+
+**Task:** Quick research pass on Gemma 4 status since our April 11 benchmarks (Entry 020-021).
+
+**Questions to answer:**
+1. Is guided JSON / structured output fixed for Gemma 4 in vLLM? (check #39130 and related PRs)
+2. Has the throughput gap narrowed? (community benchmarks, eugr recipe changes)
+3. What did eugr's "Gemma 4 recipe fixes" in v0.20.1rc1 address?
+4. Any new Gemma 4 quantized checkpoints? (FP8, NVFP4)
+
+**Decision gate:** Schedule a dedicated maintenance window only if: guided JSON is confirmed fixed AND throughput exceeds 50 tok/s c1 on community benchmarks.
+
+**Findings (2026-04-30, Entry 061):**
+1. **Guided JSON NOT fixed.** Two bugs block deployment: #39130 (xgrammar bypass when `enable_thinking=false`, PR #39138 unmerged) and #40080 (repetition loops under JSON schema, PR #40099 unmerged). Both PRs in review with active engagement but no merge date.
+2. **Throughput gap narrowed significantly.** NVFP4 path (`bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4`, 16.5 GB) achieves 52 tok/s c1 (community, ai-muninn.com Apr 13). FP8 via eugr recipe reaches 45-50 tok/s. Still 21% below our Qwen3.6 production baseline (65.9 tok/s). Throughput gate PASSES; structured output gate FAILS.
+3. **eugr "Gemma 4 fixes" were Python env fixes**, not throughput/correctness fixes. Specifically: PyTorch 2.11.0 pin + transformers 5.x flag fixing initialization failures. InstantTensor separately confirmed to break Gemma 4 26B init (safetensors workaround gives 75% perf regression).
+4. **Best new checkpoint:** `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` (W4A4 modelopt, 97.6% quality retained vs BF16, `VLLM_NVFP4_GEMM_BACKEND=marlin`). 31B dense remains non-viable on single-node (6.8 tok/s NVFP4).
+
+**Decision:** DO NOT SCHEDULE. Throughput gate passes (52 tok/s > 50 tok/s threshold), structured output gate fails (PRs unmerged). Recon Triggers updated to monitor PR merge status.
+
+**Files:** LAB_NOTEBOOK.md (Entry 061), SPARK_BASELINE.md (Gemma 4 community table, Recon Triggers, Watch Items), GEMMA4_EXPERIMENT_PLAN.md (status update block)
+
+---
+
+## Verification Checkpoints
+
+| After Phase | Verify |
+|-------------|--------|
+| 0 | Backup exists, Neo4j healthy |
+| 1 | Post-firmware baseline recorded, snap list reduced |
+| 2 | Winning image decided, production container healthy |
+| 3 | Winning model decided, production container healthy |
+| 4 | Kernel tuning evaluated, production container healthy |
+| 5 | All 8 services running via Docker Compose, health checks pass |
+| 6 | Research documented in LAB_NOTEBOOK.md |
+
+## Post-Plan Actions
+
+After all phases complete:
+1. Take final snapshot: `spark-config.sh snapshot performance-sprint-2026-05 "Post performance sprint"`
+2. Run `/spark-recon` to update SPARK_BASELINE.md watch items
+3. Update memory files with any new learnings
+4. Archive this plan to `docs/archive/`
+
+---
+
+## Summary of Outcomes
+
+**Sprint completed 2026-04-30. All 18 work items done. Production baseline improved.**
+
+### Key Results
+
+| Area | Result |
+|------|--------|
+| **Firmware gain** | Post-firmware throughput: c1 +10.0%, c4 +5.1%, c8 +5.5%, c16 +12.4% vs pre-firmware. New record: 634.0 tok/s at c16. |
+| **eugr v0.20.1rc1** | REJECTED. c16 -4.2% vs post-firmware baseline. Root cause: FlashInfer + speculative decode forces PIECEWISE-only CUDA graphs in v0.20.1rc1 (FULL_AND_PIECEWISE unsupported). Re-test when resolved. |
+| **Pre-quant FP8** | REJECTED. `Qwen/Qwen3.6-35B-A3B-FP8` regresses vs production at c1 (-11.8%), c4 (-9.7%), c16 (-14.7%). Root cause: block-scaled FP8 kernel + uncalibrated KV scale factors. Key finding: hang rule updated — no hang on v0.19.1rc1 (was v0.19.0-specific). |
+| **Kernel tuning (vLLM-Tune)** | REJECTED. Pre-tuned NVIDIA_GB10 configs exceed CUDA graph capture shared memory limit (110,592 bytes required vs 101,376 byte limit). Default MoE config is the maximum valid configuration. |
+| **Docker Compose migration** | COMPLETE. All 8 services codified in `/home/claude/docker-compose.yml` with health checks, startup ordering, and log rotation. Full migration tested — all services healthy after ~8 min. |
+| **OS cleanup** | COMPLETE. Removed gnome-46-2404, gtk-common-themes, mesa-2404 snaps. firmware-updater retained. |
+| **Research: NVFP4/INT4** | Scoped and deferred. Prerequisites: DFlash in mainline vLLM OR quality eval framework. Best current path: RedHatAI NVFP4 + DFlash (127 tok/s reported). |
+| **Research: Gemma 4** | DO NOT SCHEDULE. Throughput gate passes (52 tok/s NVFP4), structured output gate fails (xgrammar bypass and repetition bugs unmerged). Monitor PR #39138 and #40099. |
+
+### Final Production State
+
+| Metric | Value |
+|--------|-------|
+| Image | `vllm-cu132-test:latest` (v0.19.1rc1.dev219+cu132) |
+| Model | `Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` (on-the-fly) |
+| Served model name | `spark-llm` |
+| GPU memory utilization | 0.70 |
+| MTP speculative decoding | `--num-speculative-tokens 2` (acceptance ~80.7%) |
+| Throughput (post-firmware) | c1=65.9, c4=174.7, c8=394.3, c16=634.0 tok/s |
+| Stack management | Docker Compose (`/home/claude/docker-compose.yml`) |

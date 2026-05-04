@@ -8,6 +8,22 @@
 
 ---
 
+## Status Update (2026-04-30) — DEFERRED
+
+**Researched in Entry 061.** This experiment plan is superseded in several ways — production model is now Qwen3.6-35B-A3B at 65.9 tok/s c1 (not Qwen3.5 at 48.6). Before executing, update the comparison target and the docker commands below (old commands use vllm-custom:sm121-inject which is retired).
+
+**Execution blocked by two open vLLM bugs:**
+- **#39130** — `--reasoning-parser gemma4` silently disables xgrammar (structured output) when `enable_thinking=false`. PR #39138 in review, not merged.
+- **#40080** — Gemma 4 generates infinite repetition loops under grammar-constrained decoding. PR #40099 in review, not merged.
+
+Both must merge before scheduling. Monitor via SPARK_BASELINE.md Recon Triggers.
+
+**New preferred checkpoint:** `bg-digitalservices/Gemma-4-26B-A4B-it-NVFP4` (52 tok/s c1, 16.5 GB, 97.6% quality retained). Update Phase 2 experiments to include NVFP4 path alongside FP8. Add `VLLM_NVFP4_GEMM_BACKEND=marlin` and `--quantization modelopt` flags.
+
+**InstantTensor note:** If using eugr recipe, use safetensors mode — InstantTensor breaks Gemma 4 init as of eugr v0.20.1rc1 (Apr 29-30).
+
+---
+
 ## Objective
 
 Evaluate whether Gemma 4 models offer a compelling replacement or complement to the current Qwen3.5-35B-A3B configuration on a single DGX Spark. Test both the 26B-A4B MoE (throughput contender) and the 31B dense (quality contender) across throughput, output quality, tool calling, and multimodal dimensions.

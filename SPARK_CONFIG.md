@@ -88,9 +88,9 @@ The primary LLM serving Qwen3.6-35B-A3B mixture-of-experts model with on-the-fly
 - **Image:** `vllm-cu132-test:latest` (vLLM v0.19.1rc1.dev219+cu132, custom build)
 - **Model:** `Qwen/Qwen3.6-35B-A3B` (on-the-fly FP8 quantization) — adopted 2026-04-23
 - **Served as:** `spark-llm`
-- **Max context length:** 32768 tokens
+- **Max context length:** 131072 tokens (128K — bumped from 32K on 2026-05-10, Entry 065. Model native max is 262144; 128K chosen for safe KV cache margin)
 - **GPU memory utilization:** 0.70
-- **KV cache:** FP8, 47.95 GiB, 1,142,736 tokens
+- **KV cache:** FP8, 47.18 GiB, 1,123,584 tokens (~4% drop from 32K config due to per-request reservation scaling). Max concurrency at 128K full context: 29.76×
 - **Speculative decoding:** MTP=2 (acceptance rate 80.7%)
 - **MoE backend:** TRITON (auto-selected)
 - **FP8 kernel:** CutlassFP8ScaledMMLinearKernel (native SM121 support)
@@ -118,7 +118,7 @@ docker run -d \
     --served-model-name spark-llm \
     --port 8000 \
     --host 0.0.0.0 \
-    --max-model-len 32768 \
+    --max-model-len 131072 \
     --gpu-memory-utilization 0.70 \
     --quantization fp8 \
     --kv-cache-dtype fp8 \

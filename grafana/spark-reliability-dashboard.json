@@ -14,8 +14,8 @@
       "type": "stat",
       "title": "qwen35 Running",
       "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
-      "targets": [{"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "spark_qwen35_running", "instant": true}],
+      "datasource": {"uid": "DS_PROMETHEUS"},
+      "targets": [{"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "spark_qwen35_running", "instant": true}],
       "options": {"colorMode": "background", "reduceOptions": {"calcs": ["lastNotNull"]}},
       "fieldConfig": {
         "defaults": {
@@ -32,8 +32,8 @@
       "title": "qwen35 Restart Count",
       "description": "Docker RestartCount. Any increase = a container crash/restart (watch for vllm#37754 MTP/FlashInfer Xid class).",
       "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
-      "targets": [{"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "spark_qwen35_restart_count", "instant": true}],
+      "datasource": {"uid": "DS_PROMETHEUS"},
+      "targets": [{"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "spark_qwen35_restart_count", "instant": true}],
       "options": {"colorMode": "background", "reduceOptions": {"calcs": ["lastNotNull"]}},
       "fieldConfig": {
         "defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}},
@@ -45,8 +45,8 @@
       "title": "GPU Xid Events (current logs)",
       "description": "Count of GPU Xid fault lines in kern.log+.1. Non-zero = GPU fault occurred (illegal address / MTP+FlashInfer crash class). Resets on log rotation/reboot.",
       "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
-      "targets": [{"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "gpu_xid_events_total", "instant": true}],
+      "datasource": {"uid": "DS_PROMETHEUS"},
+      "targets": [{"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "gpu_xid_events_total", "instant": true}],
       "options": {"colorMode": "background", "reduceOptions": {"calcs": ["lastNotNull"]}},
       "fieldConfig": {
         "defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}},
@@ -58,8 +58,8 @@
       "title": "NVRM Alloc Failures (current logs)",
       "description": "NV_ERR_NO_MEMORY lines in kern.log+.1. Historical eval-window count ages out on rotation; a rising live value indicates UMA memory pressure.",
       "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
-      "targets": [{"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "nvrm_alloc_failures_total", "instant": true}],
+      "datasource": {"uid": "DS_PROMETHEUS"},
+      "targets": [{"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "nvrm_alloc_failures_total", "instant": true}],
       "options": {"colorMode": "background", "reduceOptions": {"calcs": ["lastNotNull"]}},
       "fieldConfig": {
         "defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}]}},
@@ -70,10 +70,10 @@
       "type": "timeseries",
       "title": "GPU Faults Over Time (Xid + NVRM)",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
+      "datasource": {"uid": "DS_PROMETHEUS"},
       "targets": [
-        {"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "gpu_xid_events_total", "legendFormat": "Xid events"},
-        {"refId": "B", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "nvrm_alloc_failures_total", "legendFormat": "NVRM alloc failures"}
+        {"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "gpu_xid_events_total", "legendFormat": "Xid events"},
+        {"refId": "B", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "nvrm_alloc_failures_total", "legendFormat": "NVRM alloc failures"}
       ],
       "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
@@ -83,8 +83,8 @@
       "title": "GPU Power Draw (W) — 14W floor = post-crash throttle bug",
       "description": "If power draw collapses to ~14W with SM clock ~513 MHz, the GPU hit the known post-crash/sleep throttle. Fix = wall power-cycle, not reboot.",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
-      "targets": [{"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "gpu_power_draw_watts", "legendFormat": "power draw W"}],
+      "datasource": {"uid": "DS_PROMETHEUS"},
+      "targets": [{"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "gpu_power_draw_watts", "legendFormat": "power draw W"}],
       "fieldConfig": {"defaults": {"unit": "watt", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}
     },
@@ -92,8 +92,8 @@
       "type": "timeseries",
       "title": "GPU SM Clock (MHz)",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
-      "targets": [{"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "gpu_clock_graphics_mhz", "legendFormat": "SM clock MHz"}],
+      "datasource": {"uid": "DS_PROMETHEUS"},
+      "targets": [{"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "gpu_clock_graphics_mhz", "legendFormat": "SM clock MHz"}],
       "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}
     },
@@ -101,8 +101,8 @@
       "type": "timeseries",
       "title": "GPU Temperature (°C)",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
-      "datasource": {"uid": "PBFA97CFB590B2093"},
-      "targets": [{"refId": "A", "datasource": {"uid": "PBFA97CFB590B2093"}, "expr": "gpu_temperature_celsius", "legendFormat": "temp °C"}],
+      "datasource": {"uid": "DS_PROMETHEUS"},
+      "targets": [{"refId": "A", "datasource": {"uid": "DS_PROMETHEUS"}, "expr": "gpu_temperature_celsius", "legendFormat": "temp °C"}],
       "fieldConfig": {"defaults": {"unit": "celsius", "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2}}, "overrides": []},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}
     }

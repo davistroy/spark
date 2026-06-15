@@ -6481,3 +6481,26 @@ Baseline tracking values updated per user confirmation (arena 60.70→80.27 vLLM
 - Grafana: homeserver:3050, Grafana 12.4.2, Prometheus datasource UID `PBFA97CFB590B2093`, existing dashboards `spark-monitor` + `spark-inference` (never modify — new UIDs only), wget-not-curl API pattern. vLLM metrics scraped with `vllm:` prefix.
 - No recurring spark-recon/audit schedule exists anywhere — all runs manual to date.
 
+## Entry 077 — Roadmap Execution: Phases 1–3 + Phase 4 Pre-Flight (2026-06-15)
+**Date:** 2026-06-15 ~12:40 UTC
+**Operator:** Claude Code (/implement-plan on IMPLEMENTATION_PLAN_SPARK_ROADMAP.md)
+**Status:** PARTIAL — AUTO + lowest-risk operational work done; reboot + eval remain (human-gated)
+
+#### Phase 1 (docs) — COMPLETE
+- 1.1 SPARK_BASELINE Current Config rewritten to live state (user-approved U-7): pre-quant FP8 model, FLASH_ATTN backend, BF16 KV / 504,912 tokens, `--speculative-config` JSON, Entry 073 throughput (66.9/198.9/427.7/678.7), 0-restart stability. 1.2 EVAL_STUDY_STATUS stale line fixed. 1.3 committed to branch `feature/spark-roadmap-2026-06` → spark repo PR #7.
+
+#### Phase 2 (spark-recon/spark-audit truth-up + 9.3.0) — COMPLETE
+- spark-recon: model→Qwen3.6-FP8 pre-quant, dropped forum cat 720, documented Firestore `benchmarks` REST access, broadened Check 2 keywords. spark-audit: removed the obsolete "pre-quant FP8 hangs" CRITICAL anti-pattern (would have flagged correct production) + corrected FLASHINFER→FLASH_ATTN expectation. Bumped 9.2.0→9.3.0; marketplace PR #95 (davistroy/claude-marketplace). Not merged (no --auto-merge); cache refresh post-merge.
+
+#### Phase 3 (observability, dashboard-only per U-2)
+- **3.1 COMPLETE:** extended `/opt/gpu-exporter/gpu_exporter.py` (root systemd, :9400) with `gpu_xid_events_total`, `nvrm_alloc_failures_total` (streamed from kern.log+.1, no slurp), `spark_qwen35_restart_count`, `spark_qwen35_running` (docker inspect). Backed up original → `gpu_exporter.py.bak-20260615`. Service active. **Verified end-to-end via Prometheus** (job `spark-gpu`, instance `spark.k4jda.net:9400`): `gpu_xid_events_total=0`, existing gauges intact. `nvrm_alloc_failures_total=37` = historical May eval-window NV_ERR_NO_MEMORY in kern.log.1 (ages out on rotation; not a live fault).
+- **3.2 BLOCKED — Grafana 13 creds.** Grafana upgraded 12.4.2→**13.0.1**; stored `admin:Spark2026!` now 401; no Bitwarden entry. Dashboard authored + committed: `grafana/spark-reliability-dashboard.json` (uid `spark-reliability`, 8 panels: qwen35 up/restarts, Xid, NVRM stat tiles + power/SM-clock/temp/fault timeseries — power+clock panels target the 14W/513MHz throttle signature). Import via UI or POST `{dashboard, folderUid:"dfhdwahqbii9sc", overwrite:false}` once creds provided. **NEW unknown U-8.**
+
+#### Phase 4.1 pre-flight (read-only) — COMPLETE, READY with one CRITICAL caveat
+- Green: idle 0/0; dkms empty; `dpkg --audit` clean; SecureBoot on; all 8 containers healthy; compose backups present. Targets available and on 580.x: kernel **6.17.0-1021.21**, driver **580.159.03**; module `linux-modules-nvidia-580-open-6.17.0-1021-nvidia` candidate present (Installed:none). Sim: 240 upgraded / 10 new / 4 removed.
+- **CRITICAL FINDING (new hazard):** `apt -s dist-upgrade` will **REMOVE the running kernel's module `linux-modules-nvidia-580-open-6.17.0-1014-nvidia`** and does NOT install the 1021 module. Naive `dist-upgrade && reboot` → both kernels lack a working nvidia module → GPU dead + GRUB fallback broken → physical recovery. **4.2 revised** (plan): install 1021 module AND retain 1014 module BEFORE reboot. Risk added to plan risk table (High).
+
+#### Stopped here — remaining work is genuinely human-gated
+- Phase 4.2–4.4 (kernel/driver + reboot + re-baseline): PHYSICAL console required (their constitution; and now the module hazard). Phase 5 (DFlash/0.22 eval): GATED — multi-hour production-down campaign needing an idle window + supervision. Phase 6: trigger-gated.
+- Open user inputs: **U-8** Grafana 13 creds/token (unblocks 3.2 deploy); a physical-console window for Phase 4; an idle-window go-ahead for Phase 5.
+

@@ -42,27 +42,29 @@ See `MODEL_EVALUATION_2026_05.md` for full comparison matrix; `LAB_NOTEBOOK.md` 
 ## Current Config
 | Field | Value |
 |-------|-------|
+<!-- Corrected 2026-06-15 (user-confirmed, U-7) to live `docker inspect` state: Entry 073 pre-quant switch + Entry 076 verified backend. -->
 | image | vllm-cu132-test:latest (v0.19.1rc1.dev219+cu132) — adopted 2026-04-23 |
-| model | Qwen/Qwen3.6-35B-A3B (on-the-fly FP8) — adopted 2026-04-23, snapshot 53c43178507d69762986fbfa314f6e8d4d859409 |
+| model | Qwen/Qwen3.6-35B-A3B-FP8 (native pre-quantized FP8) — adopted 2026-05-18 Entry 073 (was Qwen/Qwen3.6-35B-A3B + on-the-fly `--quantization fp8`, 2026-04-23→05-18) |
 | served_model_name | spark-llm (renamed from qwen3.5-35b on 2026-04-24, Phase 4) |
 | vllm_version | v0.19.1rc1.dev219+cu132 |
-| speculative_decoding | MTP=2 (method: mtp, num_speculative_tokens: 2, acceptance rate 80.7%) |
-| mtp_drafter | Qwen3_5MoeMTP, 34.16 GiB total model load |
-| moe_backend | TRITON (auto-selected) |
-| fp8_kernel | CutlassFP8ScaledMMLinearKernel |
-| attention_backend | FLASHINFER |
+| speculative_decoding | MTP=2 via `--speculative-config '{"method":"mtp","num_speculative_tokens":2}'` (acceptance ~80%; verified 0 Xid / 0 restarts, Entry 076) |
+| fp8 | native pre-quant FP8 (block-scaled). Do NOT add `--quantization fp8` or `--kv-cache-dtype fp8` (Entry 073) |
+| kv_cache_dtype | BF16 (auto) — Entry 073 |
+| moe_backend | TRITON (auto-selected); FlashInfer used for MoE kernels via `VLLM_FLASHINFER_MOE_BACKEND=latency` |
+| attention_backend | FLASH_ATTN (auto-selected on SM121, verified 2026-06-11 Entry 076) — NOT FlashInfer |
 | async_scheduling | Enabled |
 | chunked_prefill | Enabled |
+| max_num_batched_tokens | 32768 (was 4096 pre-2026-05-18; bumped on pre-quant switch, Entry 073) |
 | gpu_memory_utilization | 0.70 (increased from 0.65 on 2026-04-24) |
 | max_model_len | 131072 (128K, bumped from 32K on 2026-05-10 Entry 065; model native 262144) |
-| kv_cache_memory | 47.18 GiB (1,123,584 tokens, max concurrency 29.76x at 131K full context) |
-| single_request_tok_s | 65.9 (post-firmware, 2026-04-30 Entry 052) — prev: 59.9 (2026-04-24) |
-| c4_aggregate_tok_s | 174.7 — prev: 166.2 |
-| c8_aggregate_tok_s | 394.3 — prev: 373.8 |
-| c16_aggregate_tok_s | 634.0 — prev: 564.0 |
-| firmware_gain | c1 +10.0%, c4 +5.1%, c8 +5.5%, c16 +12.4% (all levels improved) |
-| startup_time | ~364s (warm Triton cache, cu132-cu132 dir) |
+| kv_cache_memory | BF16 KV: 504,912 tokens @131K, max concurrency 3.85x (Entry 073). BF16 KV uses ~2× memory/token vs the prior FP8 KV (1,123,584 tokens) |
+| single_request_tok_s | 66.9 (post-switch, 2026-05-18 Entry 073) — prev on-the-fly: 59.2 |
+| c4_aggregate_tok_s | 198.9 — prev: 159.0 |
+| c8_aggregate_tok_s | 427.7 — prev: 373.8 |
+| c16_aggregate_tok_s | 678.7 — prev: 525.0 |
+| startup_time | ~435s cold (fresh FP8 Triton JIT; first ~20 reqs warm to full speed) — Entry 073 |
 | triton_cache | /home/claude/.cache/triton-cu132 (separate from cu130 cache) |
+| stability | container started 2026-05-18T18:21Z, 0 restarts / 0 OOM / 0 Xid as of 2026-06-11 (Entry 076); host up 41 days |
 
 ## Soak Test Results (2026-05-10, Entry 066)
 **Duration:** 30 minutes sustained load | **Requests:** 245 | **Success rate:** 100%

@@ -6504,3 +6504,52 @@ Baseline tracking values updated per user confirmation (arena 60.70→80.27 vLLM
 - Phase 4.2–4.4 (kernel/driver + reboot + re-baseline): PHYSICAL console required (their constitution; and now the module hazard). Phase 5 (DFlash/0.22 eval): GATED — multi-hour production-down campaign needing an idle window + supervision. Phase 6: trigger-gated.
 - Open user inputs: **U-8** Grafana 13 creds/token (unblocks 3.2 deploy); a physical-console window for Phase 4; an idle-window go-ahead for Phase 5.
 
+
+## Entry 078 — Phase 4 Kernel/Driver Upgrade: HALTED pre-reboot (MOK not enrolled) (2026-06-15)
+**Date:** 2026-06-15 ~15:00 UTC
+**Operator:** Claude Code (/implement-plan Phase 4.2, user at console)
+**Status:** INCIDENT — upgrade applied, REBOOT WITHHELD. Production still serving. Awaiting user decision.
+
+#### What happened
+- `apt-get dist-upgrade` (240 pkgs) applied: host nvidia driver userspace → 580.159.03; kernel 6.17.0-1021 installed. But it **flipped the GPU module provider from prebuilt (Canonical-signed) to DKMS** — prebuilt `linux-modules-nvidia-580-open-*` packages now `rc` (removed); `nvidia-dkms-580-open` installed.
+- DKMS built+signed nvidia 580.159.03 for 1021/1014 with the MOK key `/var/lib/shim-signed/mok/MOK.der`. **`mokutil --test-key` → that key is NOT enrolled.** SecureBoot is ON → these modules will NOT load after reboot.
+- dpkg left **half-configured**: `linux-image-6.17.0-1021-nvidia` (DKMS post-install hit an arm64/aarch64 double-autoinstall: "already installed... abort").
+- Host `nvidia-smi` now broken (NVML 580.159 vs loaded kernel module 580.142 mismatch). **BUT containers (qwen35/gliner/bge-m3) still "Up, healthy"** — they hold the old 580.142 libs+module in their namespace, so production keeps serving until reboot. Do NOT restart any container.
+
+#### Why reboot was withheld
+Constitution: "If MOK enrollment may trigger — STOP, inform user." A reboot now = GPU dead on both 1021 and 1014 (both depend on the unenrolled-MOK DKMS modules). Recovery would need physical console.
+
+#### Escape hatch confirmed
+Prebuilt Canonical-signed module is still installable: `linux-modules-nvidia-580-open-6.17.0-1021-nvidia` candidate 6.17.0-1021.21 (Canonical UEFI CA is enrolled by default → SecureBoot-safe, no MOK).
+
+#### Recovery options (awaiting user choice)
+- **B (recommended): restore prebuilt** — install Canonical-signed modules for 1021+1014, remove DKMS provider so it doesn't shadow (updates/dkms > kernel precedence), `dpkg --configure -a`; verify; reboot. Returns to documented config; no interactive boot. More package surgery now.
+- **C: enroll MOK** — keep DKMS (already signed), `mokutil --import MOK.der` + fix dpkg, reboot; user completes blue MOK Manager enrollment at boot. Minimal package change; interactive boot step.
+
+Holding state: production up, dpkg half-configured (stable), box must NOT reboot until resolved.
+
+#### RESOLUTION (2026-06-15 ~15:55 UTC) — Option B (restore prebuilt) SUCCEEDED; reboot CLEAN
+User chose Option B (restore prebuilt). Recovery sequence:
+1. `dpkg --purge --force-depends nvidia-dkms-580-open` → removed DKMS provider + its MOK-signed (unenrolled) modules; ran dkms remove.
+2. `dpkg --configure -a` → reconfigured the half-configured linux-image-1021 (dkms trigger now a no-op) → **dpkg audit clean**.
+3. Found the correct prebuilt path for the `-nvidia` kernel flavour: meta `linux-modules-nvidia-580-open-nvidia-hwe-24.04` (6.17.0-1021.21) — satisfies `nvidia-driver-580-open` AND pulls the kernel-specific `linux-modules-nvidia-580-open-6.17.0-1021-nvidia`. The 1021 prebuilt requires `nvidia-kernel-common-580 = 580.159.03` (installed) → compatible. (1014 prebuilt NOT installable — it's 580.142-era; 1014 fallback boots OS for SSH recovery only, GPU not required there.)
+4. `apt-get install -y linux-modules-nvidia-580-open-nvidia-hwe-24.04 linux-modules-nvidia-580-open-6.17.0-1021-nvidia` (combined, so apt satisfies the driver via prebuilt not DKMS — verified 0 dkms pulled). depmod + initramfs + grub regenerated.
+5. **Decisive pre-reboot gate PASSED:** `nvidia.ko` has `~Module signature appended~` and `modinfo -F signer` = **"Canonical Ltd. Kernel Module Signing"** (enrolled Ubuntu SecureBoot key) → loads under SecureBoot with NO MOK enrollment.
+6. Reboot (user at console).
+
+**Post-reboot verified:** kernel **6.17.0-1021-nvidia**; driver **580.159.03**; 4 nvidia modules loaded under SecureBoot; GPU functional (GB10, 2392 MHz idle, 46°C — not the 513MHz throttle); dpkg audit + dkms both clean; routing eth=700/wifi=600 intact; gpu-exporter active, gpu_xid_events_total=0; 7/8 containers healthy, qwen35+qwen3-embed warming (cold start ~7 min). Security: kernel now ≥1018 (Copyfail/Dirtyfrag patched); driver 580.159.03 (GB10 OOM-handling improvements).
+
+**LEARNING (CLAUDE.md candidate):** On this box, `dist-upgrade` flips the nvidia provider prebuilt→DKMS and DKMS signs with an UNENROLLED MOK key (`CN=spark Secure Boot Module Signature key`). Recovery = purge nvidia-dkms, `dpkg --configure -a`, then install the prebuilt META `linux-modules-nvidia-580-open-nvidia-hwe-24.04` (+ kernel-specific module) so apt satisfies `nvidia-driver-580-open` via prebuilt; verify `modinfo -F signer`=Canonical before reboot. Prebuilt modules for OLD kernels become uninstallable after a driver bump (they pin the old `nvidia-kernel-common`).
+
+PENDING: qwen35 warm-up confirmation (/health 200) + optional throughput re-baseline (Entry 078 numbers) on the new kernel.
+
+#### Re-baseline (Entry 078) on kernel 1021 / driver 580.159.03 — PHASE 4 COMPLETE
+Spot-check after qwen35 cold start (6 min) + 21-request warm-up, vs live spark-llm (no container swap):
+| Metric | New kernel (1021/580.159) | Prod ref (Entry 073) | Delta |
+|--------|---------------------------|----------------------|-------|
+| c1 tok/s (mean of 5) | **65.4** | 66.9 | -2.2% (within noise) |
+| c8 agg tok/s (best of 2) | 385.0 | 427.7 | -10% — **not comparable** (spot-check used max_tokens=256/best-of-2 vs harness 600/3-runs) |
+
+**Conclusion: no kernel/driver perf regression.** c1 parity is the solid signal; c8 delta is methodology, not regression (shorter generations carry more per-request overhead; fewer runs). A full formal re-baseline (`run_full_suite`) can confirm c8 precisely in an idle window if desired. Also: c1 ~65 confirms the steady-state ~65-67 range — consistent with the long-standing observation that the Entry 052 "+10% firmware gain" (65.9) was not a durable step change.
+
+**PHASE 4 COMPLETE.** Kernel 6.17.0-1014→**6.17.0-1021** (Copyfail/Dirtyfrag CVE patched), driver 580.142→**580.159.03** (GB10 OOM-handling improvements). GPU functional under SecureBoot via Canonical-signed prebuilt module (DKMS/MOK trap avoided). All 8 containers healthy, production serving, routing intact, Xid=0. Firmware HOLD moot (no pending firmware). Remaining roadmap: Phase 5 (DFlash/0.22 eval — needs idle window) and Phase 6 (trigger-gated).

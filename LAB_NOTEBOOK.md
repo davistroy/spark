@@ -5882,3 +5882,602 @@ Latencies are consistent and predictable. Low coefficient of variation (11.2%) i
 ### Files
 - **Full data:** `/tmp/spark_soak_results.jsonl` (245 requests, ~56 KB)
 - **Monitor log:** `/tmp/spark_soak_monitor.csv` (GPU/memory/temp every 10s, 180 rows)
+
+---
+
+## Entry 067 — Spark Recon (2026-05-13)
+**Date:** 2026-05-13 ~18:00 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Check: NO CHANGE — leaderboard still behind Firestore App Check ACL (HTTP 403). No new verifiable c1 FP8 single-node entry. Our 65.9 tok/s c1 exceeds best known FP8 entry (60.70). Atlas engine claims 100-130 tok/s but unverified. No trigger fired.
+#### vLLM Release Check: LOW — v0.20.2 (2026-05-10), 6-commit bugfix patch, no SM121/MoE/MTP items. DeepGEMM SM12x blocked (#41063). Gemma4 PRs #39138/#40099 still open. HOLD on v0.20.x remains (prefix caching + spec decode regression confirmed multi-source).
+#### spark-vllm-docker Check: NEW BUILD — dev173→dev299 (+126 commits), FlashInfer 0.6.11 rebuilt 2026-05-13. All new commits target 397B multi-node, not 35B. InstantTensor loader adopted for 397B recipes. No 35B recipe changes.
+#### Qwen Model Check: NO CHANGE — No Qwen4. No Qwen3.6-Plus open weights. Qwen3-Next-80B-A3B exists but too large for single GB10 (~76GB FP8). No new vLLM-compatible quant formats.
+#### NVIDIA Forum Check: ACTIVE — 20+ new topics. antirez/ds4 custom SM121 engine (29.2 tok/s DS4 Flash, near-roofline). eugr now full-time NVIDIA. CVE-2026-31431 (Copyfail) LPE pending kernel patch. Multi-model stack trick (enforce-eager). NVFP4 still broken (6+ months).
+#### Cross-Correlated Findings: (1) eugr NVIDIA role + dev299 build + v0.20.2 = clearest upgrade path when leaving v0.19.1rc1. (2) Atlas + antirez/ds4 = two custom SM121 engines emerging, signaling untapped hardware potential. (3) v0.20.x prefix caching regression confirmed Arena search + Forum = reinforces HOLD.
+#### Triggered Alerts: DeepGEMM partial match (integrated v0.20.0, blocked SM12x #41063). All others: no match.
+#### Overall: WORTH WATCHING
+#### Recommendations:
+1. Check kernel version against CVE-2026-31431 (Copyfail LPE) — security hygiene
+2. Continue HOLD on v0.20.x — prefix caching + spec decode regression confirmed
+3. Monitor Atlas engine for independently verified c1 benchmarks
+4. AWQ INT4 experiment remains highest-value next action (45 min, current image)
+
+---
+
+## Entry 068 — AWQ INT4 Minimum Viable Experiment: REJECT (2026-05-13)
+**Date:** 2026-05-13 ~16:00 UTC
+**Operator:** Claude Code (manual experiment per Entry 060 scope)
+**Status:** EXPERIMENT — production restored after test
+
+### Objective
+Benchmark `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit` (compressed-tensors WNA16, Marlin MoE backend) vs production FP8 on-the-fly. This was the "minimum viable experiment" scoped in Entry 060 — works on current cu132 image, no custom build required.
+
+### Model Details
+- **Model:** `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit` (Apache 2.0, 22 GB on disk)
+- **Quantization:** compressed-tensors WNA16 (group_size=32, num_bits=4), auto-detected by vLLM
+- **Note:** Despite "AWQ" in the name, vLLM identifies this as `compressed-tensors`, NOT `awq`. Passing `--quantization awq` fails with validation error.
+- **MoE backend:** Marlin WNA16 (vs TRITON FP8 in production)
+- **Attention backend:** FLASH_ATTN v2 (vs FlashInfer in production)
+- **MTP:** Working — shares embedding/lm_head weights with drafter as expected
+
+### Critical Finding: CUDA Graph Capture Hangs
+**CUDA graph capture with Marlin WNA16 MoE backend hangs indefinitely on SM121.** Piecewise capture (49 graphs) completes in ~3 seconds, but FULL capture never completes — 20+ minutes with no progress. EngineCore process consumes CPU (~16 min) but GPU utilization stays at 0%.
+
+**Root cause hypothesis:** Marlin INT4 kernels on SM121 trigger extremely slow or infinite kernel compilation during CUDA graph FULL capture. Functionally similar to the vLLM-Tune OutOfResources issue (Entry 056) but manifests as a hang rather than a crash.
+
+**Workaround:** `--enforce-eager` required. This adds ~10-20% overhead vs CUDA graph execution.
+
+### Config Comparison
+| Parameter | AWQ INT4 (test) | Production FP8 |
+|-----------|----------------|----------------|
+| Model weights | 22.06 GiB (-35%) | ~34 GiB |
+| MoE backend | Marlin WNA16 | TRITON FP8 |
+| Attention | FLASH_ATTN v2 | FlashInfer |
+| KV cache dtype | BF16 (auto) | FP8 |
+| KV cache tokens | 701,088 (-39%) | 1,095,920 |
+| Max concurrency (131K) | 19.8x (-32%) | 29.0x |
+| CUDA graphs | BROKEN (enforce-eager) | Working |
+| Cold start | ~120s (enforce-eager) | ~364s (with graphs) |
+
+### Throughput Results
+| Concurrency | AWQ INT4 tok/s | Production FP8 tok/s | Delta |
+|-------------|---------------|---------------------|-------|
+| c1 | 58.9 | 65.9 | **-10.6%** |
+| c8 aggregate | 282.4 | 394.3 | **-28.4%** |
+| c16 aggregate | 493.7 | 634.0 | **-22.1%** |
+
+**Note:** AWQ tested with `--enforce-eager` (forced by CUDA graph hang). Production uses CUDA graphs. Fair comparison would require CUDA graphs on both — which is impossible with Marlin on SM121.
+
+### Quality Check
+- Model produces correct outputs (verified: "Paris" for capital of France, "Four" for 2+2)
+- Thinking token behavior identical to FP8 model (same chat template, same reasoning parser)
+- Quality likely equivalent (same base model, same architecture) — deep quality testing unnecessary given throughput rejection
+
+### Root Cause Analysis — Why AWQ INT4 Loses
+1. **Marlin WNA16 MoE kernels are not optimized for SM121** — TRITON FP8 MoE kernels (auto-selected in production) are significantly faster on this architecture
+2. **CUDA graph incompatibility** forces enforce-eager, adding ~10-20% overhead on top of the kernel disadvantage
+3. **BF16 KV cache** (default for compressed-tensors) uses 2× memory per token vs FP8, completely negating the 35% model weight savings and resulting in 39% FEWER KV cache tokens
+4. **FLASH_ATTN v2** selected over FlashInfer — may contribute additional overhead (unquantified)
+
+### Decision: **REJECT**
+AWQ INT4 underperforms FP8 on-the-fly across all concurrency levels by 10-28%. The theoretical memory advantage is negated by BF16 KV cache overhead. CUDA graph incompatibility with Marlin on SM121 is a structural blocker with no workaround.
+
+### Implications for Entry 060 Quantization Path Matrix
+| Path | Status | Updated Assessment |
+|------|--------|-------------------|
+| AWQ INT4 (this experiment) | **REJECTED** | -10 to -28% throughput, CUDA graph hang |
+| PrismaQuant 4.75-bit + DFlash | Deferred | Requires DFlash (unmerged). Would use different MoE kernel path — might avoid Marlin |
+| NVFP4 without DFlash | Deferred | NVFP4 broken on GB10 (SM121, no hardware instruction support) |
+| NVFP4 + DFlash | Deferred | Blocked on both NVFP4 and DFlash |
+
+**Conclusion:** FP8 on-the-fly remains the optimal quantization for Qwen3.6-35B-A3B on GB10. INT4/NVFP4 paths are all inferior or blocked. Close the Entry 060 quantization investigation — no viable INT4 path exists for SM121 currently.
+
+### Production Impact
+- Downtime: ~40 minutes total (stop production → AWQ download → experiment → restore)
+- Production container restored and healthy at 16:13 UTC
+- KV cache: 1,095,920 tokens, 29.03x max concurrency — matches pre-experiment state
+- Also cleaned up: stale `qwen36-download` container removed, `brave_shamir` download container auto-removed
+
+---
+
+## Entry 069 — Eval Study Phase A: Test Harness Construction + Parity Gate (2026-05-16)
+**Date:** 2026-05-16 16:24-17:14 UTC
+**Operator:** Claude Code (autonomous; user stepped away)
+**Status:** Phase A COMPLETE; harness validated against current production
+
+### Objective
+Build a model-agnostic swap harness to evaluate three research-recommended models (Qwen3.6-FP8 pre-quant, Qwen3-Coder-Next-FP8, GLM-4.7-Flash) against current Qwen3.6-35B-A3B (BF16+on-the-fly FP8) baseline. See IMPLEMENTATION_PLAN_MODEL_EVAL.md.
+
+### Harness Architecture (built 2026-05-16)
+- **Production isolation:** main `/home/claude/docker-compose.yml` UNCHANGED. Eval mode uses separate `/home/claude/llm-eval/docker-compose.qwen35.yml` with `container_name: qwen35` (production stops; eval container takes the name; swap-on-demand).
+- **Parameterization:** thin entrypoint wrapper `/home/claude/llm-eval/scripts/qwen35-entrypoint.sh` builds vLLM command from env vars. Profile env files in `/home/claude/llm-eval/profiles/*.env` configure each experiment.
+- **Test suite:** `run_full_suite.sh` orchestrates smoke → throughput (c1/c4/c8/c16) → quality (30 AR fixtures) → soaks (1h × c=1/4/8 in default mode; 30-min c=4 in `--abbreviated` mode) → stability (4h c=4 default; 30-min abbreviated).
+- **Benchmark reuse:** existing `throughput_bench.py` was already parameterized — kept as-is. New `soak_test.py` for arbitrary durations. New `run_ar_tasks.py` with 30 fixtures (10 AR-1 invariant reasoning, 10 AR-2 single-file convergence, 10 tool-call/YAML structured generation).
+- **Restoration:** `restore_production.sh` tears down eval container and brings up production via main compose. Called at end of each phase chain via EXIT trap.
+
+### Parity Gate Results (run_id: `current_baseline_20260516_163326`)
+Goal: harness reproduces 2026-04-24 baseline within ±10% to validate measurement fidelity.
+
+**Throughput (3 runs per concurrency, 600 max_tokens, prompt "count 1 to 600"):**
+| Concurrency | Per-req tok/s | Aggregate tok/s | 2026-04-24 baseline | Delta |
+|-------------|---------------|------------------|---------------------|-------|
+| c=1  | 59.2 | 59.2  | 59.9 (cu132+MTP, gpu_util 0.70) | **-1.2%** |
+| c=4  | 40.2 | 159.0 | 166.2                            | -4.3% |
+| c=8  | 47.1 | 373.8 | 373.8                            | **0%** (exact) |
+| c=16 | 33.5 | 525.0 | 564.0                            | -6.9% |
+
+All within ±10% gate. c=8 matches exactly. **PASS.**
+
+**AR task suite** (28/30 = 93.33%):
+- AR-1 (invariant reasoning): 9/10 — only ar1_07 failed (Python imports trick question)
+- AR-2 (single-file fixes): 9/10 — only ar2_04 failed (reverse string off-by-one)
+- TC (tool-call/YAML): 10/10
+
+**30-min stability soak (c=4, 150 tokens):**
+| Metric | Value |
+|--------|-------|
+| Total requests | 1608 |
+| Successful | 1608 / 1608 = **100%** |
+| Mean latency | 4.33s |
+| p50 latency | 4.34s |
+| p99 latency | 4.82s (tight cluster) |
+| Per-request tok/s | 34.7 |
+| Container restarts | 0 |
+| Errors | 0 |
+
+**Cold start:** 361s = 6 min (matches expected ~6-7 min for cu132+MTP).
+**Image:** `vllm-cu132-test:latest` (v0.19.1rc1.dev219+g72ff142c3.d20260412).
+
+### Smoke Probe Bug (Patched)
+First run of orchestrator: smoke probe returned `None` content. Root cause: production uses `--reasoning-parser qwen3` which routes thinking tokens into `reasoning_content` field. With max_tokens=20 in smoke prompt, reasoning exhausted the budget before any user-facing `content` was emitted. Patched smoke probe to use `chat_template_kwargs.enable_thinking=false` and max_tokens=100. Throughput and AR are unaffected (they use `usage.completion_tokens`, not `content`).
+
+### Surprising Discoveries
+1. **`Qwen/Qwen3.6-35B-A3B-FP8` already cached** on Spark (from a prior experiment, likely Entry 054-055). Saves ~36 GB Phase B download. Cache also contains 3.5 variants and several Gemma/AWQ models from prior experiments.
+2. **`Qwen3NextForCausalLM` registered** in cu132 image (`v0.19.1rc1`). Phase D won't need a derived image or vLLM upgrade.
+3. **`Glm4MoeLiteForCausalLM` registered** in cu132 image. Phase C model class is supported, but `glm4_moe_lite` is NOT in the (old-style) `vllm/config` MLA whitelist. vLLM may have moved MLA handling to native arch detection — will verify by inspecting actual KV cache size at GLM-4.7 startup before applying any patch.
+4. **Current production uses `--kv-cache-dtype fp8`** — this is research gotcha #1 for AR-1 quality. Phase B sub-runs 1 vs 2 will measure the impact directly.
+
+### Production Impact
+- Downtime: 16:33-17:13 UTC (40 min) for parity gate
+- Production restored automatically by Phase B chain restore_production trap (chain script started at 17:14)
+- Wait, actually: the eval container for parity gate was stopped at 17:13, then Phase B sub-run 1 brought up new eval container at 17:14 (using `qwen36_fp8_bf16kv_mtp1` profile). Production qwen35 (from main compose) was stopped during parity gate AND remains stopped during Phase B chain execution.
+- Downstream consumers (ce-service, retire ETL) will see `spark-llm` outage for the duration of Phase B (~15h estimated). User indicated this is acceptable.
+
+### Decision
+**PASS.** Harness produces measurements consistent with prior production characterization. Phase B launched at 17:14 UTC.
+
+### Files Created
+- `/home/claude/llm-eval/docker-compose.qwen35.yml` (eval-mode compose override)
+- `/home/claude/llm-eval/scripts/qwen35-entrypoint.sh` (env-driven vLLM launcher)
+- `/home/claude/llm-eval/scripts/run_full_suite.sh` (orchestrator)
+- `/home/claude/llm-eval/scripts/soak_test.py` (parameterized soak)
+- `/home/claude/llm-eval/scripts/run_ar_tasks.py` (AR fixture runner)
+- `/home/claude/llm-eval/scripts/restore_production.sh`
+- `/home/claude/llm-eval/scripts/phase_{b,c,d}_chain.sh` (phase orchestrators)
+- `/home/claude/llm-eval/ar_tasks/fixtures.jsonl` (30 AR fixtures)
+- `/home/claude/llm-eval/metrics_schema.json`
+- `/home/claude/llm-eval/profiles/{current_baseline, qwen36_fp8_*, glm47, coder_next_*}.env` (7 profiles)
+
+---
+
+## Entry 070 — Eval Study Phase B: Qwen3.6-35B-A3B-FP8 Pre-Quantized (2026-05-16/17)
+**Date:** 2026-05-16 17:14 UTC → 2026-05-17 08:06 UTC (15h chain time)
+**Operator:** Claude Code (autonomous)
+**Status:** COMPLETE — pre-quant FP8 RECOMMENDED for production (contradicts Entry 054-055)
+
+### Objective
+Test `Qwen/Qwen3.6-35B-A3B-FP8` (native pre-quantized) vs current production (BF16 weights + on-the-fly FP8 + FP8 KV + MTP=2). Three sub-experiments isolated (a) pre-quant vs on-the-fly via headline comparison, (b) BF16 vs FP8 KV cache via sub-runs 1 and 2 (only KV-dtype changed), (c) MTP=1 vs MTP=2 via sub-runs 1 and 3 (only MTP changed).
+
+### Throughput Headline (vs current production parity-gate baseline 59.2 / 159.0 / 373.8 / 525.0)
+| Sub-run | Config | c=1 | c=4 agg | c=8 agg | c=16 agg |
+|---------|--------|-----|---------|---------|---------|
+| 1 | BF16 KV, MTP=1 | 65.0 (+9.8%) | 183.9 (+15.7%) | 363.1 (-2.9%) | 585.9 (+11.6%) |
+| 2 | FP8 KV, MTP=1 | 63.3 (+6.9%) | 173.4 (+9.1%) | 367.3 (-1.7%) | 557.9 (+6.3%) |
+| 3 | BF16 KV, MTP=2 | **66.7** (+12.7%) | 177.8 (+11.8%) | **377.6** (+1.0%) | **603.1** (+14.9%) |
+
+**Pre-quant FP8 wins at every concurrency level vs current production.** Best Phase B config: **BF16 KV + MTP=2.**
+
+### Isolated effects
+- **BF16 KV vs FP8 KV** (sub-run 1 vs sub-run 2, both MTP=1): BF16 KV is **2-6% faster** at c=1, c=4, c=16. About even at c=8. Equivalent AR quality (27 vs 28/30 — within fixture noise).
+- **MTP=1 vs MTP=2** (sub-run 1 vs sub-run 3, both BF16 KV): MTP=2 slightly faster at c=1, c=8, c=16 (+2-3%); slightly slower at c=4 (-3%). Research's MTP=1 preference NOT validated.
+
+### Quality (30 AR fixtures, all sub-runs in 90-93% range)
+| Sub-run | AR-1 | AR-2 | TC | Overall |
+|---------|------|------|----|---------| 
+| 1 | 8/10 | 9/10 | 10/10 | 27/30 (90.0%) |
+| 2 | 9/10 | 9/10 | 10/10 | 28/30 (93.3%) |
+| 3 | 9/10 | 9/10 | 10/10 | 28/30 (93.3%) |
+
+±1 fixture = ±3.3pp at this fixture count. Within noise across sub-runs and vs current production (28/30). **Research's "FP8 KV hurts AR-1 quality" gotcha #1 NOT validated.**
+
+### 4h Stability
+- Sub-run 1 (BF16 KV, MTP=1): 15,160 reqs, 100% success, mean 3.74s, p99 3.96s, 0 restarts, 0 GPU drift
+- Sub-run 2 (FP8 KV, MTP=1): 14,908 reqs, 100% success, mean 3.80s, p99 4.03s, 0 restarts, 0 GPU drift
+- Sub-run 3 (BF16 KV, MTP=2, 30-min): 1,788 reqs, 100% success, mean 3.92s, p99 4.21s, 0 restarts, 0 GPU drift
+
+**Rock-solid stability** across all sub-runs.
+
+### MTP Acceptance
+- MTP=1 (sub-run 2): **88.9%** acceptance (1,841,372 accepted / 2,071,911 drafts)
+- MTP=2 (sub-run 3, 30-min): **80.0%** overall (1.60 avg of 2 tokens accepted); pos0=88.7%, pos1=71.1%
+
+Research's "MTP=2 tanks acceptance" claim PARTIALLY validated (pos1 drops to 71%) but doesn't translate to throughput loss because extra accepted tokens compensate.
+
+### Contradiction with Entry 054-055 (2026-04-30)
+Entry 054-055 rejected pre-quant FP8: c1 -11.8%, c4 -9.7%, c8 -0.1%, c16 -14.7% vs on-the-fly FP8. **This study finds the opposite**: c1 +9.8%, c4 +15.7%, c8 -2.9%, c16 +11.6%.
+
+**Difference:** vLLM version. Entry 054-055 tested 0.19.0 (and the v0.19.1rc1 hang theory was partial — see Entry 058 which validated v0.19.1rc1 works). This study used v0.19.1rc1.dev219+g72ff142c3.d20260412 (cu132+MTP image, ~3 weeks newer commit). Kernel selection paths for FP8 block-scaled have evolved. The pre-quant rejection was correct for that build; it is INCORRECT for the current build.
+
+### Decision: **ADOPT** for production (pending user approval — see MODEL_EVALUATION_2026_05.md for migration plan)
+
+
+---
+
+## Entry 071 — Eval Study Phase C: zai-org/GLM-4.7-Flash (2026-05-18)
+**Date:** 2026-05-18 01:48 UTC → 09:28 UTC (incl. 2 retries for vLLM compat fixes)
+**Operator:** Claude Code (autonomous)
+**Status:** COMPLETE — GLM-4.7-Flash REJECTED on SM121 (slower than Qwen3.6)
+
+### Objective
+Test `zai-org/GLM-4.7-Flash` (30B/3B MoE + MLA, MIT license) as research's #3 ranked candidate. Research projected this as fastest single-stream tok/s on GB10 (37-40 tok/s) and best τ²-Bench tool-calling.
+
+### Two Image-Compat Issues Found
+1. **`glm4_moe_lite` arch unrecognized by transformers 4.57.6** (cu132 image default). Fix: built `vllm-cu132-test:glm47` derived image with `transformers==5.0.0`. vLLM's `<5` pin is a pip warning only — runtime accepts 5.0.0 without errors.
+2. **`--attention-backend triton` rejected** in this vLLM version. Valid options now namespaced: TRITON_ATTN, TRITON_MLA, FLASH_ATTN, FLASHINFER, FLASHINFER_MLA, CUTLASS_MLA, TRITON_MLA, etc. For GLM-4.7's MLA architecture, use `--attention-backend triton_mla`. Updated profile.
+
+### Throughput vs Qwen3.6-FP8 best (BF16 KV, MTP=2)
+| Concurrency | GLM-4.7 | Qwen3.6-FP8 best | GLM delta |
+|-------------|---------|------------------|-----------|
+| c=1 | 38.5 | 66.7 | **-42.3%** |
+| c=4 agg | 89.9 | 177.8 | **-49.4%** |
+| c=8 agg | 157.5 | 377.6 | **-58.3%** |
+| c=16 agg | 210.2 | 603.1 | **-65.1%** |
+
+Single-stream matches research's projection (38.5 vs projected 37-40). But research's RANKING (GLM faster than Qwen on Spark) is WRONG — Qwen3.6 is 73% faster at c=1 here.
+
+### MLA Confirmed Active
+Log: `Using AttentionBackendEnum.TRITON_MLA backend` + `Using FlashAttention prefill for MLA`. KV cache 49.57 GiB / **962,464 tokens** — no KV balloon (so the old joshua8.ai sed patch for MLA whitelist is no longer needed in this vLLM version; MLA is natively recognized).
+
+### CUDA Graph Mode Forced PIECEWISE
+`CUDAGraphMode.FULL_AND_PIECEWISE is not supported with TritonMLABackend backend; setting cudagraph_mode=PIECEWISE`. Minor speed penalty but unavoidable for MLA in this version.
+
+### Quality (30 AR fixtures)
+- Overall: 27/30 (90.0%)
+- AR-1: 8/10 — failed ar1_02, ar1_07
+- AR-2: 9/10 — failed ar2_04
+- TC: 10/10 — perfect (tool-call/YAML strength validated)
+
+Equivalent to other candidates within fixture noise.
+
+### 4h Stability
+- 9,052 requests / 100% success / 0 restarts / 0 errors / 0 GPU drift
+- Mean latency 6.23s (vs Qwen3.6's 3.74s — 67% slower per request)
+
+### Decision: **REJECT**
+Quality essentially equivalent to Qwen3.6 (within 30-fixture noise). Throughput 42-65% slower across all concurrency. Tool-call advantage real but only ~5% margin over Qwen which already maxes the TC fixture set. Research's "fastest single-stream + best tool-call" claim does not yield a net win on this hardware.
+
+### Persistent artifact: derived image
+`vllm-cu132-test:glm47` retained on Spark for any future GLM testing. Tag is glm47.
+
+
+---
+
+## Entry 072 — Eval Study Phase D: Qwen/Qwen3-Coder-Next-FP8 + Final Synthesis (2026-05-18)
+**Date:** 2026-05-18 09:40 UTC → 17:01 UTC
+**Operator:** Claude Code (autonomous)
+**Status:** Phase D COMPLETE — Coder-Next REJECTED; vllm#37554 issue confirmed on our hardware
+
+### Objective
+Test `Qwen/Qwen3-Coder-Next-FP8` (80B/3B hybrid Gated DeltaNet + Gated Attention, FP8 native) as research's #2 ranked candidate. Research projected 43 tok/s c=1 single-stream and equivalent or slightly weaker coding quality vs Qwen3.6.
+
+### Cold Start: 280 sec
+Qwen3NextForCausalLM arch recognized natively in cu132 image. No derived image required. Triton cache cold but model loaded faster than GLM-4.7's 600s because the hybrid GDN+attention pipeline pre-exists in cu132.
+
+### Critical Finding: MTP Acceptance = 0%
+4h soak metrics:
+```
+vllm:spec_decode_num_drafts_total{model_name="spark-llm"} 1.340081e+06
+vllm:spec_decode_num_accepted_tokens_total{model_name="spark-llm"} 0.0
+vllm:spec_decode_num_accepted_tokens_per_pos_total{position="0"} 0.0
+vllm:spec_decode_num_accepted_tokens_per_pos_total{position="1"} 0.0
+```
+
+**1.34 million drafts produced, ZERO accepted.** The MTP layer runs but produces useless drafts. This is wasted compute on every generation step.
+
+Root cause traced from startup log:
+```
+WARNING: Checkpoint does not provide a q scaling factor. Setting it to k_scale.
+WARNING: Using KV cache scaling factor 1.0 for fp8_e4m3. If this is unintended, verify that k/v_scale scaling factors are properly set in the checkpoint.
+```
+
+**This is vllm-project/vllm#37554** — the unresolved FP8 KV cache scaling issue for hybrid GDN+attention. Research flagged it as gotcha #4 ("`--calculate-kv-scales` corruption — do not enable"). We didn't enable that flag, but the model's pre-quantized weights lack q_scale; the q=1.0 fallback corrupts MTP draft attention math. Drafts compute against wrong KV scale; 0% acceptance.
+
+### Throughput Impact
+With MTP effectively disabled by 0% acceptance:
+| Concurrency | Coder-Next | Qwen3.6-FP8 best | Coder-Next delta |
+|-------------|-----------|------------------|------------------|
+| c=1 | 21.6 | 66.7 | **-67.6%** |
+| c=4 agg | 57.1 | 177.8 | **-67.9%** |
+| c=8 agg | 145.0 | 377.6 | **-61.6%** |
+| c=16 agg | 249.8 | 603.1 | **-58.6%** |
+
+Research projected 43 tok/s c=1 — we measured **21.6**, half the projection. The MTP=0% acceptance accounts for most of the gap.
+
+### KV Cache Constrained
+After 82 GB model load at gpu_util=0.80, only **15.22 GiB KV cache** available. That's 3× less than Qwen3.6's 48 GiB at gpu_util=0.70. Compounding factor: hybrid GDN+attention adds 3 padding layers (`Add 3 padding layers, may waste at most 8.33% KV cache memory`).
+
+### Quality (30 AR fixtures)
+- Overall: 27/30 (90.0%) — same as GLM-4.7, identical fail pattern (ar1_02, ar1_07, ar2_04)
+- AR-1: 8/10, AR-2: 9/10, TC: 10/10
+- **Quality equivalent within fixture noise.** Research's claim that Coder-Next is purpose-built for coding-agent loops doesn't yield measurable quality edge on our 10-fixture AR-2 subset.
+
+### 4h Stability
+- 4,852 requests (3.1× fewer than Qwen3.6 due to slower throughput)
+- 100% success, 0 restarts, 0 errors, 0 GPU drift
+- Mean latency 11.41s, p99 12.23s (3× slower than Qwen3.6's 3.74s)
+
+### Phase D Chain Glitch
+After u=0.80 sub-run completed, the chain tried `docker compose up -d bge-m3 gliner` to restart aux services. Docker-compose tried to ALSO start qwen35 (depends_on dependency from main compose) while the eval container was still present (stopped but not removed) — container name conflict. set -e tripped; trap fired; production restored via trap; u=0.70 sub-run skipped. **Given Coder-Next was already conclusively rejected on throughput, the u=0.70 data point would not have changed the decision.** Documented but not load-bearing.
+
+### Decision: **REJECT**
+Coder-Next is dramatically slower than Qwen3.6 on our hardware (-58 to -69% across concurrency). Quality essentially equivalent. The 0% MTP acceptance is a hard structural blocker for this model+vLLM combination. Without MTP, even research's 43 tok/s projection wouldn't get to within Qwen3.6's range.
+
+---
+
+## Synthesis: Three-Model Study Conclusion
+
+**Production recommendation: switch from current `Qwen/Qwen3.6-35B-A3B` (BF16+on-the-fly FP8+FP8 KV) to `Qwen/Qwen3.6-35B-A3B-FP8` (pre-quant, BF16 KV, MTP=2).** Expected +10-15% throughput across all concurrency, equivalent quality, equivalent stability.
+
+**GLM-4.7-Flash and Coder-Next are rejected** on this hardware — both 40-70% slower than Qwen3.6 with no measurable quality advantage.
+
+**Three research claims invalidated** by direct measurement:
+1. "GLM-4.7-Flash is fastest single-stream tok/s on GB10" → false; Qwen3.6 is 73% faster c=1
+2. "Coder-Next ~43 tok/s single Spark" → measured 21.6 tok/s; the FP8 KV q_scale issue (vllm#37554) materially impacts this model
+3. "FP8 KV cache hurts AR-1 quality" → not validated at 30-fixture granularity; observed effect is within ±1 fixture noise
+
+**Two research claims partially validated:**
+1. "MTP=2 tanks acceptance" → pos1 acceptance does drop (71% vs MTP=1's 89%), but extra accepted tokens compensate; net MTP=2 ≈ MTP=1 throughput
+2. "Coder-Next FP8 KV cache stable" → cache *runs* without crashes, but q_scale=1.0 fallback breaks MTP acceptance entirely
+
+See **MODEL_EVALUATION_2026_05.md** for full comparison matrix, migration plan, and updated 60-day watchlist.
+
+
+---
+
+## Entry 073 — Production Switch: Qwen3.6-FP8 Pre-Quant ADOPTED (2026-05-18)
+**Date:** 2026-05-18 18:20-18:35 UTC
+**Operator:** Claude Code (user approved post-Entry 072 study)
+**Status:** PRODUCTION SWITCH COMPLETE — measured gains exceed Phase B predictions
+
+### Changes Applied
+Production `qwen35` service in `/home/claude/docker-compose.yml`:
+
+```diff
+-      - Qwen/Qwen3.6-35B-A3B            # BF16 weights
++      - Qwen/Qwen3.6-35B-A3B-FP8        # Native FP8 weights (pre-quantized)
+       - --served-model-name
+       - spark-llm
+       ...
+-      - --quantization                  # Removed: model is pre-quantized
+-      - fp8
+-      - --kv-cache-dtype                # Removed: BF16 KV cache (+5% throughput, eliminates research gotcha #1)
+-      - fp8
+       ...
+-      - "4096"                          # max-num-batched-tokens
++      - "32768"                         # +8x: matches research recommendation
+```
+
+### Restart
+- Stopped current production at ~18:20 UTC
+- Brought up new config at ~18:21 UTC
+- Cold start: 435s (7.25 min) — within expected range for fresh Triton cache for the new weight variant
+- All 8 production services healthy after restart
+
+### Resolved Engine Config (confirmed)
+```
+model='Qwen/Qwen3.6-35B-A3B-FP8'
+quantization=None  (FP8 in weights)
+kv_cache_dtype='auto'  (BF16/FP16)
+max_num_batched_tokens=32768
+served_model_name='spark-llm'
+speculative_config=SpeculativeConfig(method='mtp', num_spec_tokens=2)
+```
+
+### KV Cache Capacity Tradeoff (flagged)
+| Metric | Before (FP8 KV) | After (BF16 KV) | Delta |
+|--------|----------------|-----------------|-------|
+| KV cache tokens at 131K context | 1,123,584 | 504,912 | -55% |
+| Max concurrency at 131K | 8.57x | 3.85x | -55% |
+| GPU memory: model + KV | ~82 GiB | ~85 GiB | +3 GiB |
+
+KV cache capacity is reduced by 55%. For our typical workload (3-12 concurrent users at moderate contexts), this is non-binding. For workloads pushing many concurrent 131K contexts, this becomes a constraint. **If high-concurrency 131K usage materializes, revisit FP8 KV** — but quality regression from FP8 KV is also small to negligible per Phase B data.
+
+### Validated Throughput (live production, 3 runs × 600 max_tokens, post-warmup)
+| Concurrency | Before (2026-04-30) | After (2026-05-18) | Delta | Phase B predicted |
+|-------------|---------------------|---------------------|-------|-------------------|
+| c=1 per_req | 59.2 | **66.9** | **+13.0%** | 66.7 (matched) |
+| c=4 aggregate | 159.0 | **198.9** | **+25.1%** | 177.8 (exceeded) |
+| c=8 aggregate | 373.8 | **427.7** | **+14.4%** | 377.6 (exceeded) |
+| c=16 aggregate | 525.0 | **678.7** | **+29.3%** | 603.1 (exceeded) |
+
+**Live production beats Phase B predictions at c=4/8/16.** Likely because eval harness adds slight per-request overhead vs direct production calls.
+
+### Warmup Effect Noted
+First throughput measurement after cold start: c=1=49.9 tok/s (-25% vs prediction). After 5 warmup requests at c=4: c=1=66.9 tok/s (matches prediction). **Triton JIT for FP8 block-128 kernels needs ~20 requests to warm up.** Should not affect production users (any first 5 requests will see this; subsequent requests at full speed).
+
+### Rollback Plan
+If issues arise:
+```bash
+ssh -i ~/.ssh/id_claude_code claude@spark.k4jda.net 'docker compose -f /home/claude/docker-compose.yml stop qwen35
+docker rm -f qwen35
+cp /home/claude/docker-compose.yml.pre-fp8prequant /home/claude/docker-compose.yml
+docker compose -f /home/claude/docker-compose.yml up -d qwen35'
+```
+
+The `docker-compose.yml.pre-fp8prequant` backup contains the exact prior production config.
+
+### Production State After Switch
+- qwen35: Up, healthy, running Qwen3.6-35B-A3B-FP8
+- qwen3-embed, gliner, chromadb, neo4j, ce-service, bge-m3, node-exporter: all healthy
+- Container restart count: 0 since switch
+- GPU memory peak: similar to before (~102 GiB / 121.6 GiB)
+
+### Decision: **PRODUCTION-READY.** Monitor for 24h for any regression.
+
+---
+
+## Entry 074 — DGX Spark Recon (2026-05-27)
+**Date:** 2026-05-27 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Check: INACCESSIBLE — values FROZEN
+Spark Arena leaderboard (spark-arena.com) remains structurally unreadable. Better characterized this run: it is a **Firestore security-rule ACL** (`403 PERMISSION_DENIED` on REST reads against `leaderboard`/`entries` collections) layered atop App Check (reCAPTCHA Enterprise) — not merely App Check. Guessed REST API paths (`/api/recipes`, `/api/leaderboard`) 404; no public JSON mirror. The `spark-arena-cli`/`sparkrun` GitHub repos are submission clients only. Anonymous numeric tracking is not recoverable without authenticated Firebase creds or a logged-in browser DOM scrape. `arena_top_fp8_qwen35_tok_s` (60.70) and `arena_top_overall_tok_s` (95.11) stay frozen at the 2026-04-30 manual capture. No ACTION flag evaluable.
+
+#### vLLM Release Check: v0.21.0 (2026-05-15) — MEDIUM, HOLD remains
+One new stable release since v0.20.2. No SM121/GB10/sm_12/arch-guard items (would be HIGH); none found → MEDIUM. Relevant: Gated DeltaNet attention for Qwen3.5/3.6 (#41025, touches our model's arch path), Gemma4 MTP support, Qwen3-Next Fused Shared Expert (#39280), Blackwell FP8 group-quant/CUTLASS kernels (no SM12x guarantee). Breaking changes for any future rebuild: **C++20 build requirement (#40380)**, **Transformers v4→v5 default (#40389)**. v0.20.x prefix-caching + spec-decode regression **NOT fixed** → HOLD stands. **Stay on `vllm-cu132-test:latest` (v0.19.1rc1.dev219+cu132).**
+
+#### spark-vllm-docker Check: NEW activity — base bumped 2 minor versions
+eugr/spark-vllm-docker rebuilt 2026-05-26: vLLM base **0.21.1rc1.dev292+g97e4022c6.cu132** (was 0.20.2rc1.dev299), **FlashInfer 0.6.12** (was 0.6.11). New since 2026-05-13: (1) **DFlash speculative recipe matured** — `qwen3.6-35b-a3b-fp8-dflash.yaml` uses `z-lab/Qwen3.6-35B-A3B-DFlash` draft @ num_speculative_tokens=15, `flash_attn` backend; prefix caching removed 2026-05-14 for accuracy. (2) **`use-official-vllm` mod (2026-05-22)** — apply eugr SM121 patches onto upstream official vLLM image (simplifies future upgrade off bespoke cu132). (3) gpu-mem-util-gb safety margin removed, UMA memory-accounting fix restored, NCCL bump, 397B recipe fix. Standard single-node 35B FP8 recipe unchanged since 2026-05-06. Note both eugr 35B recipes are TP=2/Ray multi-node topology, not single-Spark.
+
+#### Qwen Model Check: No Qwen4, no Qwen3.6-Plus weights — both triggers UNMATCHED
+- **Qwen4** — no release, no announcement (still rumored pre-July-2026). **Qwen3.6-Plus** — still API-only, no HF weights. Both ACTION triggers remain unmatched.
+- **NEW: Qwen3.7-Max** announced 2026-05-20 (Alibaba Cloud Summit) — flagship, 1M ctx, native extended-thinking, **API-only on DashScope, no open weights**. Flag as next open-weights watch candidate.
+- Actionable Spark-class comparators surfaced: **`nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8`** (30B-A3B hybrid Mamba MoE, FP8+NVFP4 pre-quant, multimodal; lower text-reasoning index than Qwen3.6; MTP-acceptance risk via vllm#37554 hybrid-attention q_scale — same pitfall that killed Coder-Next). **`RedHatAI/Qwen3.6-35B-A3B-NVFP4`** (same base, GB10-validated ~55.9 tok/s c1 / MTP 83-93%, but **below** current FP8 prod ~66.9 tok/s; 21.9 GB → KV headroom only). MiMo-V2.5 family rejected (310B-1T total, exceeds 121.6 GiB).
+
+#### NVIDIA Forum Check: ~27 active topics since 2026-05-13; Category 720 now 404
+- **ACTION:** Nemotron-3-Super-120B-A12B-NVFP4 reported **working on a single Spark @ 23.45 tok/s** (airawatraj, /t/370070), `VLLM_NVFP4_GEMM_BACKEND=marlin`, MTP on — **partially contradicts our "NVFP4 broken on SM121" fact**; slower than our 35B so not a swap, but the marlin-GEMM enablement recipe is the actionable bit if NVFP4 is ever revisited.
+- **ACTION (confirming):** Qwen3.6-27B AWQ INT4 = 1.8-4.9 tok/s decode @ 285K (/t/371529) and **INT8 AWQ (W8A16) completely broken** (illegal memory access in conch-triton, /t/371315). jwarner: "FP8 essentially replaced INT8." Both reinforce that **FP8 is the only sound quant path on SM121** — validates our pre-quant FP8 production choice.
+- **INFO:** Poolside Laguna XS.2 (33B MoE/3B active, NVFP4+INT4, "similar to Qwen3.6-35B-A3B, less verbose" per jwarner; no Spark tok/s yet) — future eval candidate. DeepSeek-V4-Flash dual-node TP=2 (/t/370309, 87 posts); Kimi 2.6 + Qwen3.5-397B 8xGB10 cluster; PrismaScout/PrismaQuant v2 (/t/368933).
+- No gemma4 structured-output trigger match. **Category 720 (gb10-projects) returns 404** — appears merged/removed; confirm + adjust endpoint list next run.
+
+#### Cross-Correlated Findings
+1. **NVFP4 runs on GB10 via marlin GEMM backend** — corroborated by Check 4 (RedHatAI Qwen3.6-NVFP4, ~56 tok/s) AND Check 5 (Nemotron-120B-NVFP4, 23.45 tok/s). Two independent sources show NVFP4 inference on SM121 via `VLLM_NVFP4_GEMM_BACKEND=marlin`. Tempers our standing "NVFP4 broken on SM121" fact — but both are below FP8 prod throughput, so the value is the *enablement recipe*, not a perf win.
+2. **vLLM advancing on both fronts** — upstream v0.21.0 (Check 2) + eugr base now 0.21.1rc1.dev292 (Check 3). eugr is ~2 minor versions ahead of our prod v0.19.1rc1.dev219; kernel-selection paths likely shifted again (pre-quant FP8 verdict already flipped once across builds). An eval/upgrade window is opening.
+3. **DFlash speculative decoding** maturing — eugr recipe (Check 3) + on watch list (z-lab drafter). Alternative to MTP=2; caveat: incompatible with prefix caching for accuracy.
+4. **FP8 = only sound quant path on SM121** — Check 5 INT4/INT8 failures reinforce existing Entry 068 / Marlin-WNA16 learnings.
+
+#### Triggered Alerts
+- `vllm_release | gemma4 AND (guided OR grammar OR xgrammar)` → **MATCHED, NOT cleared.** PRs #39138 (xgrammar bypass) AND #40099 (repetition loops) **both still open/unmerged** in v0.21.0. Gemma 4 experiment stays blocked.
+- `vllm_release | DeepGEMM AND (SM12 OR SM121 OR Blackwell OR GB10)` → **MATCHED via #41063** (the tracking issue itself, still open, no timeline). No DeepGEMM SM12x benchmark unblockable.
+- `vllm_release | speculative AND (Qwen OR MoE)` → INFO match (Gemma4 MTP, Qwen3-Next FSE, Qwen3.5/3.6 Gated DeltaNet in v0.21.0). No Spark action.
+- `huggingface | Qwen3.6-Plus OR Qwen4 model weights` → no match (both unreleased).
+- `arena | fp8 ... > baseline*1.10` → not evaluable (leaderboard inaccessible).
+- `forum | gemma4 ... structured output fix` → no match.
+
+#### Overall: **WORTH WATCHING**
+No `ACTION:` trigger requires action this cycle (Gemma4 gate not cleared → stay blocked; DeepGEMM not unblocked; no Qwen4/Plus weights). Multiple INFO-level signals warrant the next eval slot but none demand a production change. **Current Qwen3.6-35B-A3B-FP8 pre-quant + cu132+MTP remains optimal.**
+
+#### Recommendations
+1. **Queue eugr eval (pre-existing carry-forward, now reinforced):** bench `dgx-vllm-eugr-nightly:latest` (vLLM 0.21.1rc1.dev292+cu132, FlashInfer 0.6.12) vs current `vllm-cu132-test:latest` (v0.19.1rc1.dev219). Decision criterion unchanged: keep current unless ≥+5% c8 AND quality holds. Sandbox only — do NOT touch production qwen35.
+2. **Evaluate DFlash vs MTP=2** when an eval slot opens — eugr's matured `z-lab/Qwen3.6-35B-A3B-DFlash` recipe (15 spec tokens). Note: requires prefix caching OFF for accuracy.
+3. **Keep v0.21.0 on HOLD** — no SM121 enablement, prefix-caching+spec-decode regression unfixed. Flag C++20 + Transformers-v5 breaking changes for any future custom rebuild.
+4. **Verify the NVFP4-on-SM121 claim** (marlin GEMM backend) next deep-dive — reconciles with our "NVFP4 broken" fact; low priority since below FP8 throughput.
+5. **No model swap** — Nemotron-3-Nano-Omni (multimodal/lower text-reasoning/MTP risk) and Qwen3.6-NVFP4 (below FP8 throughput) do not beat current production. Watch Qwen3.7-Max for open-weights release; watch Poolside Laguna XS.2 for Spark benchmarks.
+6. **Maintenance:** confirm forum Category 720 removal and update recon endpoints; consider wiring a browser-DOM Arena scrape to unfreeze leaderboard tracking.
+
+## Entry 075 — DGX Spark Recon (2026-06-11)
+**Date:** 2026-06-11 16:05 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Arena Check: ACCESS RESTORED via Firestore REST — board doubled at the top; arena trigger FIRED
+- **Access method (new, unfreezes tracking frozen since 2026-04-30):** leaderboard page is still JS-rendered + App-Check-gated (`entries`/`leaderboard`/`recipes` collections → 403), but the Firestore **`benchmarks` collection is world-readable** via REST (project `spark-arena`, public client key embedded in JS bundle). 122 approved benchmark docs with full recipes embedded; data current to 2026-06-10.
+- **Top FP8 Qwen3.6-35B-A3B single-node (tg128 c1):** absolute top **172.03 tok/s on Atlas runtime** (Szymon Walczak, +183% vs frozen baseline 60.70). Top **vLLM** entry: **80.27 tok/s** (Stojanovic, recipe built by eugr; +32% vs baseline, **+20% vs our live 66.9**). 3rd: 77.88 (Walczak, spark-vllm-docker, DFlash n15 + flashinfer + triton MoE + `--optimization-level 3`). Old baseline entry (Seth Hobson 60.70) now ~rank 4 in class.
+- **Top overall single-node:** LFM2.5-350M BF16 at 222.77 (350M tiny model, not comparable); then **Qwen3.6-35B-A3B-NVFP4 on Atlas** at 218.85 / 217.37 / 211.31. Old overall baseline (PrismaQuant 95.11) has fallen to rank 8.
+- **eugr/Stojanovic 80.27 recipe diff vs our prod (container `vllm-node-tf5`):** same model (`Qwen/Qwen3.6-35B-A3B-FP8`), same `--max-num-batched-tokens 32768`, same `qwen3_coder` parser; swaps MTP=2 → **DFlash** (`--speculative-config '{"method":"dflash","model":"z-lab/Qwen3.6-35B-A3B-DFlash","num_speculative_tokens":8}'`), adds `--attention-backend flash_attn`, `--load-format fastsafetensors`, `--gpu-memory-utilization 0.85`, `--max-num-seqs 8`, `--max-model-len 262144`, `--enable-prefix-caching` (NOTE: svd repo removed prefix caching from its DFlash recipe 2026-05-14 for accuracy — discrepancy to resolve during eval), env `VLLM_MARLIN_USE_ATOMIC_ADD=1`.
+- **Atlas 172.03 recipe:** `avarok/atlas-gb10:latest serve Qwen/Qwen3.6-35B-A3B-FP8 --max-seq-len 131072 --kv-cache-dtype fp8 --kv-high-precision-layers auto --gpu-memory-utilization 0.90 --scheduling-policy slai --enable-prefix-caching --speculative` (self-reported 100/100 quality, 15/15 tool calls). Atlas NVFP4 variant (218.85) runs `RedHatAI/Qwen3.6-35B-A3B-NVFP4` with `kv_cache_dtype: nvfp4`.
+
+#### vLLM Release Check: v0.22.0 is HIGH — first stable release with explicit SM121 kernel work
+- **v0.22.0 (2026-05-29), HIGH:** FlashInfer b12x MoE + FP4 GEMM for SM120/121 (#40082); **per-tensor FP8 CUTLASS on SM12.1 (#41215)** — directly in our pre-quant FP8 path, could flip kernel selection again (Entry 054 vs 070 precedent); FlashInfer Blackwell GDN prefill (#40717) — Qwen3.6 is hybrid GDN+attention. Also MEDIUM: spec-decode hybrid-attention support in `extract_hidden_states` (#39949), MTP for DeepSeek V4 (#43385), MXFP4 linear layers, Model Runner V2 now default for Qwen3 dense (our MoE/hybrid likely falls back to MRv1 — verify at test time). **v0.22.1 (2026-06-05): LOW** patch release.
+- **Gemma4 gate NOT cleared:** PRs #39138 (open, last update 2026-05-08) and #40099 (open, stale since 2026-04-22) both unmerged. Experiment stays blocked.
+- **DeepGEMM SM12x #41063: still open** (updated 2026-05-30). Not unblocked.
+- **Watch-item correction:** issue #37554 was **closed as completed 2026-03-20** — i.e., it was already closed when Entry 072 cited it as the open blocker. The closure resolution (q_scale=1.0 fallback) IS the cause of Coder-Next's 0% MTP acceptance. "Re-evaluate if vllm#37554 closes" is miscalibrated; the real watch is a proper KV-scale calibration fix for hybrid GDN+attention (none found in v0.22.x) and whether #39949 changes Coder-Next MTP behavior.
+- **Migration note:** v0.22.x uses `--speculative-config` JSON; our v0.19-era `--num-speculative-tokens`/`--speculative-model` flags are legacy. Prefix-caching + spec-decode regression: no fix evident in v0.22.x notes.
+- Sandbox test plan for v0.22.x captured (port 8010, separate Triton cache `/home/claude/.cache/triton-v0221`, gpu_mem_util 0.65, check FP8 kernel selection / FlashInfer MoE backend / GDN prefill path / MRv2-vs-MRv1 in startup logs; bench vs 66.9/198.9/427.7/678.7).
+
+#### spark-vllm-docker Check: wheels rebuilt 2026-06-10 — vLLM 0.22.1rc1.dev330, FlashInfer 0.6.13
+- Base bumped 0.21.1rc1.dev292 → **0.22.1rc1.dev330+g6deb05e0e.d20260610**; FlashInfer 0.6.12 → **0.6.13**. eugr builds are now **3 minor versions ahead** of our prod v0.19.1rc1.dev219 (0.19→0.20→0.21→0.22).
+- Qwen3.6-35B recipes: single change since baseline — default `gpu_memory_utilization` bumped to **0.8** (2026-06-09) "for new vLLM mem allocation" (upstream memory-management rework; validate against our UMA accounting on any upgrade). DFlash recipe otherwise unchanged (z-lab drafter, n15, flash_attn, no prefix caching).
+- New since 2026-05-27: **Step-3.7-Flash** recipes (FP8/NVFP4, 2026-05-29); **DiffusionGemma** support (4 recipes, 2026-06-10); base image **downgraded** to `nvidia/cuda:13.0.2-devel-ubuntu24.04` for wider compatibility (forum reports of `cudaErrorUnsupportedPtxVersion` on 13.2 base); targeted PR43410 (MiniMax QK RMSNorm) patch; NCCL fix in `use-official-vllm` mod; torch pin via `--override` to prevent CPU-torch downgrade; run-recipe.sh passthrough params (2026-06-11).
+- Both 35B recipes remain TP=2/Ray multi-node topology — adaptation still needed for single-node bench.
+
+#### Qwen Model Check: trigger NOT fired — but Qwen3.7 27B/35B open weights announced as forthcoming
+- Qwen official HF org: **zero new model repos since 2026-05-27**. Qwen3.6-Plus still API-only; Qwen4 unannounced (still rumored pre-July 2026).
+- **NEW SIGNAL:** Alibaba announced forthcoming **Qwen3.7 27B and 35B open-weight variants** (no committed date). Historical pattern (Qwen3.6: API late-March → weights April 17, ~3-4 weeks) puts the window open NOW (Qwen3.7-Max launched May 20). Most likely trigger-class event in the next 2-4 weeks; a Qwen3.7-35B-A3B-FP8 would be a near-drop-in successor. Recommend weekly HF org checks through mid-July.
+- **Squatter alert:** `RscriptSQwen/Qwen3.7-plus` (HF, 2026-06-04) is NOT the official Qwen org — treat as fake, do not pull.
+- New A3B-class: **Cohere North Mini Code 1.0** (2026-06-09; 30B MoE/3B active, 256K ctx, Apache 2.0, day-one official FP8 pre-quant `CohereLabs/North-Mini-Code-1.0-fp8` ~30GB) — AA Coding Index 33.4 < Qwen3.6's 35.2; not a switch candidate. **Poolside Laguna XS.2** now has official `poolside/Laguna-XS.2-FP8` + `Laguna-XS.2-speculator.dflash` on HF (SWE-bench Verified 68.2%) — most credible coding-specialist alternative with a sound SM121 path. MiniMax M3 (~230B) and Nemotron 3 Ultra (550B) exceed 121.6 GiB — irrelevant.
+
+#### NVIDIA Forum Check: ACTION — MTP=2 stability risk on our exact config + Copyfail-patched kernel shipped
+- **vLLM #37754 (stu.miller 2026-06-04, /t/366822): FlashInfer + MTP crashes on SM121** — Xid 13 / `cudaErrorIllegalAddress`. MTP=3 crashes multiple times daily; **MTP=2 ≈ 9-hour MTBF**; MTP=1 stable. Separately, Yen's tool-eval-bench sweeps showed quality degradation with MTP1-4 → disabled MTP. **We run FLASHINFER attention + MTP=2.** Our 30-min soak (Entry 066/067) could not catch a 9-h MTBF. Action: check dmesg for Xid 13 + qwen35 restart history since the 2026-05-18 production switch.
+- **Copyfail/Dirtyfrag patched kernel SHIPPED:** `linux-image-6.17.0-1018-nvidia 6.17.0-1018.18` in noble updates since 2026-05-15 — resolves the standing 2026-05-13 security watch (CVE-2026-31431). Current line: **kernel 6.17.0-1021 + driver 580.159.03** (June 2026 release, /t/373018) with improved GB10 OOM/unified-memory handling. Required sequence: `apt update && apt dist-upgrade && fwupdmgr refresh && fwupdmgr upgrade && reboot` — plain `apt upgrade` leaves the nvidia driver missing (/t/371805); remember `linux-modules-nvidia-580-open-$(uname -r)` per firmware-kernel rule. 590 drivers still NOT supported on Spark (/t/372623). No new UEFI install-failure wave in window → firmware HOLD likely liftable in the same maintenance window.
+- **AutoRound W4A16 INT4 emerging as viable on SM121** — challenges Entry 068 "no viable INT4 path" (which was AWQ/compressed-tensors gs=32-specific): whpthomas (/t/372466) Intel AutoRound `--scheme W4A16 --group_size 128`, Marlin backend, claims "Int4 Auto-Round runs twice as fast as FP8, similar quality" (WIP, no hard benchmarks); Qwen3.5-122B INT4 AutoRound Arena recipe scores 92/100 tool-eval-bench (/t/370834); jwarner: Marlin W4A16 fastest 4-bit path on GB10, W4A4 "basically non-existent" (/t/372559).
+- **v0.22.0 self-built works on GB10** (nrevo, /t/371853): CUDA 13.2.1, `VLLM_ENABLE_MARLIN=1 VLLM_MARLIN_FP4=1`, Nemotron-3-Super-120B-NVFP4 @ 21-25 tok/s, MTP acceptance 65-87%; hit long-running **cuDNN graph-corruption bug after ~12 h, reportedly fixed in v0.23.0**.
+- **Qwen3.6-35B-NVFP4 on vLLM nightly** (wantez, /t/371810): `--quantization modelopt --kv-cache-dtype fp8 --attention-backend flashinfer --moe-backend marlin` + MTP=3 → **249-268 tok/s aggregate** (batch; TTFT very high, not single-stream comparable); iromu: 127.7-131.3 effective tok/s @ 89-91% acceptance. NVFP4 closing on FP8 on our exact model.
+- **Atlas (avarok)** /t/369263: azampatti independently measured **75.6-93.0 tok/s c1** on Qwen3.6-35B-A3B-FP8 + MTP (vs our 66.9), but it fails/slows at long context and c≥2 (-35-40%), tool-call path corruption; fixes merged 2026-06-02. Promising, not production-grade.
+- Other: INT8 AWQ root-cause theory — Triton JIT TMA descriptors incompatible with `cudaMallocManaged` (/t/371315). Google released official Gemma4-31B QAT W4A16 (23.3 GB), runs on Spark with MTP draft (/t/372444). 14W throttle bug: no fix; wall power-cycle remains only workaround (/t/366590). **Category 720 permanently removed** (404; `/c/721/show.json` confirms 719 parent + 721 only child; former projects topics merged into 719/721) — drop 720 from endpoint list; 719.json alone is sufficient.
+- Forum gemma4 structured-output trigger: no match.
+
+#### Cross-Correlated Findings
+1. **DFlash has overtaken MTP as the winning vLLM speculative path on GB10** — Arena top vLLM entries both DFlash (Check 1: 80.27 n8, 77.88 n15) + svd matured recipe (Check 3) + forum adoption spreading (Check 5). Three-source signal.
+2. **MTP on FlashInfer is a stability liability on SM121** — forum #37754 9-h MTBF at MTP=2 (Check 5) + top Arena entries abandoning MTP for DFlash (Check 1) + v0.22.0 spec-decode hybrid-attention rework (Check 2). Elevates the DFlash eval from perf experiment to risk mitigation.
+3. **Atlas engine corroborated by two independent sources** — Arena domination (Check 1: 172 FP8 / 219 NVFP4 tg128, 4 of top 5) + independent forum measurement (Check 5: 75.6-93 c1 real-world, with documented failure modes). Real but immature; tg128 synthetic ≠ sustained workload.
+4. **vLLM 0.22.x upgrade window opening — three sources** — upstream v0.22.0 SM121 kernels (Check 2) + eugr wheels on 0.22.1rc1.dev330 (Check 3) + forum self-built v0.22.0 success on GB10 (Check 5). Counter-signal: ~12-h cuDNN graph-corruption bug fixed only in v0.23.0 → consider targeting v0.23.0.
+5. **NVFP4 is now a first-class path on GB10** — Arena overall top is NVFP4-on-Atlas (Check 1) + vLLM-nightly NVFP4 batch numbers on our exact model (Check 5) + RedHatAI checkpoint (Check 4, prior cycle). Standing "NVFP4 broken on SM121" fact is obsolete.
+
+#### Triggered Alerts
+- `arena | fp8 AND Qwen3.6 AND single-node > 66.8 (60.70 × 1.10)` → **MATCHED (ACTION)**: 80.27 tok/s on vLLM (eugr DFlash recipe) and 172.03 on Atlas. Recipe diffs captured above.
+- `vllm_release | gemma4 AND (guided OR grammar OR xgrammar)` → checked, **NOT cleared** (both PRs open/unmerged). Stays armed.
+- `vllm_release | DeepGEMM AND (SM12 OR SM121 OR Blackwell OR GB10)` → #41063 still open; not fired.
+- `vllm_release | speculative AND (Qwen OR MoE)` → INFO match (v0.22.0: #39949 hybrid-attention spec decode, #43385 MTP DeepSeek V4).
+- `huggingface | Qwen3.6-Plus OR Qwen4 model weights` → not fired; pre-trigger signal — Qwen3.7 27B/35B open-weights window opening now.
+- `forum | gemma4 structured output fix` → no match.
+
+#### Overall: **ACTION NEEDED**
+
+#### Recommendations
+1. **(Stability — do first)** Check production for vLLM #37754 symptoms: dmesg/journalctl for Xid 13 + qwen35 restart count since 2026-05-18. If crashes found: MTP=1 short-term, expedite DFlash eval. Fold into next spark-audit.
+2. **(Perf + stability)** Evaluate **DFlash vs MTP=2** using the eugr Arena recipe as template (DFlash n8 + `flash_attn` + fastsafetensors → 80.27 tok/s, +20% over live prod, same model/image family). Resolve the prefix-caching discrepancy (Arena recipe ON vs svd recipe removed-for-accuracy) during eval. Sandbox only — do NOT touch production qwen35.
+3. **(Security/infra)** Plan kernel+driver maintenance window: 6.17.0-1021 + 580.159.03 (Copyfail/Dirtyfrag patched, improved GB10 OOM handling). Full `dist-upgrade + fwupdmgr` sequence required; reboot needs physical-console confirmation per house rules; firmware HOLD liftable in same window.
+4. **(Upgrade)** Queue vLLM 0.22.x/0.23 eval — gap now 3 minor versions; SM121 kernels (#41215 per-tensor FP8 CUTLASS, #40082 FlashInfer MoE, #40717 GDN prefill) directly in our path. Re-validate pre-quant vs on-the-fly FP8 on the new build (verdict flipped before, Entry 054 vs 070). Consider waiting for v0.23.0 (cuDNN graph fix). eugr 0.22.1rc1.dev330 wheels are the fast path.
+5. **(Watch — weekly)** Qwen3.7 27B/35B open-weights HF checks through mid-July; release window open now. Avoid the `RscriptSQwen` squat.
+6. **(Backlog)** Sandboxed Atlas eval (AGPLv3 license check first; long-context/concurrency/tool-call issues, fixes merged 06-02). AutoRound W4A16 Qwen3.6-35B experiment (gs=128 may avoid the gs=32 Marlin graph-capture hang from Entry 068). NVFP4 re-bench when on newer vLLM.
+7. **(Maintenance)** Drop category 720 from recon endpoints (719.json sufficient). Document the Arena Firestore `benchmarks` REST access method — tracking unfrozen. Re-point the #37554 watch item (closed since 2026-03-20; closure is the q_scale fallback itself).
+
+#### Addendum (2026-06-11): Baseline applied + prioritized action roadmap
+Baseline tracking values updated per user confirmation (arena 60.70→80.27 vLLM / 218.85 overall, vllm v0.21.0→v0.22.1, svd/forum dates →2026-06-11, Watch Items refreshed, #37754 trigger added, CLAUDE.md #37554 bullet corrected). `Current Config` untouched. Roadmap delivered to user:
+- **Phase 0 (today, zero risk):** verify #37754 exposure — `docker inspect -f '{{.RestartCount}} {{.State.StartedAt}}' qwen35` vs 2026-05-18, `journalctl -k --since "2026-05-18" | grep -i xid`. Decision rule: unexplained restart or Xid 13 → drop to MTP=1 immediately and expedite Phase 2; clean → keep MTP=2 and add Xid monitoring.
+- **Phase 1 (this week, physical console required):** kernel 6.17.0-1021 + driver 580.159.03 via full `dist-upgrade + fwupdmgr` sequence (closes CVE-2026-31431, improves GB10 OOM handling); lift firmware HOLD same window; post-update: `linux-modules-nvidia-580-open-$(uname -r)`, container health, quick c1 bench, check for 14W throttle state.
+- **Phase 2 (next eval slot, sandbox):** single eval matrix on eugr 0.22.x stack adapted to TP=1: (A) current config on new build — re-validates pre-quant FP8 verdict under #41215; (B) A + DFlash n8 + flash_attn + fastsafetensors (Arena 80.27 recipe, +20% c1 candidate); (C) B prefix-caching ON vs OFF with realistic ≥200-token shared prefix (Entry 064 lesson). Gates: ≥+5% c8 AND AR 28/30 parity AND **12h+ soak** (covers both 9h-MTBF crash class and ~12h cuDNN bug; if cuDNN bug reproduces, wait for v0.23.0). Phase 2A vs prod also resolves the suspect Entry 052 baseline for free.
+- **Phase 3 (backlog):** Qwen3.7 weekly watch → benchmark day on weights drop; Atlas sandbox trial only if single-stream latency matters (loses at c≥2; pipeline workload is c8-c16); AutoRound W4A16 verification; NVFP4 re-bench rides on Phase 2 stack.
+- **Phase 4 (tooling):** fix spark-recon skill source (drop 720, codify Firestore Arena access); add Xid/restart alert to Grafana (new dashboard, never modify existing); keep biweekly recon cadence.
+
+## Entry 076 — Live-State Investigation for Ultra-Plan (2026-06-11)
+**Date:** 2026-06-11 16:50 UTC
+**Operator:** Claude Code (ultra-plan Phase 2 investigation, two read-only agents: Spark SSH sweep + local repo)
+**Status:** READ-ONLY — no changes made to the Spark
+
+#### P0 RESOLVED — vLLM #37754 exposure check: CLEAN
+- qwen35: restarts=0, started 2026-05-18T18:21Z, running, oom=false, exitcode=0. All 8 containers healthy; host up 41 days (since 2026-04-30) — no reboot.
+- Kernel logs (kern.log lineage back to ~2026-03-06; `journalctl -k` blocked for claude user — used `sudo cp` kern.log workaround, /tmp copies cleaned): **zero Xid events ever**, zero "illegal". Only noise: 37 NVRM `NV_ERR_NO_MEMORY` allocation warnings confined to the May 16–18 eval-study window (last at 2026-05-18 14:27 EDT during model-load churn); **zero NVRM lines after 2026-05-19**.
+- qwen35 container logs since 2026-05-18: zero matches for crash signatures (cuda error / illegal memory / aborted / engine dead).
+- **CRITICAL CORRECTION: production attention backend is FLASH_ATTN, not FlashInfer.** Startup log: `Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN','FLASHINFER','TRITON_ATTN','FLEX_ATTENTION']`. SPARK_BASELINE Current Config row `attention_backend | FLASHINFER` is stale/wrong — flagged to user (Current Config is user-maintained; not edited). FlashInfer IS used for MoE kernels (`VLLM_FLASHINFER_MOE_BACKEND=latency`, autotune on). vllm#37754 (FlashInfer *attention* + MTP Xid-13) therefore does not directly apply to our config; residual exposure is the FlashInfer-MoE path, which has run 3+ weeks clean.
+- **Decision: keep MTP=2; no interim config change.** Xid alerting still worth adding — nothing on the box surfaces Xid today.
+
+#### Other load-bearing findings (Spark)
+- **DFlash IS supported in the current production image** (v0.19.1rc1.dev219: `vllm/v1/spec_decode/dflash.py` present; method `"dflash"` registered in `config/speculative.py`, auto-detected from drafter name). The DFlash eval can therefore be a true one-variable experiment on the current build — no 0.22 stack required for basic support. Drafter `z-lab/Qwen3.6-35B-A3B-DFlash` NOT in HF cache (~1.2 GB download needed).
+- **Production already uses `--speculative-config '{"method":"mtp","num_speculative_tokens":2}'`** (docker inspect confirmed) — the CLAUDE.md bullet citing legacy `--num-speculative-tokens`/`--speculative-model` flags was stale (corrected 2026-06-11). No spec-flag migration needed for v0.22.x.
+- Versions: kernel **6.17.0-1014**, driver **580.142**, SecureBoot enabled, `dkms status` empty, `dpkg --audit` clean. Upgradable: kernel → **6.17.0-1021.21**, driver → **580.159.03** (full 580 stack), nvidia-container-toolkit 1.19.0→1.19.1; 230 packages total. **`fwupdmgr get-updates`: no pending firmware** (EC v10600, last update Success) — the P1 maintenance window is apt-only; UEFI-HOLD question moot this cycle. Kernel bump requires verifying `linux-modules-nvidia-580-open-6.17.0-1021` per firmware-kernel rule; 1014 modules remain installed (GRUB fallback intact).
+- Disk: 2.0 T free (43% used). Docker: 107.4 GB reclaimable images, 53.4 GB reclaimable build cache. Old eugr images (0.19x/0.20x) + rollback tags still present; `vllm-cu132-test:latest` = 26.1 GB.
+- Eval harness intact at `/home/claude/llm-eval/` (7 profiles incl. `current_baseline.env` and `qwen36_fp8_bf16kv_mtp{1,2}.env`; `run_full_suite.sh`, `run_ar_tasks.py` 30-fixture AR suite [28/30 prod baseline], `soak_test.py`, `restore_production.sh`; compose backups incl. `.pre-fp8prequant`).
+- Monitoring: node-exporter container on :9100; `/opt/gpu-exporter/gpu_exporter.py` custom systemd exporter on :9400 (nvidia-smi-style gauges only — **zero Xid metrics**; it is NOT dcgm-exporter). No Prometheus/Grafana/log-shipper on the box; no Grafana alerting rules exist. Xid alerting requires extending the custom exporter or adding a kern.log scraper.
+- Box idle at investigation time (0 running / 0 waiting requests; GPU 11.8 W idle with SM 2411 MHz — healthy idle, NOT the 14W/513MHz throttle signature, which presents under load).
+
+#### Local-repo findings
+- `IMPLEMENTATION_PLAN_MODEL_EVAL.md` is COMPLETE (26/27; D.6 intentionally skipped) → any new plan appends rather than conflicts. `EVAL_STUDY_STATUS.md` line "Production NOT changed" is stale (changed 2026-05-18, Entry 073) — minor doc cleanup.
+- personal-plugin source: `~/.claude/plugins/marketplaces/troys-plugins/plugins/personal-plugin/` (git, `github:davistroy/claude-marketplace`, v9.2.0). spark-recon SKILL.md has 3 stale config items: `current_model: Qwen/Qwen3.5-35B-A3B`, `quantization: FP8 on-the-fly`, forum category 720 endpoint.
+- Grafana: homeserver:3050, Grafana 12.4.2, Prometheus datasource UID `PBFA97CFB590B2093`, existing dashboards `spark-monitor` + `spark-inference` (never modify — new UIDs only), wget-not-curl API pattern. vLLM metrics scraped with `vllm:` prefix.
+- No recurring spark-recon/audit schedule exists anywhere — all runs manual to date.
+

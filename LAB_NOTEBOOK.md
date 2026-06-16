@@ -6553,3 +6553,74 @@ Spot-check after qwen35 cold start (6 min) + 21-request warm-up, vs live spark-l
 **Conclusion: no kernel/driver perf regression.** c1 parity is the solid signal; c8 delta is methodology, not regression (shorter generations carry more per-request overhead; fewer runs). A full formal re-baseline (`run_full_suite`) can confirm c8 precisely in an idle window if desired. Also: c1 ~65 confirms the steady-state ~65-67 range — consistent with the long-standing observation that the Entry 052 "+10% firmware gain" (65.9) was not a durable step change.
 
 **PHASE 4 COMPLETE.** Kernel 6.17.0-1014→**6.17.0-1021** (Copyfail/Dirtyfrag CVE patched), driver 580.142→**580.159.03** (GB10 OOM-handling improvements). GPU functional under SecureBoot via Canonical-signed prebuilt module (DKMS/MOK trap avoided). All 8 containers healthy, production serving, routing intact, Xid=0. Firmware HOLD moot (no pending firmware). Remaining roadmap: Phase 5 (DFlash/0.22 eval — needs idle window) and Phase 6 (trigger-gated).
+
+---
+
+## Entry 079 — Phase 5 Arm B: DFlash n8 Eval (2026-06-16) — IN PROGRESS
+
+**Objective:** Evaluate DFlash speculative decoding (drafter `z-lab/Qwen3.6-35B-A3B-DFlash`, num_speculative_tokens=8) as a single-variable swap for production's MTP=2, under the Phase 5 gates (≥+5% c8 vs harness MTP baseline; AR ≥28/30; stable soak). **GATED/sandboxed; production stopped during eval, restored after.** Anchor: a FRESH harness MTP baseline on kernel 1021 (Entry 078's spot-check used a different methodology and is not comparable).
+
+**Idle confirmation:** GPU 0% / 11.7 W, zero `/v1` POSTs in the prior 15 min → safe to stop production.
+
+**Prep (zero production impact):**
+- Extended eval entrypoint `/home/claude/llm-eval/scripts/qwen35-entrypoint.sh` to support non-MTP spec methods via structured vars `LLM_SPEC_METHOD` / `LLM_SPEC_MODEL` (precedence over the legacy MTP `LLM_SPEC_TOKENS` path; backward compatible). Structured vars (not raw JSON) keep values quote-safe through the compose env-file. Backed up to `.bak-20260616`. **Eval-only** — production runs from the separate `/home/claude/docker-compose.yml`, untouched.
+- Created profiles `prod_mtp2_n2.env` (EXACT live-prod reproduction, verified vs `docker inspect qwen35`) and `qwen36_fp8_dflash_n8.env` (single-var diff: dflash n8).
+- Pre-downloaded the drafter (~1.2 GB, 7 files) into the root-owned HF cache via a throwaway container (no GPU). Model exists, ungated; arch `DFlashDraftModel`, `auto_map → dflash.DFlashDraftModel` (custom code → needs `--trust-remote-code`).
+
+**BUG CAUGHT + FIXED (reusable learning):** the eval compose `docker-compose.qwen35.yml` used `${LLM_QUANTIZATION:-fp8}` / `${LLM_KV_DTYPE:-fp8}` — the **colon-dash** form, which replaces a profile's *explicit empty* value with the default. So profiles that set `LLM_QUANTIZATION=` (intending "no flag", correct for the pre-quant model) silently got `--quantization fp8` injected. First DFlash launch resolved with a spurious `--quantization fp8` (does NOT match live production, which has no such flag). Killed the run ~90 s in (no measurements taken), changed the defaults to the **no-colon** form `${LLM_QUANTIZATION-}` / `${LLM_KV_DTYPE-auto}` and refreshed model/batched defaults to current pre-quant production, so "empty profile = current baseline" now holds. Relaunched; resolved command then matched live production exactly except the one variable. **Implication:** the May eval-study (Entries 069–073) ran its pre-quant profiles through this same compose, so those eval runs also carried a spurious `--quantization fp8`; production itself (deployed from the *other* compose) never did, so production is unaffected — but absolute eval-study throughput figures for pre-quant profiles were measured with that confound.
+
+**U-1 RESOLVED (DFlash boots on the current image):** `vllm-cu132-test:latest` (v0.19.1rc1.dev219+g72ff142c3) loads the DFlash drafter natively — `Resolved architecture: DFlashDraftModel`, `SpeculativeConfig(method='dflash', model='z-lab/Qwen3.6-35B-A3B-DFlash', num_spec_tokens=8)`, `trust_remote_code=True` accepted, no build upgrade needed (confirms Entry 076). Benign warning: "min_p and logit_bias won't work with speculative decoding." KV cache auto/BF16, prefix-caching off — matches production.
+
+**Resolved eval command (clean, single-variable vs prod):**
+`--model Qwen/Qwen3.6-35B-A3B-FP8 --max-model-len 131072 --gpu-memory-utilization 0.70 --max-num-batched-tokens 32768 --enable-auto-tool-choice --tool-call-parser qwen3_coder --language-model-only --reasoning-parser qwen3 --speculative-config {"method":"dflash","model":"z-lab/Qwen3.6-35B-A3B-DFlash","num_speculative_tokens":8} --trust-remote-code`
+
+**DFlash arm RESULTS** (`run_full_suite qwen36_fp8_dflash_n8 --abbreviated`, run_id 20260616_210900, kernel 1021, harness 600-tok ×3):
+
+| Concurrency | per-req tok/s | aggregate tok/s | vs Entry 073 prod (agg, OLD kernel) |
+|------------|---------------|-----------------|--------------------------------------|
+| c1  | **77.7** | 77.7  | **+16.1%** (66.9) |
+| c4  | 46.9 | 183.0 | −8.0% (198.9) |
+| c8  | 43.0 | **338.4** | **−20.9%** (427.7) |
+| c16 | 28.3 | 421.9 | −37.8% (678.7) |
+
+- **Cold start:** 401 s (≈ production). **AR: 28/30** (93.3%) ✓ — 2 content-match fails (ar1_01, ar2_04).
+- **Soak (30 min, c=4):** 1964 req, **100% success, 0 errors, 0 restarts, 0 mem-drift**, mean 3.31 s / p99 4.04 s — STABLE ✓.
+- **DFlash acceptance:** 262,158 accepted / 703,928 draft tokens = **37.2%** token acceptance; ≈**3.0 of 8** draft tokens accepted per draft. Per-position decay: p0 81.6%, p1 59.4%, p2 45.0%, p3 34.6%, p4 25.6%, p5 20.9%, p6 16.9%, p7 14.0%.
+
+**Provisional shape:** DFlash is a **single-stream latency optimizer** — big win at c1 (+16%), progressively worse as concurrency rises (c8 −21%, c16 −38%). At low concurrency, speculation fills idle compute; at high concurrency the GPU is already saturated and the 8-wide draft becomes pure overhead. The Phase 5 gate (≥+5% **c8**) looks like a clear miss, but the Entry-073 anchor predates the kernel bump AND the compose `--quantization` fix, so a fresh MTP baseline on the same stack is required for the gate-valid verdict.
+
+**Harness bug noted (pre-existing, non-blocking):** `throughput_bench.py --json` prepends human-readable lines to stdout, so `summary.json`'s throughput aggregation (which `json.load`s the file) is always empty. Raw numbers are intact in `throughput.json`'s header lines (used above). Affects all eval-study `summary.json` throughput sections equally; raw data unaffected.
+
+**MTP baseline RESULTS** (`run_full_suite prod_mtp2_n2 --abbreviated`, run_id 20260616_215141, kernel 1021, resolved command verified IDENTICAL to live production). **This is the authoritative harness re-baseline on kernel 1021 — supersedes Entry 078's ad-hoc spot-check and closes the Phase 4.4 "optional formal re-baseline" item:**
+
+| Concurrency | per-req tok/s | aggregate tok/s |
+|------------|---------------|-----------------|
+| c1  | 73.1 | 73.1 |
+| c4  | 46.9 | 186.7 |
+| c8  | 51.2 | 406.9 |
+| c16 | 45.7 | 730.5 |
+
+- **AR: 28/30** — SAME two failures (ar1_01, ar2_04) as DFlash → those are fixture/grading artifacts, NOT model differences. **DFlash quality == MTP quality.**
+- **Soak (30 min, c=4):** 1804 req, 100% success, 0 errors, 0 restarts, mean 3.86 s / p99 4.16 s.
+- **MTP acceptance:** 199,888 accepted / 250,334 draft tokens = **79.8%** token acceptance; 1.60 of 2 accepted/draft. (Contrast DFlash: 37.2% token acceptance but 4× wider draft — net loss under load.)
+
+### GATE-VALID HEAD-TO-HEAD (both arms, kernel 1021, fixed compose, harness 600-tok ×3)
+
+| Concurrency | MTP (prod) agg | DFlash agg | DFlash vs MTP |
+|------------|----------------|------------|----------------|
+| c1  | 73.1  | **77.7** | **+6.3%** |
+| c4  | 186.7 | 183.0 | −2.0% |
+| c8  | **406.9** | 338.4 | **−16.8%** |
+| c16 | **730.5** | 421.9 | **−42.2%** |
+
+### VERDICT: Arm B (DFlash n8) — REJECTED for production adoption
+
+**Phase 5.5 gates (ALL required):** (1) ≥+5% c8 vs baseline → **FAIL (−16.8%)**; (2) AR ≥28/30 → PASS (28/30, == MTP); (3) 12h soak → not run (moot — gate 1 fails; 30-min soak was clean). **Gate 1 fails by a wide margin → adoption rejected; 12h soak skipped.**
+
+**Root cause / shape:** DFlash is a **single-stream latency optimizer**, not a throughput one. It drafts 8 tokens and lands ~3 (37% acceptance); at c1 that speculation fills idle GPU for a genuine +6.3%, but at c8/c16 the GPU is already saturated with real batch tokens, so the wide draft is mostly wasted compute → −17%/−42%. MTP's narrow 2-wide draft at 79.8% acceptance is far better suited to a shared, concurrency-bearing endpoint.
+
+**Recommendation:** **Keep MTP=2 in production.** The modest +6% single-stream gain does not justify the severe concurrency penalty for a shared inference endpoint (pipeline + embeddings co-located + potential multi-consumer), nor the added complexity (custom drafter, `--trust-remote-code`, +1.2 GB). DFlash would only make sense if the workload were proven pure-c1 interactive — a separate decision the user can revisit.
+
+**Downstream Phase 5 arms:** B3 (DFlash + prefix-caching) is now moot — prefix caching addresses shared-prefix latency, not the batch-throughput penalty that sinks DFlash. The remaining *independent* candidate is **Arm C (eugr 0.22.1 build)**, which tests a newer vLLM BUILD (first SM121-native kernels) — orthogonal to the spec-decode method, and the real "+20% build" lead. Arm C needs single-node TP=1 adaptation (U-3, ~3h) and carries the ~12h cuDNN graph-corruption risk; deferred to a user-approved window.
+
+**Production restored** via `restore_production.sh` after the measurement window (~1.5h downtime, all idle). Eval artifacts: `results/qwen36_fp8_dflash_n8_20260616_210900/`, `results/prod_mtp2_n2_20260616_215141/`. Harness changes (entrypoint spec-method support, compose `:-`→`-` fix) retained for future arms; backups at `*.bak-20260616`.

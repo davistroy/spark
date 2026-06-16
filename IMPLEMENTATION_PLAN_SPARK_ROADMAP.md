@@ -249,12 +249,14 @@ phase_overrides:
 **Pre-req findings (Entry 076):** DFlash supported in the current image (no build upgrade needed for Arm B); drafter `z-lab/Qwen3.6-35B-A3B-DFlash` NOT cached (~1.2 GB download); harness + profiles + `restore_production.sh` intact; eugr 0.19x/0.20x images present, 0.22 needs adapting to single-node TP=1. Depends On: Phase 4 (evals run on post-update kernel, anchored to Entry 078).
 
 ### 5.1 Arm B — DFlash n8 on current build (one variable)
-**Status:** PENDING · **Execution Mode:** GATED · **Depends On:** 4.4
+**Status:** ✅ COMPLETE 2026-06-16 — **REJECTED** (Entry 079). Gate-valid head-to-head vs fresh MTP re-baseline (kernel 1021): c1 **+6.3%** (77.7 vs 73.1) but c8 **−16.8%** (338.4 vs 406.9), c16 **−42.2%**. AR 28/30 (== MTP, quality parity); 30-min soak clean (0 err/restart). Fails the ≥+5% c8 gate decisively → 12h soak skipped (moot). DFlash is a single-stream latency optimizer (37% accept on 8-wide draft); wrong fit for a shared concurrency-bearing endpoint. **Keep MTP=2.** Harness gained `LLM_SPEC_METHOD`/`LLM_SPEC_MODEL` support + a compose `:-`→`-` quant-default fix (see Entry 079).
+**Status (orig):** PENDING · **Execution Mode:** GATED · **Depends On:** 4.4
 **Tasks:** new profile `qwen36_fp8_dflash_n8.env`, sole diff vs `current_baseline.env`: `--speculative-config '{"method":"dflash","model":"z-lab/Qwen3.6-35B-A3B-DFlash","num_speculative_tokens":8}'` (revision-pinned). smoke → throughput → AR 30 → 1h soak; promising → 12h soak.
 **Acceptance Criteria:** throughput vs Entry 078; AR ≥28/30; DFlash acceptance recorded; zero Xid/restart in soak.
 
 ### 5.2 Arm B3 — Arm B + prefix caching (resolve the ON/OFF discrepancy)
-**Status:** PENDING · **Execution Mode:** GATED · **Depends On:** 5.1
+**Status:** ⊘ MOOT 2026-06-16 — builds on DFlash (Arm B), which was rejected. Prefix caching addresses shared-prefix latency, not the batch-throughput penalty (−17% c8 / −42% c16) that sinks DFlash; it cannot recover the gate. Skipped. (Prefix-caching's accuracy question, if still wanted, can be folded into Arm C on the MTP config.)
+**Status (orig):** PENDING · **Execution Mode:** GATED · **Depends On:** 5.1
 **Tasks:** add `--enable-prefix-caching`; re-run AR + a ≥200-token shared-prefix accuracy probe (Arena recipe ON vs eugr-removed-for-accuracy).
 **Acceptance Criteria:** prefix-caching accuracy impact quantified; keep ON only if AR holds.
 

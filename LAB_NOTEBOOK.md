@@ -6553,3 +6553,57 @@ Spot-check after qwen35 cold start (6 min) + 21-request warm-up, vs live spark-l
 **Conclusion: no kernel/driver perf regression.** c1 parity is the solid signal; c8 delta is methodology, not regression (shorter generations carry more per-request overhead; fewer runs). A full formal re-baseline (`run_full_suite`) can confirm c8 precisely in an idle window if desired. Also: c1 ~65 confirms the steady-state ~65-67 range — consistent with the long-standing observation that the Entry 052 "+10% firmware gain" (65.9) was not a durable step change.
 
 **PHASE 4 COMPLETE.** Kernel 6.17.0-1014→**6.17.0-1021** (Copyfail/Dirtyfrag CVE patched), driver 580.142→**580.159.03** (GB10 OOM-handling improvements). GPU functional under SecureBoot via Canonical-signed prebuilt module (DKMS/MOK trap avoided). All 8 containers healthy, production serving, routing intact, Xid=0. Firmware HOLD moot (no pending firmware). Remaining roadmap: Phase 5 (DFlash/0.22 eval — needs idle window) and Phase 6 (trigger-gated).
+
+## Entry 079 — DGX Spark Recon (2026-06-16)
+**Date:** 2026-06-16
+**Operator:** Claude Code (scheduled daily recon — report-only, no hardware access)
+**Status:** WORTH WATCHING — vLLM v0.23.0 released (the target upgrade version); eugr wheels already on v0.23.x same day; DFlash+FP8-KV support added. Gemma4 PRs still blocked; Qwen3.7 open weights still absent; Arena data partially inaccessible.
+
+### Check 1 — Arena (spark-arena.com / Firestore benchmarks)
+Firestore REST (`/documents/benchmarks?pageSize=100`) returned only 2 documents, both GPT-OSS 120B MXFP4 (single-node 58.82 tok/s c1, two-node 109.19 tok/s c2). No Qwen3.6-35B-A3B FP8 or Atlas entries visible in this response — likely a page offset or collection ordering issue, not a data loss. Prior baseline values (arena_top_fp8_qwen35_tok_s=80.27 vLLM, arena_top_overall_tok_s=218.85 Atlas) UNCHANGED — cannot confirm movement without full collection scan. Forum WebSearch surfaces NVFP4 97 tok/s single / 322 tok/s c8 decode-only (llmrequirements.com, June 3, pre-recon window) as community benchmark.
+
+### Check 2 — vLLM releases (github.com/vllm-project/vllm)
+**NEW: v0.23.0 released June 15, 2026** — one day before this recon; 408 commits, 200 contributors. Release highlights: DeepSeek-V4 hardening, Model Runner V2 now default for Llama/Mistral dense, Gemma 4 Unified encoder-free, multi-tier KV cache offloading, "breakable CUDA graphs," prefix-cache corruption remedies, Rust frontend expansion. **No explicit SM121/GB10/cuDNN text found in release notes** — expected cuDNN graph-corruption fix not confirmed from available notes (the "breakable CUDA graphs" feature may be related but unconfirmed). GitHub API returned HTTP 403 (rate-limited without auth token); release date verified via GitHub HTML + newreleases.io.
+
+- **PR #39138** (Gemma4 xgrammar bypass): **STILL OPEN** — Mergify added `needs-rebase` label June 15; author acknowledged rebase needed but not yet done as of June 15.
+- **PR #40099** (Gemma4 repetition loop fix): **STILL OPEN** — awaiting review from multiple code owners; no merge date.
+- **Issue #41063** (DeepGEMM SM12.x kernel gaps): **STILL OPEN** — tracking issue, no progress comment visible.
+- **New issue observed:** #45317 — DSA models (GLM-5.1 / DeepSeek-V3.2-family, `use_sparse=True`) cannot select any attention backend on SM121 (GB10 / DGX Spark). Informational; not our current model family.
+
+### Check 3 — eugr/spark-vllm-docker
+**Major jump since 2026-06-11:** wheels rebuilt twice since last check.
+- June 14: vLLM 0.22.1rc1.dev511 (last known build)
+- **June 16 (today): vLLM 0.23.1rc1.dev53+gc69c73418.d20260616** — eugr ALREADY tracking v0.23.x base, same day as v0.23.0 stable. FlashInfer 0.6.13-38feb62b (June 15, stable).
+- **New capability: DFlash + FlashInfer FP8 KV Cache** — eugr added a recipe option enabling DFlash inference without the BF16 KV memory overhead. This directly addresses the KV-budget concern for the DFlash eval (BF16 KV reduces token budget 55% vs FP8 KV). Significant for the queued DFlash eval.
+- Note: spark-arena/sparkrun issue #164 reports "eugr builder rebuild path on `:latest` produces image without flashinfer" — may affect DFlash+FlashInfer testing; verify image has FlashInfer before eval.
+
+### Check 4 — Qwen HuggingFace models
+**No Qwen3.7 open weights as of 2026-06-16.** Qwen3.7-Max (API-only, announced May 19-20) and Qwen3.7-Plus remain closed-weight. Wikipedia confirms Qwen3.7-Max/Plus released May 18, no open weights for either. Historical pattern: Qwen3.6 API→weights lag ~4 weeks, putting expected window June–July. No Qwen4 announced. Watch continues at weekly frequency. No HF name-squats of note beyond previously flagged `RscriptSQwen`.
+
+### Check 5 — NVIDIA forum (category 719)
+Category 719.json endpoint returned HTTP 403 (blocked in this execution environment; not a permanent change — was accessible in prior runs via different tooling). WebSearch fallback: identified new NVIDIA announcement "DGX Spark Software Updates - June 2026 Release" (/t/371965, fetched 403); content not retrieved. Atlas thread still active (page 7+, 403). Category 723 (`dgx-spark-gb10-projects`) observed in search results as a URL path — may be the replacement/successor to removed category 720; flag for endpoint list review. No new driver/firmware/crash findings accessible this run.
+
+### Cross-Correlated Findings
+1. **vLLM v0.23.0 stable (Check 2) + eugr already on 0.23.x wheels today (Check 3):** Two-source confirmation that the v0.23.x upgrade path is NOW LIVE. This is the target version from the baseline Watch Item ("consider targeting v0.23.0"). The queued DFlash/vLLM eval can now use eugr 0.23.x + DFlash+FP8-KV recipe in a single experiment — no need to wait further.
+2. **DFlash+FP8-KV new in eugr (Check 3) + BF16 KV budget concern in baseline:** eugr's new DFlash recipe with FP8 KV directly answers the KV-budget limitation (BF16 KV is -55% token capacity vs FP8 KV). The DFlash eval can now test the full configuration without the KV regression.
+
+### Triggered Alerts
+- **No Recon Triggers formally hit:** Both Gemma4 PRs still open (not merged), DeepGEMM #41063 still open, Arena data insufficient to compare vs baseline, no #37754 fix confirmed in v0.23.0 notes.
+- **Watch Item escalation:** "vLLM 0.22.x/0.23 upgrade eval queued" — upgrade path is now executable (v0.23.0 stable + eugr 0.23.x wheels today + DFlash+FP8-KV available). No further waiting criteria.
+
+### Overall Classification: WORTH WATCHING
+No production action required, no emergency. However, the DFlash/vLLM upgrade evaluation previously queued as ACTION is **now ready to execute** — all gating conditions met (v0.23.0 stable, eugr wheels live, DFlash+FP8-KV available). Schedule the Phase 5 eval window.
+
+### Recommendations
+1. **Schedule Phase 5 DFlash/vLLM upgrade eval** — all blockers resolved: v0.23.0 stable (Jun 15), eugr 0.23.1rc1.dev53 wheels live (today). Use eugr image with DFlash+FP8-KV recipe (vs current cu132+MTP=2). Verify sparkrun issue #164 (FlashInfer missing from rebuild) before starting. Sandbox only — do NOT touch production qwen35.
+2. **Confirm cuDNN graph-corruption fix in v0.23.0** — release notes do not explicitly call it out; verify by running the 30-min soak test under the new build. If the ~12h bug is fixed, v0.23.0 becomes a stronger upgrade candidate vs current v0.19.1rc1.dev219.
+3. **Gemma4 PRs still blocked** — #39138 needs author rebase (stalled since Jun 13); #40099 needs code-owner review. Both required before Gemma 4 experiment. No action — passive watch.
+4. **Qwen3.7 open weights: weekly watch continues.** June window still open per historical pattern; no new data.
+5. **Forum category 723** — check if this is now the replacement projects sub-category for removed 720; update recon skill endpoint list if confirmed.
+6. **Arena data gap** — next run should try Firestore with explicit `orderBy` or `startAt` pagination to retrieve Qwen3.6 FP8 entries. The benchmarks collection may have sorted GPT-OSS to top.
+
+### Tracking Value Updates (applied to SPARK_BASELINE.md)
+- `vllm_last_checked_version`: v0.22.1 → **v0.23.0** (2026-06-15)
+- `svd_last_checked_date`: 2026-06-11 → **2026-06-16** (eugr at v0.23.1rc1.dev53+FlashInfer 0.6.13)
+- `forum_last_checked_date`: 2026-06-11 → **2026-06-16** (partial — 719.json 403; WebSearch only)
+- `gemma4_pr_status`: dates updated (both still open; #39138 needs-rebase Jun 15)

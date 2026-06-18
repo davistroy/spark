@@ -6678,3 +6678,50 @@ No production action required, no emergency. However, the DFlash/vLLM upgrade ev
 **Downstream Phase 5 arms:** B3 (DFlash + prefix-caching) is now moot — prefix caching addresses shared-prefix latency, not the batch-throughput penalty that sinks DFlash. The remaining *independent* candidate is **Arm C (eugr 0.22.1 build)**, which tests a newer vLLM BUILD (first SM121-native kernels) — orthogonal to the spec-decode method, and the real "+20% build" lead. Arm C needs single-node TP=1 adaptation (U-3, ~3h) and carries the ~12h cuDNN graph-corruption risk; deferred to a user-approved window.
 
 **Production restored** via `restore_production.sh` after the measurement window (~1.5h downtime, all idle). Eval artifacts: `results/qwen36_fp8_dflash_n8_20260616_210900/`, `results/prod_mtp2_n2_20260616_215141/`. Harness changes (entrypoint spec-method support, compose `:-`→`-` fix) retained for future arms; backups at `*.bak-20260616`.
+
+---
+
+## Entry 081 - DGX Spark Recon (2026-06-18)
+
+**Overall: WORTH WATCHING**
+
+**Production context:** Qwen/Qwen3.6-35B-A3B-FP8 (pre-quant), vLLM v0.19.1rc1.dev219+cu132, MTP=2, FLASH_ATTN backend, kernel 1021. Current re-baselined c1=73.1 tok/s, c8 agg=406.9, c16 agg=730.5 (Entry 080).
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST API returned `{}` (unauthenticated; no API key in this session — same blockage as last run). WebSearch fallback: @spark_arena tweet references 130 tok/s at c=10 (100K context) for Qwen3.6-35B-A3B-FP8 on vLLM — not comparable to tg128 c1 baseline. Community benchmarks show NVFP4+MTP-3 on vLLM reaching 97 tok/s c1, 322 tok/s c8 (llmrequirements.com, June 3, 2026 — technigmaai/dgx-spark recipe, FlashInfer attention, CUTLASS-FP4 MoE, vLLM v0.23.x). Arena FP8 c1 tracking: **inconclusive** — no direct Firestore confirmation; 80.27 baseline held unchanged. NVFP4 is a different quant track, not covered by the FP8 trigger rule. Top overall: Atlas at ~120 tok/s NVFP4 (consistent with prior data from Entry 075).
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15, 2026) is still the latest stable; **no v0.24.0.** v0.23.0 highlights for SM121: FlashInfer b12x MoE + **FP4 GEMM for SM120/121**, per-tensor FP8 CUTLASS on SM12.1, Causal DFlash spec-decode, Gemma4 MTP + encoder-free Unified. PRs **#39138 STILL OPEN** (needs-rebase, xgrammar bypass for Gemma4) and **#40099 STILL OPEN** (repetition-loop fix) — Gemma4 structured output remains blocked. Issue **#41063 STILL OPEN** (DeepGEMM SM12x dispatch gaps). No SM121-specific fix or cuDNN graph-corruption confirmation in release notes text.
+
+**Check 3 — eugr/spark-vllm-docker:** New wheels released June 17, 2026: vLLM **0.23.1rc1.dev129+g2a47a9ff0.d20260617** (+76 dev commits vs dev53 checked 2026-06-16), FlashInfer **0.6.13-d8f1dcbd-d20260617** (same minor version, refreshed build). PR **#279** (DFlash + FlashInfer FP8 KV cache: ~2× efficiency claim, eliminates BF16 KV memory penalty) still OPEN. **--load-format instanttensor** added as experimental option (faster than fastsafetensors); **issue #211** documents instanttensor+DFlash crash — do not combine until resolved.
+
+**Check 4 — Qwen models:** **No Qwen3.7 open weights released** as of mid-June 2026. The predicted June release window (based on 3.6 → 3.7 lag pattern) has now passed. Qwen3.7-Max (announced 2026-05-20) remains API-only on DashScope; no HF repo under official Qwen org. Qwen3.7-Plus (API, June 1) also closed. No Qwen4 announcement. `Qwen/Qwen3-Coder-Next` visible on HF (already tracked). Watch extended to mid-July.
+
+**Check 5 — NVIDIA forum:** **NVIDIA DGX Spark Software Updates — June 2026 Release** (/t/371965, announced ~June 2): NVIDIA officially ships NVFP4 quantized checkpoint for Qwen3.6-35B co-developed with vLLM team; claims **2.6× throughput vs FP8** (baseline is FP8 without MTP; community vs our FP8+MTP2 is +33% c1, −21% c8). Multi-node Cluster Assistant for 2–4 nodes now in NVIDIA Sync app. Community thread /t/372623 "What is actually new in the June Software Release?" scrutinizes claims. Avarok Atlas blog: NVFP4 ~42 tok/s without spec-decode, ~67 tok/s average with MTP. No new driver/firmware/crash/OOM reports since June 16.
+
+### Cross-correlated findings
+
+1. **NVFP4 + MTP on single-node vLLM SM121 — HIGH CONFIDENCE (Checks 2+3+5+community):** v0.23.0 FP4 GEMM for SM120/121 is the enabling kernel. NVIDIA officially endorses and ships checkpoint. Community numbers (June 3-9): 97 tok/s c1, 322 tok/s c8 agg on vLLM+MTP-3. vs our FP8+MTP-2 baseline (Entry 080): **c1 +32.7%** (73.1→97), **c8 −20.9%** (406.9→322). Same latency-vs-throughput tradeoff shape as DFlash: wins at c1, loses at c8+. The 2.6× NVIDIA claim compares vs older FP8-without-MTP (~37–50 tok/s era), not vs our current baseline. NVFP4 now has multiple confirmed SM121 recipes (eugr, technigmaai, RedHatAI checkpoint, NVIDIA-official).
+
+2. **Gemma4 structured output — STILL BLOCKED (Checks 2+5 consistent):** PRs #39138 (needs-rebase) and #40099 still open — no change since Entry 079. No new forum findings indicating imminent merge.
+
+3. **DeepGEMM SM12x — STILL BLOCKED (Check 2 re-confirmed):** Issue #41063 open, kernel dispatch gaps documented, no timeline.
+
+### Triggered alerts
+
+None from the formal trigger table:
+- Arena FP8 c1 >baseline×1.10: Firestore blocked; NVFP4 ≠ FP8 so trigger does not apply
+- DeepGEMM SM12x: #41063 still open (no change)
+- Gemma4 structured output: #39138 + #40099 both still open (no change)
+- Qwen3.7 open weights: not released (no change)
+- vLLM #37754 FlashInfer+MTP fix: nothing in v0.23.0 release notes (no change)
+
+Informational signal: NVIDIA June 2026 update + NVFP4 community benchmarks represent the strongest single-session signal since the DFlash eval (Entry 080). NVFP4 is now officially backed with a co-developed checkpoint — this elevates it above a "community experiment" but the concurrency penalty keeps it in WORTH WATCHING rather than ACTION for a shared endpoint.
+
+### Recommendations
+
+1. **Schedule vLLM 0.23.x upgrade eval (Arm C) with NVFP4 as Arm D.** The upgrade eval gating conditions were met as of Entry 079. Now add Arm D: `RedHatAI/Qwen3.6-35B-A3B-NVFP4` or NVIDIA-co-developed checkpoint + MTP-3 on the eugr 0.23.1rc1.dev129 image. Expected Arm D shape: +33% c1, −21% c8 vs current FP8+MTP2 — same tradeoff as DFlash, but c1 gain is larger (+33% vs +6%). Gate criterion same as other arms: ≥+5% c8 AND quality holds.
+2. **DFlash + FP8 KV (eugr PR #279):** Still open; when merged into 0.23.x wheels, re-evaluate DFlash with proper FP8 KV cache (eliminates the −55% KV token budget concern from Entry 073). Currently blocked on PR merge.
+3. **instanttensor:** Safe to test with FP8 recipes (not with DFlash — issue #211). Can shorten cold-start during eval window.
+4. **Qwen3.7 open weights:** Watch continues through mid-July. If no release by 2026-07-16, the gap suggests Qwen is shifting to closed-weight-first model for new generations — update watch item accordingly.
+5. **Arena Firestore:** Remains blocked without the JS-embedded API key. Plan to extract key from site JS bundle during a session with a Spark-hosted browser, or accept the WebSearch-fallback degraded mode for Arena tracking.

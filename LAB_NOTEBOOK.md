@@ -6725,3 +6725,45 @@ Informational signal: NVIDIA June 2026 update + NVFP4 community benchmarks repre
 3. **instanttensor:** Safe to test with FP8 recipes (not with DFlash — issue #211). Can shorten cold-start during eval window.
 4. **Qwen3.7 open weights:** Watch continues through mid-July. If no release by 2026-07-16, the gap suggests Qwen is shifting to closed-weight-first model for new generations — update watch item accordingly.
 5. **Arena Firestore:** Remains blocked without the JS-embedded API key. Plan to extract key from site JS bundle during a session with a Spark-hosted browser, or accept the WebSearch-fallback degraded mode for Arena tracking.
+
+---
+
+## Entry 082 - DGX Spark Recon (2026-06-19)
+
+**Overall: WORTH WATCHING**
+
+**Production context:** Qwen/Qwen3.6-35B-A3B-FP8 (pre-quant), vLLM v0.19.1rc1.dev219+cu132, MTP=2, FLASH_ATTN backend, kernel 1021. Re-baselined c1=73.1 tok/s, c8 agg=406.9, c16 agg=730.5 (Entry 080).
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST still returns `{}` (no API key available in remote execution env — same blockage as Entry 081). WebSearch: @spark_arena tweet cites 130 tok/s at c=10 with 100K cached context — different benchmark metric, not tg128 c=1, not comparable to the FP8 trigger baseline. No new FP8 vLLM tg128 c=1 data identified. **Arena FP8 tg128 c=1 baseline held at 80.27 (trigger threshold 88.3 unconfirmed).** Top-overall NVFP4 on Atlas (~120+ tok/s c=1) consistent with prior entries.
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15, 2026) still latest stable; **no v0.23.1 or v0.24.x released.** NVIDIA container **release 26.05** (June 2026) is a separate NVIDIA-packaged distribution — not upstream vLLM — and requires **driver 595.58+**; does not apply to our custom eugr cu132 image. PR **#39138** STILL OPEN: active merge conflict flagged June 15; last activity June 16 (automated project assignment). PR **#40099** STILL OPEN: last substantial activity June 9 (cherry-picked by another repo). Issue **#41063** (DeepGEMM SM12x coverage gaps) STILL OPEN; companion PR **#41834** (Triton-based fallbacks for DeepSeek V4 Flash on SM12x) also OPEN, rebased onto main June 18. Gemma4 structured output remains blocked on both PRs.
+
+**Check 3 — eugr/spark-vllm-docker:** No new wheel builds since June 17 (vLLM 0.23.1rc1.dev129 + FlashInfer 0.6.13 unchanged). Recent repo commits include: (a) default **`gpu_memory_utilization` raised 0.7→0.8** across single-node and two-node recipes; (b) CUDA base changed to `nvidia/cuda:13.0.2-devel-ubuntu24.04`; (c) MiniMax QK RMSNorm CUDA IPC fused path disabled (patches vLLM PR #43410). PR **#279** (DFlash + FlashInfer FP8 KV cache) still OPEN — not yet in wheels.
+
+**Check 4 — Qwen models:** **Qwen3.7 27B/35B open weights NOT released** as of June 19, 2026. Qwen3.7-Max (API-only, May 18) and Qwen3.7-Plus (API-only, June 1) remain closed-weight; no HF repo under official Qwen org for 3.7 open variants. **No Qwen4 announcement.** No new A3B-class ~30–40B MoE models from other labs identified. Watch extends to 2026-07-16.
+
+**Check 5 — NVIDIA forum:** 719.json returns 403 (WebSearch fallback). Driver **595.45.04** + **CUDA 13.2** confirmed landed in cuda-compute-repo but community-flagged as **beta — not for production DGX OS**; consistent with prior guidance. Forum thread /t/366060 documents `gpu_memory_utilization >0.80` causing system hangs on DGX Spark unified memory architecture (corroborates eugr's new 0.80 recipe default). No new driver/firmware/crash/OOM reports since June 18.
+
+### Cross-correlated findings
+
+1. **eugr gpu_memory_utilization 0.7→0.8 + forum hang warning at >0.8 (Checks 3 & 5 — moderate confidence):** eugr recipes now default to 0.80; forum thread confirms >0.80 causes system hangs on DGX Spark. Our production uses 0.70 (set 2026-04-24). Moving to 0.80 during Arm C eval would increase KV cache budget ~14% (BF16 KV: estimated 576K vs current 504K tokens) at cost of tighter unified-memory headroom. **Arm C eval note:** use 0.80 as ceiling, require clean soak test at 0.80 before any production adoption.
+
+2. **Gemma4 structured output still blocked (Checks 2 & 5 consistent):** PR #39138 has an active merge conflict (unfavourable for imminent merge); PR #40099 awaiting multiple code-owner approvals. No merge signal within this cycle. Gemma4 experiment gate remains closed.
+
+3. **DeepGEMM SM12x still blocked (Check 2 — #41063 open, PR #41834 open June 18):** The Triton-fallback route (PR #41834) is active but unmerged and targets DeepSeek V4 Flash specifically, not Qwen MoE. No DeepGEMM-on-GB10 timeline visible.
+
+4. **Qwen3.7 open-weight window still open (Checks 1 & 4 consistent):** No HF repo under official Qwen org. Pattern now consistent with a closed-weight-first rollout strategy similar to Qwen3.6-Plus and 3.7-Max.
+
+### Triggered alerts
+
+None from the formal trigger table. No Arena FP8 tg128 c=1 data exceeding 88.3 tok/s (Firestore blocked). No Gemma4 PR merge. No DeepGEMM fix landed. No Qwen3.7 open weights. No vLLM #37754 fix.
+
+### Recommendations
+
+1. **Arm C eval: use gpu_memory_utilization=0.80 as eval parameter (not production default).** eugr now defaults to 0.80; forum confirms 0.80 is the safe ceiling on DGX Spark unified memory. Validate with 30-min soak before any production adoption. Do not exceed 0.80.
+2. **Do not upgrade to driver 595.45.04 / CUDA 13.2.** Still beta in cuda-compute-repo; NVIDIA container release 26.05 (which requires 595.58+) is a different distribution stack from our eugr cu132 image. No performance benefit on our stack without a full stack upgrade.
+3. **Gemma4 experiment remains gated.** PR #39138 now has an active merge conflict — re-confirm state next recon before scheduling the experiment.
+4. **Qwen3.7 watch:** Continue weekly through 2026-07-16. If no open-weight release by that date, update Watch Item to reflect closed-weight-first hypothesis for new Qwen generations.
+5. **Arena Firestore:** Blocked as before. No action.

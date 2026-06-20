@@ -6767,3 +6767,45 @@ None from the formal trigger table. No Arena FP8 tg128 c=1 data exceeding 88.3 t
 3. **Gemma4 experiment remains gated.** PR #39138 now has an active merge conflict — re-confirm state next recon before scheduling the experiment.
 4. **Qwen3.7 watch:** Continue weekly through 2026-07-16. If no open-weight release by that date, update Watch Item to reflect closed-weight-first hypothesis for new Qwen generations.
 5. **Arena Firestore:** Blocked as before. No action.
+
+---
+
+## Entry 083 - DGX Spark Recon (2026-06-20)
+
+**Overall: WORTH WATCHING**
+
+**Production context:** Qwen/Qwen3.6-35B-A3B-FP8 (pre-quant), vLLM v0.19.1rc1.dev219+cu132, MTP=2, FLASH_ATTN backend, kernel 1021. Re-baselined c1=73.1 tok/s, c8 agg=406.9, c16 agg=730.5 (Entry 080).
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection, unauthenticated) returns only GPT-OSS-120B MXFP4 entries in first page: single-node 58.82 tok/s (sub1770622524960), dual-node 75.96 tok/s (sub1770681883769). No Qwen3.6-35B-A3B-FP8 vLLM tg128 c=1 entries visible without API key — pagination shows most-recently-submitted docs. **Arena FP8 Qwen3.6 c=1 baseline held at 80.27 (trigger threshold 88.3 unconfirmed).** No new confirmed above-threshold FP8 vLLM result. Top-overall NVFP4 on Atlas consistent with prior entries (~120+ tok/s c=1).
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15, 2026) still latest stable; **no v0.23.1 or v0.24.x released.** PR **#39138** STILL OPEN (needs-rebase label; last activity June 16 — automated project assignment, no code progress). PR **#40099** STILL OPEN (last substantial code activity April 22; awaiting multiple code-owner approvals). Issue **#41063** (DeepGEMM SM12x coverage gaps) STILL OPEN (last activity May 30). No new SM121/GB10-specific fixes in any vLLM stable release.
+
+**Check 3 — eugr/spark-vllm-docker:** **New wheel rebuild today (June 20, 2026):** vLLM **0.23.1rc1.dev207+gdced29076.d20260620** (up from dev129 June 17, +78 upstream dev commits). FlashInfer **0.6.13-9c5ed7c1-d20260618** (refreshed build June 18, same minor version). Notable recent commits: (a) June 19 — eugr **added PR #41834** (DeepSeek V4 Flash SM12x Triton fallbacks) to the Dockerfile build process and **rolled it back the same day**, indicating #41834 not yet stable for the production image; (b) June 18 — "Qwen recipes updates" (minor recipe maintenance); (c) June 17 — fixed issue #294 (AutoRound chat template path error for Qwen3.5-397B-INT4-AutoRound recipe). PR **#279** (DFlash + FlashInfer FP8 KV cache) still OPEN.
+
+**Check 4 — Qwen models:** **No Qwen3.7 open weights released** as of June 20, 2026. The predicted June release window has now fully passed. Qwen3.7-Max (API-only, May 19) and Qwen3.7-Plus (API-only, June 1) remain closed-weight; no HF repo under official Qwen org for 3.7 open variants. **No Qwen4 announcement.** `Qwen/WebWorld-{8B,14B,32B}` models released May 11, 2026 are web-world simulation models for training browser agents — NOT general-purpose inference models and irrelevant to production use. No new A3B-class ~30–40B MoE models from other labs identified. Watch extends to 2026-07-16.
+
+**Check 5 — NVIDIA Forum:** 719.json returns 403 (WebSearch fallback, same as prior runs). Forum thread /t/371812 "Next version of DGX Spark is here: It is a notebook" references **RTX Spark** — new consumer laptop/notebook product line announced at Computex 2026 (starting $2,899, Fall 2026), distinct from the DGX Spark professional workstation; NOT a GB10 successor. No new driver/firmware/crash/OOM/perf reports since June 19. Driver 595.45.04 + CUDA 13.2 still beta; not for production.
+
+### Cross-correlated findings
+
+1. **eugr dev129→dev207 today + DeepSeek PR #41834 add/revert (Checks 2 & 3 — moderate confidence):** The +78 dev commits in today's wheel rebuild are upstream vLLM 0.23.x branch activity. The same-day #41834 add-and-revert by eugr signals that the Triton SM12x fallback patch is still unstable in a Docker build context — consistent with Issue #41063 still open. dev207 is the freshest target for Arm C eval.
+
+2. **Qwen3.7 open-weight window fully lapsed (Check 4 — building conviction):** June 20 is past the predicted window based on Qwen3.6 API→weights lag. Three Qwen3.x releases (3.6-Plus, 3.7-Max, 3.7-Plus) have all debuted API-only. Pattern now strongly consistent with a closed-weight-first strategy for new Qwen generations post-3.6.
+
+3. **Gemma4 structured output blocked (Check 2 — consistent with prior):** PR #39138 needs-rebase with no code progress since June 15; PR #40099 awaiting approvals since April. Gate remains closed.
+
+4. **Arena FP8 baseline inconclusive (Check 1 — same as prior runs):** Firestore unauthenticated returns only GPT-OSS-120B submissions. No new FP8 Qwen3.6 result confirmed or denied.
+
+### Triggered alerts
+
+None from the formal trigger table. No Arena FP8 tg128 c=1 result >88.3 confirmed. No Gemma4 PR merge. No DeepGEMM SM12x fix. No Qwen3.7 open weights. No vLLM #37754 upstream fix. No new vLLM stable release.
+
+### Recommendations
+
+1. **Arm C eval target: use today's dev207 wheel.** The June 20 build is the freshest eugr wheel (+78 commits vs dev129). Schedule Arm C (eugr 0.23.x + current FP8 model, gpu_mem_util=0.80 eval parameter) when a sandbox window opens; Arm D (NVFP4 + MTP-3) can follow in the same window.
+2. **Do not incorporate PR #41834 in any build.** eugr's same-day add/revert confirms instability; wait for it to merge into mainline vLLM.
+3. **Qwen3.7 watch:** If no open-weight release by 2026-07-16, update Watch Item to reflect closed-weight-first hypothesis as a working conclusion. Shift attention to Qwen4 and other A3B-class entrants.
+4. **Gemma4 experiment gate:** PR #39138 needs-rebase with no code progress — low probability of merge this week. Re-confirm state next recon.
+5. **Arena Firestore:** Blocked in remote env without the JS-embedded API key. Continue WebSearch-fallback mode.

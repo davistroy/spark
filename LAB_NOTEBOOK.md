@@ -6809,3 +6809,42 @@ None from the formal trigger table. No Arena FP8 tg128 c=1 result >88.3 confirme
 3. **Qwen3.7 watch:** If no open-weight release by 2026-07-16, update Watch Item to reflect closed-weight-first hypothesis as a working conclusion. Shift attention to Qwen4 and other A3B-class entrants.
 4. **Gemma4 experiment gate:** PR #39138 needs-rebase with no code progress — low probability of merge this week. Re-confirm state next recon.
 5. **Arena Firestore:** Blocked in remote env without the JS-embedded API key. Continue WebSearch-fallback mode.
+
+---
+
+## Entry 084 - DGX Spark Recon (2026-06-21)
+
+**Overall: NO ACTION**
+
+**Production context:** Qwen/Qwen3.6-35B-A3B-FP8 (pre-quant), vLLM v0.19.1rc1.dev219+cu132, MTP=2, FLASH_ATTN backend, kernel 1021. Baseline c1=73.1 tok/s, c8 agg=406.9, c16 agg=730.5 (Entry 080).
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection, unauthenticated) returned empty `{}` again — same access block as prior remote-env runs. No new FP8 Qwen3.6 vLLM tg128 c=1 result confirmed or denied. Arena baseline held at 80.27; trigger threshold 88.3 unconfirmed. Top-overall NVFP4 on Atlas unchanged from prior entries.
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15, 2026) still latest stable; **no v0.23.1 or v0.24.x released.** PR **#39138** STILL OPEN (`needs-rebase` label; last update 2026-06-16 — automated project assignment only, no code progress; re-confirmed). PR **#40099** STILL OPEN (last substantial code activity 2026-04-22; re-confirmed). Issue **#41063** (DeepGEMM SM12x coverage gaps) STILL OPEN (last updated 2026-05-30; no change). **Informational new finding:** PR **#45277** (CUDA arch build coverage cleanup, by Harry-Chen/NVIDIA) **MERGED 2026-06-14** and is in v0.23.0. Key SM12x changes: (a) removed false-positive SM12x CUTLASS FP8 MoE support gate — CUTLASS grouped GEMM now correctly reports unsupported on SM12x (kernel never existed; FlashInfer b12x MoE from #40082/v0.22.0 is the correct SM12x MoE path); (b) added SM12x to `cuda_archs_sm90plus()` and DSV3 router GEMM paths. Companion #45215 (MXFP4 build fix for CUDA 12.8) and #41310/#43658 (NVFP4 CUDART_VERSION guards) also merged 2026-06-14 into v0.23.0.
+
+**Check 3 — eugr/spark-vllm-docker:** No new commits or wheel builds since June 20. Most recent commit remains June 19 — "Rolled back DeepSeek PR inclusion" (PR #41834 SM12x Triton fallbacks add-and-revert). Eval target remains **dev207 wheel (June 20, 0.23.1rc1.dev207)**. PR **#279** (DFlash + FlashInfer FP8 KV Cache) still OPEN.
+
+**Check 4 — Qwen models:** **No Qwen3.7 open weights** as of June 21, 2026. June prediction window fully elapsed. Qwen3.7-Max (API-only, May 19), Qwen3.7-Plus (API-only, June 1), and Qwen3.7-Plus remain closed-weight. No Qwen4 announcement. No new A3B-class ~30–40B MoE from other labs. Closed-weight-first pattern now spans 3 consecutive Qwen3.x generations. Watch extends to 2026-07-16.
+
+**Check 5 — NVIDIA Forum:** 719.json inaccessible via WebFetch in remote env (403); WebSearch fallback used. New visible thread: **/t/372748 "Optimizing DGX for Openclaw Brain"** — a community user post about running the OpenClaw agentic stack (NemoClaw) on single DGX Spark; no perf/driver/firmware findings. /t/371965 (June Software Updates) and /t/372623 (community scrutiny) unchanged from prior. No new driver/firmware/crash/OOM reports since 2026-06-20.
+
+### Cross-correlated findings
+
+1. **Checks 2 & 3 agree — ecosystem quiet:** No new vLLM stable release and no new eugr wheel. Arm C eval target remains dev207. Confident.
+
+2. **Checks 4 & 5 agree — no new model or hardware pressure:** No Qwen3.7 open weights, no new forum hardware incidents. Production stack is stable with no external pressure to act.
+
+3. **Check 2 informational — PR #45277 SM12x arch cleanup in v0.23.0 (single-source, moderate confidence):** The false-positive CUTLASS FP8 MoE support gate for SM12x was removed and is in v0.23.0. For the Arm C eval, kernel selection trace should confirm: (a) CUTLASS MoE backend correctly falls back to FlashInfer b12x MoE on SM12x (behavior unchanged in practice, but dispatch path now more explicit); (b) DSV3-router GEMM changes are irrelevant to Qwen3.6 MoE architecture. Net eval impact: minimal, but worth annotating in the Arm C eval log.
+
+### Triggered alerts
+
+None from the formal trigger table. No Arena FP8 tg128 c=1 result >88.3 confirmed. No Gemma4 PR merge. No DeepGEMM SM12x fix. No Qwen3.7 open weights. No new vLLM stable release. No vLLM #37754 upstream fix.
+
+### Recommendations
+
+1. **Arm C eval:** Target still dev207 wheel. Note #45277 CUTLASS MoE dispatch change in the eval baseline — confirm Triton MoE path is correctly selected during the v0.23.x run and that the dispatch correction does not shift MoE kernel selection unexpectedly.
+2. **PR #39138 (Gemma4 structured output):** Still needs-rebase with no code progress through June 21. Probability of merge this week remains low. Re-confirm next recon.
+3. **Qwen3.7 watch:** Still no open weights. If no release by 2026-07-16, update Watch Item to treat closed-weight-first as working conclusion and shift focus to Qwen4 and other A3B-class entrants.
+4. **Arena Firestore:** Remains blocked in remote env without JS-embedded API key. WebSearch fallback cannot surface per-entry benchmark data. No action until a client-side extraction run is possible.

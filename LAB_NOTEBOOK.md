@@ -6848,3 +6848,57 @@ None from the formal trigger table. No Arena FP8 tg128 c=1 result >88.3 confirme
 2. **PR #39138 (Gemma4 structured output):** Still needs-rebase with no code progress through June 21. Probability of merge this week remains low. Re-confirm next recon.
 3. **Qwen3.7 watch:** Still no open weights. If no release by 2026-07-16, update Watch Item to treat closed-weight-first as working conclusion and shift focus to Qwen4 and other A3B-class entrants.
 4. **Arena Firestore:** Remains blocked in remote env without JS-embedded API key. WebSearch fallback cannot surface per-entry benchmark data. No action until a client-side extraction run is possible.
+
+---
+
+## Entry 085 - DGX Spark Recon (2026-06-22)
+
+**⚡ ACTION NEEDED — Driver 610.43.02 (CUDA 13.3) community-validated on DGX Spark; direct prerequisite for Arm D NVFP4 eval with corrected cuBLASLt.**
+
+**Production context:** Qwen/Qwen3.6-35B-A3B-FP8 (pre-quant), vLLM v0.19.1rc1.dev219+cu132, MTP=2, FLASH_ATTN backend, kernel 6.17.0-1021, driver 580.159.03. Baseline c1=73.1 tok/s, c8 agg=406.9, c16 agg=730.5 (Entry 080).
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection) returns `{}` again — blocked in remote env, same as prior runs. WebSearch confirms no new FP8 vLLM c1 entry above 80.27 tok/s; top-overall NVFP4-on-Atlas (~120+ tok/s c1) unchanged. sparkarena X post (@spark_arena) cited "130 tok/s at c10 with 100K context in memory" — this is a fill-and-decode metric, not tg128 c1, and not directly comparable to the tracked baseline. **FP8 vLLM baseline held at 80.27; trigger threshold 88.3 unconfirmed.**
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15, 2026) still latest stable; **no v0.23.1 or v0.24.x.** PR **#39138** STILL OPEN (`needs-rebase`; no code progress since June 16 automated project assignment). PR **#40099** STILL OPEN (awaiting code-owner approvals; last activity April 22). Issue **#41063** (DeepGEMM SM12x) STILL OPEN. No new SM121/GB10-specific fixes in any release. vLLM blog post on DGX Spark architecture published June 1, 2026 (informational).
+
+**Check 3 — eugr/spark-vllm-docker:** No new commits or wheel builds since June 20. Eval target remains **dev207 (0.23.1rc1.dev207+gdced29076.d20260620, FlashInfer 0.6.13)**. PR **#279** (DFlash + FlashInfer FP8 KV Cache) still OPEN. No changes.
+
+**Check 4 — Qwen models:** **No Qwen3.7 open weights** as of June 22. Qwen3.7-Max (API-only, May 19) and Qwen3.7-Plus (API-only, June 1) remain closed. Three consecutive post-3.6 Qwen releases are now all closed-weight-first. No Qwen4 announcement. **New A3B-class comparators identified:** (a) **North Mini Code** (Cohere, 30B MoE / 3B active, Apache 2.0, June 9, 256K context, 8 experts per token, vLLM recommended) — agentic coding focus; (b) **Nex-N2 Mini** (Nex AGI, 35B MoE / 3B active, Apache 2.0, multimodal text+image, 262K context) — A3B-class multimodal; (c) **NVIDIA Nemotron-3-Nano-30B-A3B-FP8** now confirmed on HF as a pre-quantized FP8 variant.
+
+**Check 5 — NVIDIA Forum (ACTION):** 719.json returns 403 in remote env (WebSearch fallback). **Two new threads found since June 21:**
+- **/t/373994 "Upgraded driver of spark to 610.43.02, so far so good"** (June 21, 2026) — community user successfully installed **driver 610.43.02** (CUDA UMD 13.3) on DGX Spark. R610 is the first driver branch following R595 (which had the GB10 UMA memory leak; CLAUDE.md "Stay on 580.x" rule was written for R590/R595 specifically). No adverse effects reported.
+- **/t/373655 "Ubuntu 26.04 + drivers 610 + cuda-toolkit 13.3 + ZFS on GB10"** — second independent thread, users exploring full Ubuntu 26.04 + R610 + ZFS stack on GB10.
+- **CUDA 13.3 release-note highlights relevant to DGX Spark:** (a) cuBLASLt 3× NVFP4/MXFP8 GEMM improvement for large M and N problem sizes on DGX Spark; (b) cuBLASLt NVFP4 correctness fix (CUB-9570) — bug in `cublasLtMatmul` causing incorrect results for NVFP4 precision; (c) BF16/FP16 illegal memory access fix on DGX Spark; (d) SM121 DriveOS support added; (e) CFP32 GEMM improvement on DGX Spark.
+- No new firmware/crash/OOM reports beyond driver 610 threads.
+
+### Cross-correlated findings
+
+1. **Driver 610.43.02 + CUDA 13.3 directly affects planned Arm D eval (Checks 3 & 5 — moderate confidence):** Community NVFP4 numbers (97 tok/s c1, technigmaai recipe, Entry 081) were measured with driver 580.x and pre-CUDA 13.3. CUDA 13.3 adds: (a) cuBLASLt 3× NVFP4 GEMM speed on DGX Spark for large M/N; (b) cuBLASLt NVFP4 correctness fix (CUB-9570). Prior NVFP4 figures may be understated on speed or affected by the correctness bug. Arm D eval should target driver 610 + CUDA 13.3 baseline.
+
+2. **R610 driver safety for GB10 unclear (Check 5 — single source, low confidence):** CLAUDE.md "Stay on 580.x" was written because R590/R595 had the GB10 UMA memory leak. R610 is a separate new-feature branch. One community user reports success; DGX OS production support status unknown. Must verify SecureBoot-compatible prebuilt ARM64 modules before scheduling upgrade.
+
+3. **Checks 2 & 3 agree: ecosystem quiet.** No new vLLM release, no new eugr wheel. Arm C eval target unchanged at dev207. Confident.
+
+4. **Qwen3.7 closed-weight-first pattern solidifies (Check 4 — high confidence):** Three consecutive post-3.6 Qwen releases all API-only. If no release by 2026-07-16, working hypothesis becomes closed-weight-first for new Qwen generations.
+
+5. **No Arena FP8 trigger (Check 1 — low information):** Firestore blocked; WebSearch finds no new FP8 vLLM c1 entry above 80.27. Baseline held.
+
+### Triggered alerts
+
+- **Formal trigger table `forum` row — perf/driver/firmware findings since forum_last_checked_date: HIT.** Driver 610.43.02 + CUDA 13.3 with DGX Spark NVFP4 cuBLASLt improvements is a directly relevant driver/firmware finding. **Classify: ACTION (assess driver 610 safety + implications for Arm D NVFP4 eval).**
+- Gemma4 PRs #39138/#40099: not merged — trigger not fired.
+- DeepGEMM SM12x (#41063): not resolved — trigger not fired.
+- Qwen3.7 open weights: not released — trigger not fired.
+- Arena FP8 >88.3 tok/s: not confirmed — trigger not fired.
+- vLLM #37754 upstream fix: not landed — trigger not fired.
+
+### Recommendations
+
+1. **[PRIORITY 1] Assess driver 610.43.02 for DGX Spark:** Determine if R610 is production-ready for DGX OS vs. community/beta; whether R590/R595 UMA leak is resolved in R610; and whether SecureBoot-compatible prebuilt ARM64 modules exist (critical per CLAUDE.md dist-upgrade rule). If safe, plan upgrade with console access + soak test **before** any Arm D NVFP4 eval. Requires explicit user approval + physical console (CLAUDE.md pre-flight reboot protocol).
+2. **[PRIORITY 2] Re-baseline Arm D NVFP4 expectations:** CUDA 13.3 cuBLASLt 3× NVFP4 improvement may push NVFP4 c1 well above the current 97 tok/s community figure. Gate criterion (≥+5% c8) should be evaluated under CUDA 13.3 to avoid comparing against stale pre-CUDA-13.3 numbers.
+3. **[PRIORITY 3] Arm C eval:** Still target dev207 wheel. Unchanged from Entry 084. Note #45277 CUTLASS MoE dispatch change in eval baseline.
+4. **Qwen3.7 watch:** No open weights. Next check July 3. If still absent July 16, update Watch Item to treat closed-weight-first as working conclusion and redirect attention to Qwen4, North Mini Code, and Nex-N2 Mini.
+5. **New A3B-class comparators:** North Mini Code (Cohere, 30B-A3B, Apache 2.0, coding) and Nex-N2 Mini (35B-A3B, multimodal) are the strongest new A3B entrants since Poolside Laguna XS.2. Candidate eval after DFlash/NVFP4 window.
+6. **Arena Firestore:** Remains blocked in remote env. No action until a client-side extraction run is possible.

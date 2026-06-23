@@ -6902,3 +6902,51 @@ None from the formal trigger table. No Arena FP8 tg128 c=1 result >88.3 confirme
 4. **Qwen3.7 watch:** No open weights. Next check July 3. If still absent July 16, update Watch Item to treat closed-weight-first as working conclusion and redirect attention to Qwen4, North Mini Code, and Nex-N2 Mini.
 5. **New A3B-class comparators:** North Mini Code (Cohere, 30B-A3B, Apache 2.0, coding) and Nex-N2 Mini (35B-A3B, multimodal) are the strongest new A3B entrants since Poolside Laguna XS.2. Candidate eval after DFlash/NVFP4 window.
 6. **Arena Firestore:** Remains blocked in remote env. No action until a client-side extraction run is possible.
+
+---
+
+## Entry 086 - DGX Spark Recon (2026-06-23)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection) blocked (403) in remote env — same as prior runs. WebSearch confirms no new FP8 vLLM tg128 c1 entry above 80.27 tok/s. sparkarena post "130 tok/s at c10 with 100K context in memory" is a fill-and-decode metric (not tg128 c1) and not comparable to the tracked baseline. **Arena FP8 vLLM baseline held at 80.27; trigger threshold 88.3 unconfirmed. No change.**
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15) still latest stable; **no v0.23.1 stable or v0.24.x.** PR **#39138** still OPEN (`needs-rebase`; no code progress). PR **#40099** still OPEN (awaiting code-owner review). Issue **#41063** (DeepGEMM SM12x) still OPEN; related PR #41834 (SM12x DeepSeek-V4 Flash) exists but merge status unconfirmed. No new SM121/GB10-specific vLLM releases. **No change.**
+
+**Check 3 — eugr/spark-vllm-docker (UPDATE):** **NEW WHEEL (today):** `0.23.1rc1.dev288+gc97e8f99d.d20260622` released June 23 at 00:40 — **+81 commits beyond prior Arm C eval target dev207** (June 20). FlashInfer updated: `0.6.13-a671c02e-d20260622` (same 0.6.13 minor version, new d20260622 build vs prior d20260618). PR **#279** (DFlash + FlashInfer FP8 KV Cache) still OPEN. **Arm C eval target updated from dev207 → dev288.**
+
+**Check 4 — Qwen models:** **No Qwen3.7 open weights** — pattern persists. Qwen3.7-Max (API May 19) and Qwen3.7-Plus (API June 1) remain closed-weight. No Qwen4 announcement. InsiderLLM analysis "Is Qwen Going Closed?" documents the closed-weight-first pattern solidifying. No new A3B-class models from other labs identified today. **No change from Entry 085.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403 in remote env):** Two threads of note:
+- **/t/373251 "DGX Spark (GB10) reproducibly hard powers-off under GPU load — fully updated, zero crash capture"** — user on latest OTA ("May 2026" = ~580.x driver, all firmware applied) reports hard complete power-off within ~60s of vLLM stress test, reproducible on demand; no crash logs captured. Related older thread /t/369457 (DGX-Spark shutdown under VLM/GPU Burn load, RMA requested). **First appearance in recon logs; thread estimated ~1 week old (age uncertain, missed in Entry 085).**
+- Driver 610.43.02 (/t/373994, June 21) — already tracked in Entry 085; no updates in this run.
+- No new OOM/crash/driver/firmware reports beyond above.
+
+### Cross-correlated findings
+
+1. **eugr dev288 advances Arm C eval target (Check 3 only — high confidence):** New wheel released today (June 23, +81 commits vs dev207). Same 0.23.1rc1 lineage. Arm C eval target updated to dev288; FlashInfer to d20260622 build. No functional change to eval plan — just a fresher upstream cut.
+
+2. **Hard power-off thread not corroborated by other checks (Check 5 only — low confidence):** /t/373251 reports reproducible hard power-off on a fully-updated system. No similar reports surfaced in Checks 1–4. Estimated ~1 week old; missed in Entry 085. Our production unit has had zero such events (41+ days stable per CLAUDE.md). Monitor; not an immediate action item.
+
+3. **Ecosystem otherwise stable (Checks 1, 2, 4 — high confidence):** vLLM v0.23.0 still latest stable, no SM121 kernel changes. Qwen3.7 still closed-weight-first. Arena FP8 vLLM baseline held. Confirms no external forcing functions requiring rushed eval scheduling.
+
+### Triggered alerts
+
+- All formal trigger table rows: **NOT FIRED.**
+  - Arena FP8 >88.3 tok/s: not confirmed (Firestore blocked; no WebSearch evidence).
+  - vLLM SM121/GB10 release: not fired (v0.23.0 unchanged).
+  - Gemma4 PRs #39138/#40099: not merged.
+  - DeepGEMM SM12x (#41063): not resolved.
+  - Qwen3.7 open weights: not released.
+  - vLLM #37754 upstream fix: not landed.
+
+### Overall classification: WORTH WATCHING
+
+Primary: eugr dev288 wheel released today — Arm C eval target updated from dev207 → dev288. Secondary: Hard power-off thread /t/373251 first appears in recon (estimated ~1 week old; unmatched by our production stability record).
+
+### Recommendations
+
+1. **[PRIORITY 1] Update Arm C eval target to dev288:** Prior target dev207 (June 20) superseded by dev288 (June 22 build, June 23 release, +81 commits). When Arm C eval window opens, pull `0.23.1rc1.dev288+gc97e8f99d.d20260622` + FlashInfer `0.6.13-a671c02e-d20260622`. Still sandbox-only.
+2. **[PRIORITY 2] Carry from Entry 085 — Driver 610 assessment:** Gate for Arm D NVFP4 eval. R610 SecureBoot + ARM64 prebuilt module availability still unverified. Requires console access + user approval.
+3. **[PRIORITY 3] Investigate /t/373251 hard power-off:** Determine if this matches known thermal/power-delivery issues on specific hardware batches, and compare firmware against our unit. Low urgency (production unit clean), but worth reading when forum access is available.
+4. **Qwen3.7 watch:** Still no open weights. Next check July 3. If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift attention to Qwen4, North Mini Code, Nex-N2 Mini.

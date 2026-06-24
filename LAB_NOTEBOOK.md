@@ -6950,3 +6950,48 @@ Primary: eugr dev288 wheel released today — Arm C eval target updated from dev
 2. **[PRIORITY 2] Carry from Entry 085 — Driver 610 assessment:** Gate for Arm D NVFP4 eval. R610 SecureBoot + ARM64 prebuilt module availability still unverified. Requires console access + user approval.
 3. **[PRIORITY 3] Investigate /t/373251 hard power-off:** Determine if this matches known thermal/power-delivery issues on specific hardware batches, and compare firmware against our unit. Low urgency (production unit clean), but worth reading when forum access is available.
 4. **Qwen3.7 watch:** Still no open weights. Next check July 3. If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift attention to Qwen4, North Mini Code, Nex-N2 Mini.
+
+---
+
+## Entry 087 - DGX Spark Recon (2026-06-24)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection) blocked (403) in remote env — same as all prior runs. WebSearch: sparkarena's "130 tok/s" tweet confirmed as fill-and-decode at concurrency 10 with 100K prior-context tokens in memory (not tg128 c1 — already excluded in Entry 086 as non-comparable). No new FP8 vLLM tg128 c1 entry above 80.27 tok/s identified. **Arena FP8 vLLM baseline held at 80.27; trigger threshold 88.3 unconfirmed. No change.**
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15) still latest stable; no v0.23.1 stable or v0.24.x. PR **#39138** OPEN (`needs-rebase`; last activity 2026-06-16 automated project assignment only — no code progress; re-confirmed). PR **#40099** OPEN (awaiting code-owner review, last substantial activity 2026-04-22). Issue **#41063** (DeepGEMM SM12x) OPEN — companion PRs #41062/#41028/#40923 track SM12.0f build gates; full DeepGEMM kernel path for SM121 not closed. Clarification confirmed: v0.22.0 (not v0.23.0) is the first release with explicit SM120/SM121 language (FlashInfer b12x MoE + CUTLASS-FP4 per-tensor on SM12.1); v0.23.0 adds Gemma4 + FlashInfer updates but no additional SM121-specific text. **No change from Entry 086.**
+
+**Check 3 — eugr/spark-vllm-docker (UPDATE):** **NEW WHEEL June 23 (~11:30 UTC, post-Entry 086):** `0.23.1rc1.dev309+g901a3b091.d20260623` — **+21 commits beyond dev288** (which Entry 086 captured at 00:40 the same day; both June 23). FlashInfer updated: `0.6.13-b3baedbb-d20260623` (new build, same 0.6.13 minor). Single repo commit since Entry 086: "Updated README with DeepSeek V4 Flash support" (June 23). PR **#279** (DFlash + FlashInfer FP8 KV Cache) still OPEN, no reviews yet. **Arm C eval target updated dev288 → dev309.**
+
+**Check 4 — Qwen models:** No Qwen3.7 open weights — pattern persists. Qwen3.7-Max (API May 19) and Qwen3.7-Plus (API June 1) remain closed-weight; no HF repo under official Qwen org. No Qwen4 announcement. InsiderLLM "Is Qwen Going Closed?" analysis documents closed-weight-first pattern solidifying. No new A3B-class models from other labs identified. **No change from Entry 086. Next Qwen3.7 watch: July 3.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403):** Notable new thread (not in Entry 086): **/t/373927 "Successfully serving MiniMax-M3-NVFP4 on 4x DGX Spark with vLLM"** (~June 20, multi-node 4×DGX Spark — not single-node relevant). Additional power-stability thread surfaced: **/t/372089 "DGX Spark Failure – Unable to Power On"** (date unclear) — distinct from /t/373251 tracked in Entry 086; adds a third thread to the power-instability cluster. No new driver/firmware/crash/OOM reports on single-node basis since 2026-06-23.
+
+### Cross-correlated findings
+
+1. **eugr dev309 advances Arm C eval target (Check 3 only — high confidence):** Released ~11h after dev288 on the same day (June 23 00:40 vs 11:30 UTC). Entry 086 captured only dev288; dev309 is +21 dev commits with a new FlashInfer build. Only functional change noted in repo: README documenting DeepSeek V4 Flash support. Arm C eval should pull dev309, not dev288.
+
+2. **Ecosystem stable (Checks 1, 2, 4 — high confidence):** vLLM v0.23.0 still latest stable, no SM121 kernel changes beyond what v0.22.0 introduced, Qwen3.7 closed-weight-first pattern holding, Arena FP8 vLLM baseline unchanged. No external forcing functions requiring rushed eval scheduling.
+
+3. **Power-instability thread cluster broadening (Check 5 — low confidence):** Three distinct threads now (see Check 5). No NVIDIA resolution found. Our production unit: 42+ days clean.
+
+### Triggered alerts
+
+- All formal trigger table rows: **NOT FIRED.**
+  - Arena FP8 >88.3 tok/s: not confirmed (Firestore blocked; no WebSearch evidence).
+  - vLLM SM121/GB10 release: not fired (v0.23.0 unchanged since Entry 086).
+  - Gemma4 PRs #39138/#40099: not merged.
+  - DeepGEMM SM12x (#41063): not resolved.
+  - Qwen3.7 open weights: not released.
+  - vLLM #37754 upstream fix: not landed.
+
+### Overall classification: WORTH WATCHING
+
+Primary: eugr dev309 wheel (June 23, ~11:30 UTC) supersedes dev288 as Arm C eval target — +21 commits released same day as Entry 086's capture. Secondary: power-instability thread cluster now at 3 distinct threads; no NVIDIA resolution. No formal triggers fired; ecosystem otherwise stable.
+
+### Recommendations
+
+1. **[PRIORITY 1] Update Arm C eval target to dev309:** dev288 (Entry 086) superseded by dev309 (June 23, ~11:30 UTC, +21 commits). When Arm C eval window opens, pull `0.23.1rc1.dev309+g901a3b091.d20260623` + FlashInfer `0.6.13-b3baedbb-d20260623`. Sandbox only.
+2. **[PRIORITY 2] Carry from Entry 086 — Driver 610 assessment before Arm D NVFP4 eval.** R610 SecureBoot + ARM64 prebuilt module availability unverified. Requires console access + user approval.
+3. **[PRIORITY 3] Monitor power-instability cluster:** Three threads (/t/373251, /t/362483, /t/372089) without NVIDIA resolution. When forum access available, compare unit firmware/driver configs across threads and check for NVIDIA acknowledgment. No action on our clean unit.
+4. **[PRIORITY 4] Qwen3.7 watch:** Next check July 3. If absent July 16, update Watch Item to shift focus to Qwen4, North Mini Code, and Nex-N2 Mini per Entry 086 plan.

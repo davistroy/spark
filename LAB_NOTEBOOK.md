@@ -6995,3 +6995,48 @@ Primary: eugr dev309 wheel (June 23, ~11:30 UTC) supersedes dev288 as Arm C eval
 2. **[PRIORITY 2] Carry from Entry 086 — Driver 610 assessment before Arm D NVFP4 eval.** R610 SecureBoot + ARM64 prebuilt module availability unverified. Requires console access + user approval.
 3. **[PRIORITY 3] Monitor power-instability cluster:** Three threads (/t/373251, /t/362483, /t/372089) without NVIDIA resolution. When forum access available, compare unit firmware/driver configs across threads and check for NVIDIA acknowledgment. No action on our clean unit.
 4. **[PRIORITY 4] Qwen3.7 watch:** Next check July 3. If absent July 16, update Watch Item to shift focus to Qwen4, North Mini Code, and Nex-N2 Mini per Entry 086 plan.
+
+---
+
+## Entry 088 - DGX Spark Recon (2026-06-25)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection) blocked (403) in remote env — same as all prior runs. WebSearch yields no new FP8 vLLM tg128 c1 benchmark above 80.27 tok/s. Spark Arena leaderboard page also 403. **Arena FP8 vLLM baseline held at 80.27 tok/s; trigger threshold 88.3 not crossed. No change from Entry 087.**
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15, 2026) remains latest stable — no new release in the ~10 days since. PR **#39138** OPEN (needs-rebase; last activity June 15 from mergify bot for merge conflicts — no code progress since Entry 086 re-confirm). PR **#40099** OPEN (last activity April 21; reviewer questioned reproducibility). Issue **#41063** (DeepGEMM SM12x) OPEN — companion PRs #41062/#41028/#40923 in progress but SM12x kernel implementation gaps remain (missing SM120-native kernels; `tcgen05` instruction incompatibilities). No SM121/GB10-specific text in any new vLLM release. **No change from Entry 087.**
+
+**Check 3 — eugr/spark-vllm-docker:** No new wheel or repo commit visible since dev309 (June 23, ~11:30 UTC). Latest confirmed: `0.23.1rc1.dev309+g901a3b091.d20260623` + FlashInfer `0.6.13-b3baedbb-d20260623`. PR #279 (DFlash + FlashInfer FP8 KV Cache) still OPEN. **Arm C eval target remains dev309. No change from Entry 087.**
+
+**Check 4 — Qwen models:** **Qwen3.7 open weights not released.** InsiderLLM "June window is closing" article confirms zero Qwen3.7-* repos under official Qwen org on HuggingFace as of mid-late June; probability declining daily. Pattern remains closed-weight-first. No Qwen4 announcement. No new A3B-class models from other labs identified. **No change from Entry 087; next Qwen3.7 check: July 3.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403):** No new driver/firmware/crash/OOM reports surfaced for the June 24–25 window. Previously untracked thread **/t/372486 "DGX Spark GB10 – Asus GX10 – GPU becomes inoperable"** (thread # places it between Entry 087's /t/372089 and /t/373251; predates current entry, likely ~June 10-15) — GPU enters non-functional state after repeated workloads; distinct from hard-power-off symptom. Driver 610.62 mentioned in search is the GeForce GRD consumer driver (June 16, 2026) — NOT the DGX Spark ARM64 driver; community DGX driver remains 610.43.02 (/t/373994). Power-instability cluster holds at 3 threads (/t/373251, /t/362483, /t/372089) with no NVIDIA resolution.
+
+### Cross-correlated findings
+
+1. **Ecosystem stable across all five checks** — vLLM v0.23.0 still latest stable, eugr dev309 still latest, Qwen3.7 not released, Arena FP8 vLLM baseline unchanged, no new forum crises. Consistent with day-after-Entry-087 cadence.
+
+2. **Hardware reliability picture slightly broader (Check 5 only — low confidence):** /t/372486 "Asus GX10 GPU becomes inoperable" adds a fourth distinct hardware-reliability thread (different symptom from power-off cluster). Asus-specific; unknown relevance to other OEM units. Our production unit: 43+ days clean.
+
+3. **Qwen3.7 June window closing (Check 4):** InsiderLLM analysis documents declining probability per passing day. Original 3.5→3.6 open-to-open lag projection (51-59 days) pointed to June 6-14; June 25 = >5 weeks past 3.7-Max API launch with no open weights. Realistic window now late June through mid-July.
+
+### Triggered alerts
+
+- All formal trigger table rows: **NOT FIRED.**
+  - Arena FP8 >88.3 tok/s: not confirmed (Firestore blocked; no WebSearch evidence).
+  - vLLM SM121/GB10 release: not fired (v0.23.0 unchanged).
+  - Gemma4 PRs #39138/#40099: not merged.
+  - DeepGEMM SM12x (#41063): not resolved.
+  - Qwen3.7 open weights: not released.
+  - vLLM #37754 upstream fix: not landed.
+
+### Overall classification: NO ACTION
+
+Calm day-after-Entry-087 recon. No new releases, no trigger fires, no urgent findings. All ongoing watch items (Qwen3.7, vLLM upgrade eval, power-instability cluster, Driver 610 assessment) carry forward unchanged.
+
+### Recommendations
+
+1. **[PRIORITY 1] Arm C eval (eugr dev309) — carry forward:** When eval window opens, pull `0.23.1rc1.dev309+g901a3b091.d20260623` + FlashInfer `0.6.13-b3baedbb-d20260623`. No new wheel expected until vLLM v0.23.1 stable or a significant upstream change. Sandbox only.
+2. **[PRIORITY 2] Driver 610 assessment — carry forward:** Gate before Arm D NVFP4 eval. R610 SecureBoot + ARM64 prebuilt module availability unverified. Requires console access + user approval.
+3. **[PRIORITY 3] Power-instability cluster — carry forward:** Four threads now visible (/t/373251, /t/362483, /t/372089, /t/372486). No NVIDIA resolution. Our unit clean at 43+ days.
+4. **[PRIORITY 4] Qwen3.7 watch:** Next check July 3. If absent July 16, shift Watch Item focus to Qwen4, North Mini Code, and Nex-N2 Mini.

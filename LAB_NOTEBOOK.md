@@ -7040,3 +7040,52 @@ Calm day-after-Entry-087 recon. No new releases, no trigger fires, no urgent fin
 2. **[PRIORITY 2] Driver 610 assessment — carry forward:** Gate before Arm D NVFP4 eval. R610 SecureBoot + ARM64 prebuilt module availability unverified. Requires console access + user approval.
 3. **[PRIORITY 3] Power-instability cluster — carry forward:** Four threads now visible (/t/373251, /t/362483, /t/372089, /t/372486). No NVIDIA resolution. Our unit clean at 43+ days.
 4. **[PRIORITY 4] Qwen3.7 watch:** Next check July 3. If absent July 16, shift Watch Item focus to Qwen4, North Mini Code, and Nex-N2 Mini.
+
+---
+
+## Entry 089 - DGX Spark Recon (2026-06-26)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection) returned only 2 documents (both `openai/gpt-oss-120b` MXFP4, dual-node — not comparable to single-node FP8 Qwen3.6-35B-A3B); no FP8 Qwen3.6-35B-A3B entries in the world-readable collection. `entries`/`leaderboard`/`recipes` remain App-Check-gated (403); site JS bundle unreachable so Firebase key not extractable. WebSearch: no new FP8 vLLM c1 benchmark above 80.27 tok/s identified. **Arena FP8 vLLM baseline held at 80.27 tok/s; trigger threshold 88.3 not crossed. No change from Entry 088.**
+
+**Check 2 — vLLM releases:** v0.23.0 (June 15, 2026) remains latest stable — no new release. PR **#39138** OPEN (needs-rebase; last activity June 16 mergify bot only — no code progress). PR **#40099** OPEN (last substantial activity April 22). Issue **#41063** (DeepGEMM SM12x) OPEN — `tcgen05` instruction incompatibilities block SM120/121 kernel implementation; companion PRs #41062/#41028/#40923 in progress. Issue **#37754** (FlashInfer+MTP crash) OPEN — no fix merged; irrelevant to production (FLASH_ATTN backend). **No change from Entry 088.**
+
+**Check 3 — eugr/spark-vllm-docker (UPDATE):** **NEW WHEEL published 2026-06-25T20:38Z: `0.23.1rc1.dev448+ge53a17232.d20260625`** — +139 commits vs dev309 in a 2-day window. FlashInfer `0.6.13-25dd814e-d20260625` (new build, same 0.6.13 minor). Three commits since dev309: (1) NVFP4 recipe kv-cache-dtype reverted to fp8 due to vLLM bugs (not relevant to BF16 KV FP8 config); (2) DeepGEMM switched to `nv_dev` branch; (3) **DSV4F (DeepSeek V4 Fusion / MoE kernel) patch for broken vLLM PR #43008 applied** — directly relevant to Qwen3.6-35B-A3B MoE dispatch path on SM121. PR #279 (DFlash + FP8 KV Cache) still OPEN (no activity since June 12). **Arm C eval target updated: dev309 → dev448.**
+
+**Check 4 — Qwen models:** Qwen3.7 open weights NOT released — pattern continues. No Qwen3.7-* under official Qwen HF org. No Qwen4 announcement. Notable adjacent: **Qwen-AgentWorld-35B-A3B** released ~June 24 (specialized world-model/simulator fine-tune, same A3B architecture, Apache 2.0; NOT a production LLM replacement — covers MCP/tool/SWE/OS domain next-state prediction). North Mini Code 1.0 (CohereLabs, 30B/3B active, FP8 available, June 9) and Nex-N2-mini (35B/3B active, Qwen3.5-35B-A3B-Base, ~June 12) noted — both already in watch items. **Next Qwen3.7 check: July 3.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403):** New thread surfaced: **/t/372469 "DGX Spark shutting down under load - MODS-020000600139"** (~June 5) — adds fifth thread to power-instability cluster. MODS-020000600139 (Power Stress failure code) also appeared in /t/368572; establishes a recurring named diagnostic identifier. No NVIDIA resolution found. Driver 610.43.02 / CUDA 13.3 community-validated in two threads (/t/373994, /t/373655): CUDA 13.3 documents up-to-3x NVFP4 GEMM improvement for selected matrix shapes — directly relevant to Arm D NVFP4 eval. June 2026 official OTA still on 580/595 channel (driver 610 is manual install only). No new driver/firmware/crash/OOM reports dated June 25–26.
+
+### Cross-correlated findings
+
+1. **eugr dev448 DSV4F MoE patch is the key delta vs dev309 (Check 3 only — high confidence):** dev448 wheel (June 25, +139 commits) applies a Dockerfile-level fix for a broken vLLM PR #43008 affecting the DSV4F (MoE kernel) path and switches DeepGEMM to the `nv_dev` branch. Both changes touch the MoE kernel dispatch path used by Qwen3.6-35B-A3B on SM121. This is a more substantive delta than dev288→dev309 (+21 commits, README only). **Arm C eval target: dev309 → dev448.**
+
+2. **NVFP4 + MTP-3 at 97 tok/s c1 / 322 tok/s c8 decode-only cross-corroborated (Checks 2, 5):** vLLM check confirms official config (FlashInfer attention + CUTLASS-FP4 MoE + MTP-3 + fp8 KV + prefix caching) per NVIDIA blog/June release. Forum check adds CUDA 13.3 claim of up-to-3x NVFP4 GEMM for selected shapes — if accurate, Arm D NVFP4 numbers on R610+CUDA 13.3 could exceed current community benchmarks (97 tok/s c1). Both findings reinforce Arm D target viability.
+
+3. **Power-instability cluster grows; MODS-020000600139 now named failure code (Check 5 — medium confidence):** Five threads total. Same failure code in /t/372469 and /t/368572 suggests this is the canonical Power Stress diagnostic for these events. Consistent pattern: fully-updated units, zero crash capture, reproducible under GPU load. No NVIDIA resolution. Our production: 44+ days clean.
+
+4. **Qwen3.7 window narrowing (Checks 4, 5 — high confidence):** No open weights. June 26 marks >5 weeks past Qwen3.7-Max API launch. Both checks consistent. Original projection missed (June 6-14); realistic window now late June through mid-July.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 >88.3 tok/s (10% above 80.27) | NOT FIRED — baseline held; Firestore mostly empty for FP8 entries |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both OPEN |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open |
+| vLLM #37754 FlashInfer+MTP fix landed | NOT FIRED — still open |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED |
+| MXFP4 online quantization on Qwen | NOT FIRED |
+| FlashInfer heterogeneous head support | NOT FIRED |
+
+### Overall classification: WORTH WATCHING
+
+Primary: eugr dev448 wheel (June 25, 20:38 UTC) supersedes dev309 as Arm C eval target — +139 commits, DSV4F MoE kernel patch, DeepGEMM `nv_dev` branch switch; this is a substantive build delta. Secondary: power-instability cluster now 5 threads with named MODS-020000600139 failure code. No formal triggers fired; production stable at 44+ days clean.
+
+### Recommendations
+
+1. **[PRIORITY 1] Update Arm C eval target to dev448:** dev309 (Entry 088) superseded by dev448 (June 25, 20:38 UTC, +139 commits, DSV4F MoE patch for PR #43008). When Arm C eval window opens, pull `0.23.1rc1.dev448+ge53a17232.d20260625` + FlashInfer `0.6.13-25dd814e-d20260625`. The DSV4F MoE patch makes this eval more meaningful than the dev288→dev309 jump. Sandbox only; do NOT touch production qwen35.
+2. **[PRIORITY 2] Driver 610.43.02 / CUDA 13.3 assessment before Arm D NVFP4 eval:** Community-validated stable (/t/373994, /t/373655); CUDA 13.3 documents up-to-3x NVFP4 GEMM for selected matrix shapes. Manual install only — not OTA. Apply all CLAUDE.md pre-flight checks: verify Canonical-signed prebuilt ARM64 nvidia modules, check MOK signer before reboot. Requires physical console + explicit user approval.
+3. **[PRIORITY 3] Monitor power-instability cluster (now 5 threads):** MODS-020000600139 is the canonical Power Stress diagnostic identifier. When forum access available, cross-reference unit firmware/driver configs across threads. No action on our 44-day-clean production unit.
+4. **[PRIORITY 4] Qwen3.7 watch:** Next check July 3. If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift attention to Qwen4, North Mini Code 1.0 (FP8), and Nex-N2-mini.

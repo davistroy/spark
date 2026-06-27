@@ -7089,3 +7089,50 @@ Primary: eugr dev448 wheel (June 25, 20:38 UTC) supersedes dev309 as Arm C eval 
 2. **[PRIORITY 2] Driver 610.43.02 / CUDA 13.3 assessment before Arm D NVFP4 eval:** Community-validated stable (/t/373994, /t/373655); CUDA 13.3 documents up-to-3x NVFP4 GEMM for selected matrix shapes. Manual install only — not OTA. Apply all CLAUDE.md pre-flight checks: verify Canonical-signed prebuilt ARM64 nvidia modules, check MOK signer before reboot. Requires physical console + explicit user approval.
 3. **[PRIORITY 3] Monitor power-instability cluster (now 5 threads):** MODS-020000600139 is the canonical Power Stress diagnostic identifier. When forum access available, cross-reference unit firmware/driver configs across threads. No action on our 44-day-clean production unit.
 4. **[PRIORITY 4] Qwen3.7 watch:** Next check July 3. If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift attention to Qwen4, North Mini Code 1.0 (FP8), and Nex-N2-mini.
+
+---
+
+## Entry 090 - DGX Spark Recon (2026-06-27)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST (`benchmarks` collection) returned empty `{}` — same result as Entry 089; collection access unchanged or no new approved docs. WebSearch: no new FP8 vLLM single-node c1 benchmark above 80.27 tok/s identified. **Arena FP8 vLLM baseline held at 80.27 tok/s; trigger threshold 88.3 not crossed. No change from Entry 089.**
+
+**Check 2 — vLLM releases:** GitHub API 403 (remote exec env); GitHub MCP tools restricted to session scope. WebSearch: v0.23.0 (June 15) remains latest stable — no v0.23.1 released. **NEW: Issue #43906 `[Bug] MXFP8 MoE always falls back to MARLIN on SM_121`** — `TrtLlmFp8ExpertsBase` gates on `family(100)`, excluding SM12x consumer Blackwell from FLASHINFER_TRTLLM; no intermediate MXFP8 fast path on SM121 (falls straight to Marlin W8A16 dequant, losing MX precision and Blackwell tcgen05.mma benefit). Related: **#43507** (CUTLASS MoE unavailable on SM_120/121 for tensor/token-scaled FP8-Dynamic models — distinct from our block-scaled pre-quant FP8). Neither directly affects production config (TRITON auto-select + FlashInfer b12x MoE). Gemma4 PRs #39138/#40099 likely still OPEN (issue #39130 still referenced as open in search results; GitHub inaccessible). DeepGEMM #41063 unknown. Also surfaced: official vLLM blog post "vLLM on the DGX Spark: Architecture, Configuration, and Local Evaluation" (June 1, 2026) — informational; first noted this entry.
+
+**Check 3 — eugr/spark-vllm-docker:** GitHub MCP restricted to session scope. WebSearch confirms **NEW wheel `0.23.1rc1.dev480+gd980a3cc6.d20260626`** published June 26, 2026 — +32 commits vs dev448 (June 25, 20:38 UTC). Specific commit details inaccessible (GitHub 403/MCP scoping). FlashInfer version not confirmed independently; likely same 0.6.13 minor. Prior dev448 key changes carry forward: DSV4F MoE kernel patch for broken vLLM PR #43008, DeepGEMM switched to `nv_dev` branch. PR #279 (DFlash + FP8 KV Cache) status unknown. **Arm C eval target updated: dev448 → dev480.**
+
+**Check 4 — Qwen models:** No Qwen3.7 open weights released — June 27 is 39 days past Qwen3.7-Max API launch (May 19). Zero Qwen3.7-* repos under official Qwen HF org per InsiderLLM + WebSearch. No Qwen4 announcement. No new A3B-class models from other labs identified in this check. **Next check: July 3** (per Entry 089 Watch Item).
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403 in remote exec env):** No new threads found for June 26–27. Existing threads confirmed in search returns: /t/373251 (hard power-off), /t/373994 (driver 610.43.02, June 21), /t/371965 (June 2026 release), /t/371799 (apt upgrade broken driver). Power-instability cluster remains at 5 threads with MODS-020000600139 named failure code (per Entry 089); no NVIDIA resolution. No new driver/firmware/crash/OOM reports since Entry 089.
+
+### Cross-correlated findings
+
+1. **vLLM #43906 (MXFP8 MoE → MARLIN fallback on SM121) reveals another SM121 MoE backend gap (Check 2 — new this entry):** Production FP8 config is unaffected — TRITON auto-select + FlashInfer b12x MoE via `VLLM_FLASHINFER_MOE_BACKEND=latency` is the correct SM121 FP8 path (confirmed by PR #45277 in v0.23.0). However, the MXFP8 oracle has NO intermediate fast path on SM121 between FLASHINFER_TRTLLM (unavailable, gates on `family(100)`) and Marlin W8A16 dequant. Combined with #43507 (CUTLASS MoE unavailable on SM121 for FP8-Dynamic), a pattern emerges: SM121 MoE kernel coverage is incomplete for non-standard quant formats. Arm D NVFP4 uses CUTLASS-FP4 MoE + FlashInfer b12x (distinct path from MXFP8) — direct blocking risk is low, but verify CUTLASS-FP4 MoE dispatch actually lands on SM121 vs falling back during Arm D eval.
+
+2. **eugr daily build cadence continues; dev480 is now Arm C target (Check 3):** dev480 (June 26) is +32 commits vs dev448 (June 25) in one day. Consistent with Entry 089 (dev448 was +139 vs dev309 in 2 days). If this cadence holds, the target will shift again before the Arm C eval window opens. Consider pinning dev448 (known-good DSV4F patch) if dev480 introduces unexpected regressions.
+
+3. **Qwen3.7 window now demonstrably past original projection (Check 4 — high confidence):** June 27 is 39 days past the May 19 Qwen3.7-Max API launch. The 3.5→3.6 open-weight lag (~51-59 days) would have pointed to June 6-14; we are now 13-21 days past that window. InsiderLLM probability assessment (55-65% late June; 35-45% July) has now shifted clearly toward July slip.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 >88.3 tok/s (10% above 80.27) | NOT FIRED — Firestore empty; no new vLLM benchmark above baseline |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — still open |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — unknown (GitHub inaccessible in remote env) |
+| vLLM #37754 FlashInfer+MTP fix landed | NOT FIRED — still open |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED |
+| MXFP4 online quantization on Qwen | NOT FIRED |
+| FlashInfer heterogeneous head support | NOT FIRED |
+
+### Overall classification: WORTH WATCHING
+
+Primary: eugr dev480 (June 26) supersedes dev448 as Arm C eval target — daily build cadence on 0.23.1rc1 line continues. Secondary: vLLM issue #43906 (MXFP8 MoE → Marlin fallback on SM121) is a newly identified SM121 MoE backend gap; not a production blocker but informs Arm D NVFP4 eval scoping (verify CUTLASS-FP4 MoE dispatch during eval). No formal triggers fired; production stable at 45+ days uptime.
+
+### Recommendations
+
+1. **[PRIORITY 1] Update Arm C eval target to dev480:** dev448 (Entry 089) superseded by dev480 (June 26, +32 commits, `0.23.1rc1.dev480+gd980a3cc6.d20260626`). Prior dev448 key changes (DSV4F MoE patch for PR #43008, DeepGEMM `nv_dev` branch) carry forward. If daily builds continue before eval window opens, consider re-pinning to dev448 (most stable known-good). Sandbox only; do NOT touch production qwen35.
+2. **[PRIORITY 2] Add CUTLASS-FP4 MoE dispatch verification to Arm D protocol:** vLLM #43906 + #43507 establish a pattern of SM121 MoE kernel fallback for non-standard quant formats. During Arm D NVFP4 eval, confirm via vLLM startup logs that CUTLASS-FP4 MoE backend (not Marlin fallback) is selected on SM121. Also confirm FlashInfer b12x MoE is active. Failure to land the CUTLASS-FP4 path would invalidate the c1 throughput claim.
+3. **[PRIORITY 3] Driver 610 / CUDA 13.3 assessment — carry forward.** Gate before Arm D NVFP4 eval. No new community reports since June 21 (/t/373994). Requires physical console + user approval.
+4. **[PRIORITY 4] Qwen3.7 next check: July 3.** If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift focus to Qwen4, North Mini Code 1.0 FP8, and Nex-N2-mini.

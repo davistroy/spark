@@ -7136,3 +7136,55 @@ Primary: eugr dev480 (June 26) supersedes dev448 as Arm C eval target — daily 
 2. **[PRIORITY 2] Add CUTLASS-FP4 MoE dispatch verification to Arm D protocol:** vLLM #43906 + #43507 establish a pattern of SM121 MoE kernel fallback for non-standard quant formats. During Arm D NVFP4 eval, confirm via vLLM startup logs that CUTLASS-FP4 MoE backend (not Marlin fallback) is selected on SM121. Also confirm FlashInfer b12x MoE is active. Failure to land the CUTLASS-FP4 path would invalidate the c1 throughput claim.
 3. **[PRIORITY 3] Driver 610 / CUDA 13.3 assessment — carry forward.** Gate before Arm D NVFP4 eval. No new community reports since June 21 (/t/373994). Requires physical console + user approval.
 4. **[PRIORITY 4] Qwen3.7 next check: July 3.** If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift focus to Qwen4, North Mini Code 1.0 FP8, and Nex-N2-mini.
+
+---
+
+## Entry 091 - DGX Spark Recon (2026-06-28)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore `benchmarks` collection returned only gpt-oss-120b MXFP4 dual-node entries (same as Entry 090); no FP8 Qwen3.6-35B-A3B single-node entries in world-readable collection. `entries`/`leaderboard`/`recipes` remain App-Check-gated (403). sparkarena X/Twitter post noted: "Qwen3.6-35B-A3B-FP8 achieved 130 tok/s on text generation on NVIDIA DGX Spark with vLLM at concurrency 10, for a 128 tokens reply with 100k tokens of prior context already in memory" — c=10 with 100k prefix, NOT our tg128 c1 baseline metric (different workload; not directly comparable). No FP8 vLLM c1 entry found above 88.3 tok/s trigger threshold. **Arena FP8 vLLM baseline held at 80.27 tok/s; trigger not fired. No change from Entry 090.**
+
+**Check 2 — vLLM releases:** PyPI confirms v0.23.0 (June 13, 2026) is still latest stable — **no new release since Entry 090.** Initial WebSearch returned a false-positive "v0.24.0 released June 26" — contradicted by PyPI (v0.23.0 latest) and GitHub 404; no such version exists (search engine hallucination — log for future). PR **#41834** ("[New Model][Nvidia] Add SM12x support for DeepSeek V4 Flash with essential fixes") OPEN: 116 files, ~15.5k lines; adds Triton-based fallback kernels for SM120/SM121; correctness fixes for prefix caching, MTP, and quant on SM12x; validated on RTX PRO 6000 (SM120) and 2-node GB10/DGX Spark (SM121). Issue **#41063** (DeepGEMM SM12x tracking): likely still open; PR #41834 is the related enablement path. Gemma4 PRs **#39138** and **#40099**: still OPEN (related bugs #39130, #40080, #39392 still active). **#37754** (FlashInfer+MTP): still open. **No release, no trigger fired.**
+
+**Check 3 — eugr/spark-vllm-docker (UPDATE):** **NEW wheel dev520 (`0.23.1rc1.dev520+g9fd00ee00.d20260627`) published June 27, 11:48 UTC** — +40 commits vs dev480 (June 26) in 1 day. FlashInfer: `0.6.13-0cb2bc9b-d20260627` (new build, same 0.6.13 minor). Prior dev448/dev480 key changes (DSV4F MoE patch for broken vLLM PR #43008, DeepGEMM switched to `nv_dev` branch) carry forward. PR #279 (DFlash + FP8 KV Cache) status unconfirmed in this run. **Arm C eval target updated: dev480 → dev520.**
+
+**Check 4 — Qwen models:** Qwen3.7 open weights still NOT released — June 28 is 40 days past Qwen3.7-Max API launch (May 19). Zero Qwen3.7-* repos under official Qwen HF org per WebSearch. No Qwen4 announcement. No new A3B-class models from other labs identified in this check. **Next check: July 3 per Watch Item.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403 in remote exec env):** **NEW: /t/374791 "GB10 (Asus GX10) GPU maxing out at 60W, firmware/platform cap? Need help"** (June 27-28, <24h old) — Asus GX10/Ascent GX10 user on latest BIOS/firmware as of June 27 reports GPU drawing only 60W (expected 140W), ~65 TFLOPS. Distinct symptom from: (a) 14W throttle bug (lower cap, after crash/sleep, wall power-cycle fix known); (b) MODS-020000600139 hard-power-off cluster (complete shutdown, not throttle). No NVIDIA response visible. **Also new: /t/374721 "Share your latest Ascent GX10 idle power"** — concurrent community thread on Asus GX10 power behavior. Hard-power-off cluster remains at 5 threads (MODS-020000600139); /t/374791 is a distinct throttling category. No new driver/firmware/crash/OOM reports beyond these.
+
+### Cross-correlated findings
+
+1. **eugr daily build cadence continues; dev520 now Arm C target (Check 3 — high confidence):** dev520 (June 27, 11:48 UTC, +40 commits vs dev480) supersedes dev480. DSV4F MoE patch and DeepGEMM `nv_dev` branch from dev448 carry forward. Daily cadence (dev480 June 26, dev520 June 27) means Arm C target will likely be at dev600+ by the time the eval window opens. If dev520 shows regressions, fall back to dev448 (known-good DSV4F patch, June 25, FlashInfer `0.6.13-25dd814e-d20260625`).
+
+2. **PR #41834 is substantial active SM12x work (Check 2 — medium confidence):** 116 files, ~15.5k lines; Triton-based fallback for SM120/SM121 DeepSeek V4 Flash; validated on dual GB10/DGX Spark. Not a Qwen3.6-35B-A3B production concern. When merged it will close the DeepSeek-V4-Flash → SM121 enablement gap and likely close #41063. eugr will pick it up in the next nightly build post-merge.
+
+3. **Asus GX10 60W GPU cap is a new power-throttle category (Check 5 — new thread, low confidence for NVIDIA DGX Spark impact):** /t/374791 shows 60W cap (not 14W, not hard power-off) after latest BIOS/firmware on Asus-specific hardware. Concurrent /t/374721 suggests active community investigation. Production unit is NVIDIA-branded DGX Spark (distinct OTA path from Asus GX10); direct risk is low. Watch for NVIDIA response or corresponding thread on NVIDIA-branded units.
+
+4. **vLLM v0.24.0 false positive documented (Check 2 — confirmed):** Initial WebSearch hallucinated "Release v0.24.0 · vllm-project/vllm" with June 26, 2026 date. PyPI and GitHub 404 confirm no such version. For future recon runs: verify via PyPI (`https://pypi.org/project/vllm/`) as authoritative source; distrust search engine version claims.
+
+5. **Arena sparkarena X post metric is NOT tg128 c1 (Check 1 — confirmed):** "130 tok/s at c=10 with 100k prior context" is a concurrency-10 / pre-filled-context metric, not our tg128 c1 baseline (80.27 tok/s, empty context). Arena trigger threshold (88.3 tg128 c1) not breached. Post may reflect a new leaderboard entry not visible in the world-readable `benchmarks` collection.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 >88.3 tok/s (10% above 80.27) | NOT FIRED — Firestore sparse; 130 tok/s X post is c=10 not tg128 c1 |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both OPEN |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — PR #41834 (related SM12x work) OPEN |
+| vLLM #37754 FlashInfer+MTP fix landed | NOT FIRED — still open |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 40 days past 3.7-Max API launch |
+| MXFP4 online quantization on Qwen | NOT FIRED |
+| FlashInfer heterogeneous head support | NOT FIRED |
+
+### Overall classification: WORTH WATCHING
+
+Primary: eugr dev520 (June 27) supersedes dev480 as Arm C eval target; daily 0.23.1rc1 build cadence continues. Secondary: PR #41834 (SM12x DSV4F support, 116 files, ~15.5k lines) is active substantial work that advances SM121 ecosystem when merged. New forum thread /t/374791 (Asus GX10 60W GPU power cap after firmware) is a new throttle category to watch. No formal triggers fired; production stable at 45+ days uptime.
+
+### Recommendations
+
+1. **[PRIORITY 1] Update Arm C eval target to dev520:** dev480 (Entry 090) superseded by dev520 (June 27, `0.23.1rc1.dev520+g9fd00ee00.d20260627`). DSV4F MoE patch and DeepGEMM `nv_dev` branch carry forward. If daily cadence continues before eval window opens, consider pinning dev448 (most recent confirmed-good with DSV4F fix) rather than chasing the latest. Sandbox only; do NOT touch production qwen35.
+2. **[PRIORITY 2] Monitor vLLM PR #41834 (SM12x DSV4F support):** Large PR (116 files, ~15.5k lines) adding Triton SM12x fallback for DeepSeek V4 Flash, validated on GB10/DGX Spark SM121. When merged, closes #41063 and eugr picks it up next nightly. Not a blocker for current Qwen3.6-35B-A3B FP8 production config.
+3. **[PRIORITY 3] Monitor /t/374791 (Asus GX10 60W GPU power cap):** Watch for NVIDIA response or community workaround. Symptom (60W cap after firmware) is distinct from 14W throttle and hard-power-off cluster. Production unit is NVIDIA-branded DGX Spark, not Asus GX10; assess if a corresponding thread appears for NVIDIA-branded units before treating as production risk.
+4. **[PRIORITY 4] Qwen3.7 next check: July 3.** 40 days past Qwen3.7-Max API launch. If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift focus to Qwen4, North Mini Code 1.0 FP8, and Nex-N2-mini.
+5. **[NOTE] vLLM version claims via search are unreliable:** search engine hallucinated v0.24.0 this run. Always verify via PyPI directly. Future recon: check PyPI before reporting new vLLM stable version.

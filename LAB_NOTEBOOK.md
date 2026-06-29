@@ -7188,3 +7188,52 @@ Primary: eugr dev520 (June 27) supersedes dev480 as Arm C eval target; daily 0.2
 3. **[PRIORITY 3] Monitor /t/374791 (Asus GX10 60W GPU power cap):** Watch for NVIDIA response or community workaround. Symptom (60W cap after firmware) is distinct from 14W throttle and hard-power-off cluster. Production unit is NVIDIA-branded DGX Spark, not Asus GX10; assess if a corresponding thread appears for NVIDIA-branded units before treating as production risk.
 4. **[PRIORITY 4] Qwen3.7 next check: July 3.** 40 days past Qwen3.7-Max API launch. If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift focus to Qwen4, North Mini Code 1.0 FP8, and Nex-N2-mini.
 5. **[NOTE] vLLM version claims via search are unreliable:** search engine hallucinated v0.24.0 this run. Always verify via PyPI directly. Future recon: check PyPI before reporting new vLLM stable version.
+
+---
+
+## Entry 092 - DGX Spark Recon (2026-06-29)
+
+### Per-check summaries
+
+**Check 1 — Arena:** spark-arena.com and Firestore REST both return 403/empty in remote execution env (same as all prior remote-env entries). Firestore `benchmarks` collection returned `{}`. No evidence of new FP8 Qwen3.6-35B-A3B single-node vLLM entry above trigger threshold (88.3 tok/s). Community search returned 97 tok/s reference — NVFP4 technigmaai recipe (previously tracked, Entry 081), not FP8 vLLM. **Arena FP8 vLLM baseline unchanged: 80.27 tok/s (tg128 c1, Stojanovic, DFlash n8). Arena top overall: 218.85 tok/s (NVFP4 on Atlas). Trigger not fired.**
+
+**Check 2 — vLLM releases:** v0.23.0 (June 13, 2026) confirmed as latest stable via PyPI and WebSearch — **no new release since Entry 091.** No v0.24.0 (confirmed hallucination in Entry 091; search engine again listed it; contradicted by PyPI). PR #39138 (Gemma4 xgrammar bypass) and PR #40099 (Gemma4 repetition loops): no merge evidence — treating as still OPEN per Entry 091 tracking. Newly found active Gemma4 issues against v0.23.x+: **#43326** (GELU_TANH unsupported in CPU fused MoE path), **#44494** (Gemma 4 12B not working), **#44548** (crashes on OpenShift) — suggests ongoing Gemma4 instability post-v0.23.0; unrelated to structured output trigger. PR #41834 (SM12x DSV4F support, 116 files): still OPEN. No triggers fired.
+
+**Check 3 — eugr/spark-vllm-docker:** dev520 (`0.23.1rc1.dev520+g9fd00ee00.d20260627`, June 27) confirmed as latest — **no new build found for June 28–29.** First 2-day gap in recent daily cadence (dev480 June 26, dev520 June 27). Last eugr issue activity: June 23, 2026 (#246). PR #279 (DFlash + FP8 KV Cache): no update. **Arm C eval target remains dev520; fallback pin dev448 (June 25) unchanged.**
+
+**Check 4 — Qwen models:** Qwen3.7 open weights **NOT released** — June 29 is 41 days past Qwen3.7-Max API launch (May 19). InsiderLLM "June window is closing" article confirms no release; no Qwen3.7-* repos under official Qwen HF org. No Qwen4 announcement found. No new A3B-class models from other labs identified. **Next check: July 3 per Watch Item.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403 in remote env):** No new threads found from June 29, 2026. Same threads as Entry 091: /t/374791 (Asus GX10 60W power cap, June 27-28) still no NVIDIA response visible; /t/374721 (Asus GX10 idle power) concurrent community discussion. Hard-power-off cluster unchanged at 5 threads (MODS-020000600139), no resolution. Driver 610.43.02 remains community-validated option (/t/373994, June 21); no new driver release. No new driver/firmware/crash/OOM reports.
+
+### Cross-correlated findings
+
+1. **Clean-day quiescence across all 5 checks:** No new releases (vLLM, eugr), no new Qwen weights, no Arena movement, no new forum posts. All tracking values either confirmed stable or incremented by one day. Zero cross-source signals of change.
+
+2. **Gemma4 ongoing instability in v0.23.x+ (Check 2 — low relevance to production):** Three new Gemma4 issues (#43326, #44494, #44548) filed against v0.23.x suggest Gemma4 support remains unstable even in the current stable release. Structured output trigger (#39138/#40099) not fired; no experiment scheduling implication today, but trend is unfavorable for scheduling a Gemma4 experiment near-term.
+
+3. **eugr build cadence: first 2-day gap since June 25 (Check 3 — medium confidence):** dev480 was June 26, dev520 was June 27 — no June 28 or June 29 build detected. Could be weekend or build-on-demand behavior. Arm C eval target (dev520) and fallback (dev448) both unchanged.
+
+4. **Qwen3.7 non-release now 41 days past 3.7-Max API launch (Check 4 — high confidence):** Well past the original June 6-14 projection (3.5→3.6 lag pattern). June window effectively closed. July is now the primary window; probability declining each passing week.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 >88.3 tok/s (10% above 80.27) | NOT FIRED — Firestore empty/403 in remote env |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — still OPEN; new Gemma4 issues #43326/#44494/#44548 signal continued instability |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — PR #41834 still OPEN |
+| vLLM #37754 FlashInfer+MTP fix landed | NOT FIRED — still open |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 41 days past 3.7-Max API launch; June window closed |
+| MXFP4 online quantization on Qwen | NOT FIRED |
+| FlashInfer heterogeneous head support | NOT FIRED |
+
+### Overall classification: NO ACTION
+
+All 5 checks stable. No releases, no new Qwen weights, no Arena movement, no new forum posts, no triggers fired. Gemma4 instability in v0.23.x noted but not a production concern. eugr build cadence appears to have paused (no June 28–29 build). Production unit at 46+ days uptime, zero incidents. Next meaningful check target: July 3 (Qwen3.7 watch date).
+
+### Recommendations
+
+1. **[PRIORITY 1] Qwen3.7 next check: July 3** — 41 days past 3.7-Max API launch; June window effectively closed. If absent July 16, update Watch Item to treat closed-weight-first as working conclusion and shift focus to Qwen4, North Mini Code 1.0 FP8, and Nex-N2-mini.
+2. **[PRIORITY 2] Monitor eugr for resumed build cadence** — first 2-day gap detected (June 28–29). If dev cadence resumes, Arm C eval target may shift again before eval window opens; consider pinning dev448 as stable known-good DSV4F baseline rather than chasing the nightly.
+3. **[CARRY-FORWARD] Asus GX10 60W GPU power cap (/t/374791):** Still no NVIDIA response. Watch for corresponding NVIDIA-branded DGX Spark thread before treating as production risk.
+4. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment:** No new community reports. Gate before Arm D NVFP4 eval. Requires explicit user approval + physical console.

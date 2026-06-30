@@ -1,7 +1,7 @@
 # NVIDIA DGX Spark — Full System Configuration
 
 > **Purpose:** Complete configuration reference to rebuild this system from scratch after a wipe.
-> **Last verified:** 2026-04-30
+> **Last verified:** 2026-06-30 (§6.1, §11, §12 #7 corrected to Entry 073/076/080 live state — native pre-quant FP8, BF16 KV, FLASH_ATTN, batched-tokens 32768)
 
 ---
 
@@ -82,22 +82,23 @@ Tailscale is installed and running. The machine is registered as `spark` in the 
 
 ### 6.1 qwen35 — LLM Inference (Port 8000)
 
-The primary LLM serving Qwen3.6-35B-A3B mixture-of-experts model with on-the-fly FP8 quantization and MTP speculative decoding.
+The primary LLM serving the Qwen3.6-35B-A3B mixture-of-experts model with **native pre-quantized FP8** (adopted 2026-05-18, Entry 073 — replaced on-the-fly FP8) and MTP=2 speculative decoding.
 
 **Key details:**
 - **Image:** `vllm-cu132-test:latest` (vLLM v0.19.1rc1.dev219+cu132, custom build)
-- **Model:** `Qwen/Qwen3.6-35B-A3B` (on-the-fly FP8 quantization) — adopted 2026-04-23
+- **Model:** `Qwen/Qwen3.6-35B-A3B-FP8` (**native pre-quantized FP8**, block-scaled) — adopted 2026-05-18 (Entry 073; was `Qwen/Qwen3.6-35B-A3B` + on-the-fly `--quantization fp8` from 2026-04-23)
 - **Served as:** `spark-llm`
 - **Max context length:** 131072 tokens (128K — bumped from 32K on 2026-05-10, Entry 065. Model native max is 262144; 128K chosen for safe KV cache margin)
 - **GPU memory utilization:** 0.70
-- **KV cache:** FP8, 47.18 GiB, 1,123,584 tokens (~4% drop from 32K config due to per-request reservation scaling). Max concurrency at 128K full context: 29.76×
-- **Speculative decoding:** MTP=2 (acceptance rate 80.7%)
-- **MoE backend:** TRITON (auto-selected)
-- **FP8 kernel:** CutlassFP8ScaledMMLinearKernel (native SM121 support)
-- **Attention backend:** FLASHINFER
+- **KV cache:** **BF16 (auto — do NOT set `--kv-cache-dtype fp8`)**, Entry 073. 504,912 tokens @ 131K, max concurrency 3.85× (BF16 KV uses ~2× memory/token vs the old FP8 KV's 1,123,584 tokens; non-binding for current workload)
+- **Speculative decoding:** MTP=2 (acceptance ~80%)
+- **MoE backend:** TRITON (auto-selected); FlashInfer for MoE kernels via `VLLM_FLASHINFER_MOE_BACKEND=latency`
+- **FP8 kernel:** native pre-quant block-scaled FP8 (do NOT add `--quantization fp8`)
+- **Attention backend:** **FLASH_ATTN** (auto-selected on SM121 — verified Entry 076; NOT FlashInfer)
 - **Async scheduling:** Enabled
-- **Performance:** 59.9 tok/s c1, 166.2 c4, 373.8 c8, 564.0 c16 aggregate
-- **Startup time:** ~280-360s (warm Triton cache)
+- **max-num-batched-tokens:** 32768 (was 4096 pre-2026-05-18; bumped on the pre-quant switch, Entry 073)
+- **Performance (kernel 1021, Entry 080 harness):** 73.1 tok/s c1, 186.7 c4, 406.9 c8, 730.5 c16 aggregate (prior on-the-fly: 59.9/166.2/373.8/564.0)
+- **Startup time:** ~435s cold (fresh FP8 Triton JIT; first ~20 reqs warm to full speed) — Entry 073
 - **API endpoint:** `http://192.168.10.32:8000/v1` (WiFi) or `http://192.168.10.33:8000/v1` (Ethernet)
 
 ```bash
@@ -120,24 +121,23 @@ docker run -d \
     --host 0.0.0.0 \
     --max-model-len 131072 \
     --gpu-memory-utilization 0.70 \
-    --quantization fp8 \
-    --kv-cache-dtype fp8 \
     --reasoning-parser qwen3 \
     --language-model-only \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
-    --max-num-batched-tokens 4096 \
+    --max-num-batched-tokens 32768 \
     --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
 ```
 
 **Notes:**
 - `--entrypoint python3` required — cu132 image uses NVIDIA base entrypoint
-- `--max-num-batched-tokens 4096` required for MTP with Mamba/hybrid architecture
-- `--speculative-config` enables Multi-Token Prediction (MTP=2 speculative tokens)
+- `--max-num-batched-tokens 32768` (was 4096 pre-2026-05-18; bumped on the pre-quant switch, Entry 073)
+- **Pre-quant model: do NOT add `--quantization fp8` or `--kv-cache-dtype fp8`** — inappropriate for native FP8 weights and impose 5-15% throughput cost; KV cache runs BF16 (auto) by design (Entry 073)
+- `--speculative-config` enables Multi-Token Prediction (MTP=2 speculative tokens, acceptance ~80%)
+- Attention backend auto-selects **FLASH_ATTN** on SM121 (verified Entry 076) — do NOT force FlashInfer for attention; FlashInfer is used only for MoE via `VLLM_FLASHINFER_MOE_BACKEND=latency`
 - Triton cache at `/home/claude/.cache/triton-cu132` — separate from cu130 cache (preserved for rollback)
 - `enable_thinking: false` in API requests must be at request top level (`chat_template_kwargs`), NOT inside `extra_body`
-- Pre-quantized `Qwen3.5-35B-A3B-FP8` hangs on v0.19.0 (Qwen3.6-FP8 pre-quant reportedly works — re-test pending)
-- Rollback: swap image to `vllm/vllm-openai:v0.19.0-aarch64-cu130`, remove entrypoint override + `-m` + `--max-num-batched-tokens` + `--speculative-config`, change triton mount to `/home/claude/.cache/triton`
+- **Rollback to on-the-fly FP8 (pre-Entry-073):** `cp /home/claude/docker-compose.yml.pre-fp8prequant /home/claude/docker-compose.yml && docker compose stop qwen35 && docker compose up -d qwen35` (~6 min; the backup preserves the exact prior config)
 
 ### 6.2 qwen3-embed — Embedding Model (Port 8001)
 
@@ -389,7 +389,7 @@ With the current 8-container configuration (5 use GPU):
 
 | Component | GPU MiB | Notes |
 |-----------|---------|-------|
-| qwen35 (Qwen3.6-35B-A3B FP8 + MTP) | ~87,500 | 0.70 × 121.6 GiB (weights + KV cache + MTP drafter) |
+| qwen35 (Qwen3.6-35B-A3B-FP8 pre-quant + MTP, BF16 KV) | ~84,600 | 0.70 × 121.6 GiB (weights + BF16 KV cache + MTP drafter); live-measured 84,565 MiB 2026-06-30 |
 | bge-m3 (BAAI/bge-m3) | ~12,200 | 0.05 × 121.6 GiB |
 | gliner (gliner_large-v2.1) | ~2,000 | On CUDA |
 | qwen3-embed (Qwen3-Embedding-4B) | ~1,700 | 0.10 × 121.6 GiB |
@@ -413,7 +413,7 @@ These are hard-won lessons. Do not ignore them.
 
 6. **NVFP4 quantization:** Community reports NVFP4 working on GB10 via nightly cu130 with flashinfer_cutlass backend (as of Apr 2026). Previously believed broken on SM 12.1.
 
-7. **Pre-quantized FP8:** `Qwen3.5-35B-A3B-FP8` hangs on v0.19.0. `Qwen3.6-35B-A3B-FP8` reportedly works (community-confirmed Apr 2026). Current config uses on-the-fly FP8 from BF16 model.
+7. **Pre-quantized FP8 (current production):** `Qwen/Qwen3.6-35B-A3B-FP8` native pre-quant is the production model since 2026-05-18 (Entry 073) — the old v0.19.0 hang was version-specific and does not occur on the cu132 build. Do NOT add `--quantization fp8` or `--kv-cache-dtype fp8` (KV is BF16/auto). The earlier `Qwen3.5-35B-A3B-FP8` hang was v0.19.0-only.
 
 8. **Startup order is critical:** See Section 7. Simultaneous container startup causes CUDA memory allocation races and transient hangs.
 

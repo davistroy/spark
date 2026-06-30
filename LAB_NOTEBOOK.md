@@ -7288,3 +7288,33 @@ Primary: vLLM v0.24.0 is a confirmed new stable release (June 29/30, 2026) that 
 4. **[PRIORITY 4] Qwen3.7 next check: July 3.** 42 days past 3.7-Max API launch. June window closed. If absent July 16, treat closed-weight-first as working conclusion and shift attention to Qwen4, North Mini Code 1.0 FP8, Nex-N2-mini.
 5. **[CARRY-FORWARD] Asus GX10 60W GPU power cap (/t/374791):** Still no NVIDIA response. /t/374742 (DSV4 guide) is new useful signal for 2-node users but doesn't affect single-node production.
 6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment:** Gate before Arm D NVFP4 eval. No new community reports. Requires explicit user approval + physical console.
+
+---
+
+## Entry 094 — Manual session: deep recon + live audit + CVE remediation + NVFP4 B1 eval (2026-06-30)
+**Date:** 2026-06-30
+**Operator:** Claude Code (user-directed interactive session with SSH to the box — distinct from the report-only daily routine that wrote Entry 093 the same day)
+**Status:** CVE REMEDIATED ✅; audit HEALTHY; NVFP4 B1 → blocked on v0.23.x build (deferred). Production restored & verified.
+
+> **Numbering note:** this session ran a manual spark-recon + spark-audit + plan + execution while the daily-recon routine independently advanced `main` to Entry 093. The session's working entries (drafted as 081–083 off a stale local `main`) are consolidated here as **Entry 094**; routine entries 081–093 are authoritative and untouched.
+
+#### Deep recon (manual, 5-agent) — UNIQUE findings vs routine Entry 093
+- **Arena: NVFP4-on-vLLM is real and PORTABLE** — Luis Poveda `nvidia/Qwen3.6-35B-A3B-NVFP4` **118.91 tok/s c1 (+78% vs prod, +48% vs FP8-vLLM 80.27)**, Marlin MoE + FULL CUDA graphs + FlashInfer + MTP=3 + FP8 KV (corroborated Leung 76.81, 06-27). **The daily routine's Arena check 403s in its cloud env**, so this is absent from Entry 093 — captured here via the world-readable Firestore `benchmarks` REST path. → Arena Tracking + Watch Item added.
+- **Forum: CVE-2026-24218** (DGX OS shared SSH host keys → unauth RCE) — actioned (below).
+- v0.24.0 (2026-06-29), Qwen3.7 still no open weights, eugr NVFP4 recipe — all consistent with Entry 093.
+
+#### Live audit (spark-audit) — system HEALTHY
+- All 8 containers healthy; qwen35 0 restarts/13 d; endpoints 200; GPU 41 °C idle; disk 43%.
+- **Config drift: `SPARK_CONFIG.md` §6.1 was STALE** (still documented on-the-fly FP8 / FLASHINFER / batched-tokens 4096) → **FIXED this session** to live Entry 073/076 state (pre-quant FP8, FLASH_ATTN, BF16 KV, 32768).
+- Swap ~7.6 GiB in long-running secondary services (chronic; partial restart, re-verify when quiet); ~160 GB reclaimable docker (**53 GB builder cache pruned**).
+- Versions: qwen35 vLLM v0.19.1rc1.dev219 (HIGH gap vs v0.24.0 — deliberate custom SM121 build); FlashInfer 0.6.7; driver 580.159.03 current.
+- Limitation: `dmesg`/journal unreadable (`claude` lacks group) → `usermod -aG systemd-journal,adm claude` recommended.
+
+#### CVE-2026-24218 — REMEDIATED ✅
+Host keys confirmed factory-shared (mtime 2025-09-22 23:46 predates fs-birth 23:49; `root@localhost`; never regenerated). Claude-automated rotation via NOPASSWD primitives: backup → `ssh-keygen` (user) → `sudo cp/chown/chmod` → `sudo systemctl restart ssh` (built-in rollback armed, not triggered). **New fps: ED25519 `xXNusbupisxTmURNJV5khmepwIoym0UldLz3020g14c`, ECDSA `lQ9gqI8gmpqTLka4rg5qeb5kbUiUQb1CpDJIKjacnAo`, RSA `vEjO1Ydc/b6C8PM0/vWPSCC9VQupAITe1NmuT25GRq4`.** This VM re-pinned + verified (RECONNECT_OK, sshd active). Backups `/home/claude/ssh-hostkey-backup-20260630/`. **Remaining (davistroy):** Windows-laptop re-pin; `usermod` journal group.
+
+#### NVFP4 B1 eval — NVFP4 needs v0.23.x (decisive; empirically confirms the routine's inference)
+Downloaded `nvidia/Qwen3.6-35B-A3B-NVFP4` (22 GB, `quant_method: modelopt`, arch `Qwen3_5MoeForConditionalGeneration`). Stopped prod qwen35 (idle), launched single-variable NVFP4 profile on the CURRENT build. **EngineCore died ~20 s at weight-load: `KeyError 'layers.0.mlp.experts.w2_input_scale'` (`qwen3_5.py:407`)** — current loader has no NVFP4 MoE expert-scale mapping. **NOT a kernel/#2776/Marlin issue; no flag fix.** Confirms NVFP4 is coupled to the v0.23.x/v0.24.0 build (Arm C). **B2 (build v0.23.x image) is the next step — multi-hour, deferred to a user-scheduled window.** Production restored & verified (`/health` 200 at 17:17:38Z; `Qwen/Qwen3.6-35B-A3B-FP8`, MTP=2, no quant/kv flags; all 8 healthy). Prod-down window ≈ 12 min, no consumer impact.
+
+#### Artifacts
+`IMPLEMENTATION_PLAN_2026-06-30.md` (CVE ✅; NVFP4/Arm-C deferred; housekeeping); `docs/adr/ADR-0001-nvfp4-sm121-quantization.md` (Proposed). CLAUDE.md verified rules added (NVFP4 load-gap + CVE rotation). `SPARK_CONFIG.md` §6.1/§11/§12 corrected. Eval harness: profile `nvfp4_curbuild.env`.

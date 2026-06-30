@@ -6678,3 +6678,102 @@ No production action required, no emergency. However, the DFlash/vLLM upgrade ev
 **Downstream Phase 5 arms:** B3 (DFlash + prefix-caching) is now moot — prefix caching addresses shared-prefix latency, not the batch-throughput penalty that sinks DFlash. The remaining *independent* candidate is **Arm C (eugr 0.22.1 build)**, which tests a newer vLLM BUILD (first SM121-native kernels) — orthogonal to the spec-decode method, and the real "+20% build" lead. Arm C needs single-node TP=1 adaptation (U-3, ~3h) and carries the ~12h cuDNN graph-corruption risk; deferred to a user-approved window.
 
 **Production restored** via `restore_production.sh` after the measurement window (~1.5h downtime, all idle). Eval artifacts: `results/qwen36_fp8_dflash_n8_20260616_210900/`, `results/prod_mtp2_n2_20260616_215141/`. Harness changes (entrypoint spec-method support, compose `:-`→`-` fix) retained for future arms; backups at `*.bak-20260616`.
+
+---
+
+## Entry 081 — DGX Spark Recon (2026-06-30)
+**Date:** 2026-06-30
+**Operator:** Claude Code (spark-recon skill — report-only, no hardware access; user-requested)
+**Status:** ACTION NEEDED — (1) security: CVE-2026-24218 shared-SSH-host-key RCE applies to DGX OS; (2) opportunity: NVFP4-on-vLLM emerged across 3 of 5 checks as the top portable perf lead for our exact production model (+78% c1 vs prod on a deployable runtime). No production threat; nothing broken.
+
+### Check 1 — Arena (Firestore `benchmarks`, project spark-arena)
+Full 141-doc collection pulled via world-readable Firestore REST (no API key needed; web UI 403s on Cloudflare but not needed). Metric = exact `tg128 (c1)`.
+- **Top FP8 Qwen3.6-35B-A3B single-node ON vLLM: 80.27 tok/s — Stojanovic** (DFlash + flash_attn + fastsafetensors, container `vllm-node-tf5`). **UNCHANGED (0.0%)** vs baseline; this is the exact entry we already evaluated and REJECTED in Entry 080 (DFlash). Next FP8 vLLM: Walczak 77.88, Hobson 60.70 (MTP). **Nothing exceeds the 88.3 (+10%) FP8 action gate.**
+- **Top FP8 any runtime: 172.03 — Walczak, Atlas** (proprietary, non-portable). UNCHANGED.
+- **Top overall 35B-class: 218.85 — Qwen3.6-35B-A3B-NVFP4 on Atlas** (Rawat). UNCHANGED. (222.77 LFM2.5-350M tiny-model excluded.)
+- **NEW CONTENDER (the finding that matters): Luis Poveda — Qwen3.6-35B-A3B-NVFP4 on vLLM, single-node, 118.91 tok/s** (submitted 2026-06-30, recipe `Qwen36-35B-A3B-NVFP4-nvidia`, container `vllm-node`). **+78% over production (66.9), +48% over best FP8 vLLM (80.27), on a PORTABLE runtime.** Raised the NVFP4-on-vLLM ceiling +54% over the prior best (Frick 77.07, 2026-05-06). Corroborated by Hon Lam Gabriel Leung 76.81 (2026-06-27). Recipe: `nvidia/Qwen3.6-35B-A3B-NVFP4`, `--kv-cache-dtype fp8`, `--attention-backend flashinfer`, `--moe-backend marlin`, MTP=3 (`moe_backend:triton`), async-scheduling, fastsafetensors, chunked-prefill, prefix-caching, **NO `--enforce-eager` (full CUDA graphs work)**.
+- New runtime **SGLang** on the board (10 entries) but weak at 35B-class (~19 tok/s c1) — not a portable threat yet.
+
+### Check 2 — vLLM releases (github vllm-project/vllm)
+**NEW: v0.24.0 released 2026-06-29** (stable; 571 commits / 256 contributors) — newer than baseline's tracked v0.23.0. Headline: MiniMax-M3, DeepSeek-V4 opt, Model Runner V2 for quantized, streaming tool-call parser. **Classification HIGH by keyword (SM120) but practical GB10 relevance MODERATE — SM120 ≠ our SM121** (DeepSeek-V4 on desktop Blackwell RTX50/compute-12.0, #43477; no SM121/sm_12-guard/GB10/#38126/cuDNN-graph text). DFlash now mainline (#44586, DFlash+FlashInfer #43081) — does not change Entry 080 rejection (throughput-based, not load-based). EAGLE3 for Qwen3 (#43132). **Gemma4 PRs #39138 + #40099 BOTH STILL OPEN** (no movement since 06-16). **DeepGEMM SM12.x tracking #41063 STILL OPEN** (explicitly names GB10/SM121 → DeepGEMM-FP8 benchmark remains gated off). v0.24.0 joins v0.23.0 as an Arm C build-upgrade candidate.
+
+### Check 3 — eugr/spark-vllm-docker (since 2026-06-16)
+**New wheels 2026-06-28:** vLLM 0.23.1rc1.dev537+g6eb63a1da (was dev53), FlashInfer 0.6.13-5f2bdc41-d20260628 (newer cubin/JIT wheels, same 0.6.13 line). **HEADLINE: new `qwen3.6-35b-a3b-nvfp4.yaml` recipe for our exact production model** — `nvidia/Qwen3.6-35B-A3B-NVFP4`, Marlin MoE, FlashInfer attn, MTP=3, `--kv-cache-dtype fp8` (NVFP4-native FP4 KV reverted to FP8 due to vLLM bug, commit 1d45b34), `VLLM_MARLIN_USE_ATOMIC_ADD=1`, 262K max-len. **Caveat: defaults to TP=2/Ray multi-Spark (gpu_mem_util 0.4); needs TP=1 adaptation + higher util for single-Spark eval — not a drop-in.** DFlash recipe bumped to n=15 + flash_attn (skews harder single-stream; does not change Entry 080). #164 FlashInfer-missing materially de-risked (FlashInfer built from source, freshly rebuilt; DFlash recipe no longer needs FlashInfer) — but NVFP4 recipes DO require it, so verify image contains FlashInfer before NVFP4 eval. cutlass-dsl 4.4.2 pin location not reconfirmed this pass (minor gap).
+
+### Check 4 — Qwen / A3B-class models
+**No Qwen3.7 open weights as of 2026-06-30** — zero `Qwen/Qwen3.7-*` repos; 3.7-Max/Plus remain API-only. Projected open-weights window slipped to **late-June → mid-July**; likelihood decreasing daily — keep tight weekly watch (would be near-drop-in successor). Off-class new official Qwen weights (NOT successors, do not bench as prod candidates): `Qwen/Qwen-AgentWorld-35B-A3B` (agent-sim world model) + Qwen-Robot suite (06-23). New non-Qwen comparators, both BELOW production on the sound FP8/SM121 path: **Cohere North Mini Code 1.0** (06-09, 30B MoE/3B, FP8 ~35 tok/s c1, NVFP4 ~58; coding-specialized, 90.2% HumanEval) and **NVIDIA Nemotron 3 Nano 30B-A3B** (Mamba2-Transformer HYBRID MoE, FP8 ~47.6 / NVFP4 ~74.75 — but the hybrid-GDN+FP8-KV class is exactly the q_scale=1.0 / 0% MTP-acceptance trap, cf. Coder-Next; wins are NVFP4-only). Name-squats to ignore: `RscriptSQwen/Qwen3.7-plus`, `armand0e/qwen3.7-max-pi-traces`.
+
+### Check 5 — NVIDIA forum (719 + 721 + 723 all live this run)
+- **ACTION — Security Bulletin CVE-2026-24218** (/t/374930, 06-30): DGX OS factory images ship **identical/cloned SSH host keys** across units → unauth network RCE/impersonation. Fix is cheap/non-disruptive: regenerate host keys + re-pin `known_hosts`. Applies to our `spark.k4jda.net` if never reconfigured. **Only item demanding prompt action; does not touch the inference stack.**
+- **NVFP4 = SM121 throughput frontier** (multi-thread): iromu vLLM-nightly NVFP4 (FlashInfer attn + Marlin MoE + MTP=3) hits **249–268 tok/s decode, 92.2% spec-accept, 92/100 tool-eval** on DGX Spark (/t/371810); env `FLASHINFER_DISABLE_VERSION_CHECK=1`, `CUTE_DSL_ARCH=sm_121a`. Corroborates Check 1 + Check 3.
+- **vLLM 0.23.x confirmed running on GB10** (eugr, /t/374827, 06-28) — **de-risks Arm C.** Payload is a Claude-Code/Messages-API compat shim.
+- INFO: DFlash-for-122B independently re-validates our Entry 080 (single-stream optimizer, collapses at concurrency, /t/374328). Atlas ~130 c1 / ~99 agg c4 (single-stream signature). New **flashinfer #2776: NVFP4 MoE crash on SM121 during CUDA-graph capture** — relevant to any NVFP4 arm (may need enforce-eager or triton path; note Poveda ran full graphs OK → build-dependent).
+- **No new driver/kernel/firmware** — current 580.159.03 / 6.17.0-1021 is the top of the thread. June software update (/t/371965) = UX/cluster only (Sync Cluster Assistant, NCCL 2.30u1); no driver/kernel/CUDA/firmware change. #37754 still open but **we are unaffected** (auto-selected FLASH_ATTN, not FlashInfer attention). 14W/60W power cap driver-baked, NVIDIA-acknowledged, unfixed.
+
+### Cross-Correlated Findings
+1. **NVFP4-on-vLLM (3 sources: Check 1 Poveda 118.91 + Check 3 eugr recipe + Check 5 iromu 249–268 / forum frontier).** Strongest portable perf lead for our exact model. **Directly challenges our verified rule "no viable INT4/4-bit path on SM121 / Marlin WNA16 hangs → enforce-eager."** That rule was derived from AWQ-INT4 (compressed-tensors gs=32); NVFP4 is a distinct native-Blackwell FP4 format and Poveda runs Marlin MoE with FULL CUDA graphs (no enforce-eager). Caveat: flashinfer #2776 NVFP4-MoE graph-capture crash is build-dependent. → **warrants a Phase 5 NVFP4 eval arm.**
+2. **vLLM 0.23.x/0.24.0 build upgrade (Check 2 release + Check 3 eugr wheels + Check 5 eugr GB10 confirmation).** Arm C de-risked; now two candidate versions (0.23.0, 0.24.0), both inheriting the cuDNN-graph-corruption fix lineage. Deferred to user window.
+3. **DFlash = single-stream optimizer, re-confirmed (Check 5 entrpi-122B + Check 1 Stojanovic still FP8-vLLM top + our Entry 080).** MTP=2 remains the right call for the shared endpoint.
+
+### Triggered Alerts
+- **No armed Recon Trigger fired:** arena FP8 gate NOT tripped (80.27 unchanged < 88.3); Qwen3.7 trigger NOT fired (no open weights); Gemma4 triggers not fired (PRs open, no release pairing); DeepGEMM trigger not fired (#41063 open, not arch-paired); #37754 trigger not fired (no fix).
+- **New unlisted ACTION (security): CVE-2026-24218** — not in the trigger table; add as a one-off action.
+- **Opportunity meeting "significantly better config/model available": NVFP4-on-vLLM** — elevates overall to ACTION NEEDED on the eval axis (not a production emergency).
+
+### Overall Classification: ACTION NEEDED
+Two action items, neither a production threat: (1) **do-now security** — regenerate the Spark's SSH host keys (CVE-2026-24218); (2) **evaluate-next** — NVFP4-on-vLLM arm, the first credible challenge to the "no 4-bit path on SM121" rule and +78% c1 over production on a portable runtime. Production health is unaffected; MTP=2 + FP8 pre-quant remains correct today.
+
+### Recommendations
+1. **[SECURITY, do-now]** Regenerate Spark SSH host keys per CVE-2026-24218: `sudo rm /etc/ssh/ssh_host_* && sudo ssh-keygen -A && sudo systemctl restart ssh`, then re-pin fingerprints in local `~/.ssh/known_hosts`. Needs interactive sudo by `davistroy` (`ssh-keygen`/`rm /etc/ssh` are not in `claude`'s NOPASSWD set) and will change the host fingerprint — coordinate so the session isn't locked out. **Confirm whether the unit was ever reconfigured first.**
+2. **[EVAL, schedule]** Phase 5 NVFP4-on-vLLM arm — adapt the Poveda/eugr recipe to single-Spark TP=1 (raise gpu-mem-util from 0.4), keep FP8 KV, Marlin MoE, FlashInfer attn, MTP=3. Gate: ≥+5% c8 vs the authoritative MTP baseline (c8 406.9, Entry 080). Verify image contains FlashInfer (#164) and watch flashinfer #2776 (may force enforce-eager/triton). Sandbox only — do NOT touch production qwen35.
+3. **[BUILD, defer to user window]** Arm C now has two candidates (v0.23.0 stable, v0.24.0 stable 06-29), de-risked by eugr's GB10-confirmation. Carries the ~12h cuDNN-graph-corruption risk → soak-test required. Naturally combinable with the NVFP4 arm (eugr 0.23.x image already ships the NVFP4 recipe).
+4. **[WATCH]** Qwen3.7 open weights — tight weekly watch through mid-July (release window open, overdue).
+5. **[passive]** Gemma4 PRs #39138/#40099 + DeepGEMM #41063 all still open — no Gemma4/DeepGEMM experiment yet.
+
+### Proposed Tracking Value Updates (PENDING USER CONFIRMATION — not yet applied to SPARK_BASELINE.md)
+- `vllm_last_checked_version`: v0.23.0 → **v0.24.0** (2026-06-29)
+- `vllm_latest_observed`: v0.23.0 → **v0.24.0** (WORTH WATCHING; SM120 not SM121; Arm C candidate #2)
+- `svd_last_checked_date`: 2026-06-16 → **2026-06-30** (eugr wheels 0.23.1rc1.dev537 + FlashInfer 0.6.13-d20260628; NEW NVFP4 recipe)
+- `forum_last_checked_date`: 2026-06-16 → **2026-06-30** (719/721/723 all accessible this run)
+- Arena: add `arena_top_nvfp4_vllm_tok_s` = **118.91** (Poveda, portable vLLM, 2026-06-30); FP8-vLLM (80.27) and overall (218.85 Atlas) UNCHANGED
+- New Watch Item: **NVFP4-on-vLLM eval arm** (cross-correlated, challenges the no-4-bit-path rule); **CVE-2026-24218 SSH host-key remediation**
+
+---
+
+## Entry 082 — DGX Spark Audit (2026-06-30)
+**Date:** 2026-06-30
+**Operator:** Claude Code (spark-audit skill — reads live system, no changes made; user-requested)
+**Status:** OPTIMIZATION AVAILABLE — system HEALTHY and live config correct; the standing optimization is the build/NVFP4 upgrade tracked in Entry 081. Plus housekeeping (stale rebuild doc, secondary-service swap, docker cache) — no live problems.
+
+#### Config Drift
+- **Live `qwen35`/`qwen3-embed`/`gliner` configs are CORRECT** — `qwen35` matches the sanctioned Entry 073 pre-quant state exactly: model `Qwen/Qwen3.6-35B-A3B-FP8`, **no** `--quantization fp8`, **no** `--kv-cache-dtype fp8`, `--max-num-batched-tokens 32768`, gpu-util 0.70, MTP=2, `VLLM_FLASHINFER_MOE_BACKEND=latency`, `--entrypoint python3`, absolute HF/triton-cu132 binds, shm 64g, ipc host, restart unless-stopped. `qwen3-embed` has required `--runner pooling` + `--enforce-eager`; `gliner` has `GLINER_DEVICE=cuda` + separate user-writable HF cache. **No live drift.**
+- **WARNING — `SPARK_CONFIG.md` is STALE** (last verified 2026-04-30). The rebuild reference still documents the PRE-Entry-073 config (`Qwen/Qwen3.6-35B-A3B` + `--quantization fp8` + `--kv-cache-dtype fp8`, `--max-num-batched-tokens 4096`, "Attention backend: FLASHINFER"). A disaster-recovery rebuild from it would reconstruct the slower, superseded config (and the FLASHINFER line contradicts Entry 076's verified FLASH_ATTN). → update §6.1 + §11 to the Entry 073/076 state.
+
+#### Missing Optimizations
+- **No active anti-patterns:** no `VLLM_TEST_FORCE_FP8_MARLIN=1`, no `--no-async-scheduling`, no `~`/tilde Docker mounts; pre-quant FP8 is sanctioned (not an anti-pattern). 
+- **Absent flags, all justified/minor:** `--enable-prefix-caching` absent (intentionally deferred, Entry 064 — synthetic bench 0-hit/-7-9% overhead; revisit only with realistic ≥200-tok shared prefix); `--load-format fastsafetensors` not used (LOW — cold-start only); async/chunked-prefill not explicit (likely default-on; baseline records them enabled). None HIGH. The real optimization is the NVFP4/build upgrade in Entry 081, not a missing flag.
+
+#### Memory Budget — headroom OK by design; swap is the one watch item
+- GPU alloc ~102.3 GiB of 121.6 (84565+12524+1989+1681+1538 MiB) → in the audit "WARN" band (95–105) **but by design** (5 GPU models @ gpu-util 0.70, Entry 050). Free GPU ~19.3 GiB, available RAM 8.3 GiB — both nominally WARN-band, both expected for this provisioning. GPU 41 °C idle = HEALTHY.
+- **Swap ~7.6 GiB (WARNING)** — concentrated in the long-running (since 06-15) SECONDARY services: an embed EngineCore 2.43 GiB, gliner(uvicorn) 1.99 GiB, bge-m3 EngineCore 1.19 GiB, vLLM frontends 0.9+0.67 GiB, ce-service 0.41 GiB, neo4j 0.12 GiB. **`qwen35` (fresh since 06-16) carries ~0 swap.** Chronic cold-page accumulation under swappiness=1, not active thrashing (load 0.25, 0% GPU). Clears on a planned restart (Entry 064 precedent: qwen35 EC 2.16→0.26 GiB). Matches the deferred baseline Watch Item (qwen3-embed/gliner swap).
+
+#### System Health: HEALTHY
+- Uptime 14 d; **8/8 containers healthy**; qwen35 0 restarts/13 d (qwen3-embed restart=2, bge-m3 restart=1 — both exit-0, dated to the 06-15 reboot startup-order race, not recurring). Health endpoints 8000/8001/8002 = 200. Disk `/` 43% (2.0 TB free) = HEALTHY.
+- **Docker cleanup opportunity (LOW):** `docker system df` shows 274 GB images (107 GB reclaimable) + **154 GB build cache (53 GB reclaimable)** ≈ 160 GB prunable. Not urgent (2 TB free).
+- **Limitation:** `dmesg`/journal NOT readable (`kernel.dmesg_restrict=1`, `claude` lacks NOPASSWD for dmesg and isn't in `systemd-journal`) → cannot directly confirm absence of Xid/OOM at kernel level. Indirect evidence clean (0 qwen35 restarts/13 d, 0 OOM flags on any container, clean container logs). No fresh tok/s benchmark run (read-only; authoritative c1 = 73.1 on kernel 1021, Entry 080).
+- sysctl: `vm.swappiness=1`, `vm.min_free_kbytes=262144` — both correct.
+
+#### Version Currency
+- **qwen35 vLLM `0.19.1rc1.dev219+g72ff142c3.d20260412` (cu132) vs upstream stable v0.24.0** → ~5 minor versions behind = **HIGH**, **but deliberate** (custom SM121-native build; can't pull upstream directly). This IS the tracked Arm C upgrade (Entry 081 rec #3). torch 2.11.0+cu130, CUDA 13.0 — current.
+- **FlashInfer 0.6.7 vs eugr-build 0.6.13** = MEDIUM, same upgrade bucket.
+- driver **580.159.03** = current/sanctioned (Entry 078; 590 still unsupported) — no gap. qwen3-embed vLLM 0.17.0rc1 = INFO (known-good embedding image, by design).
+
+#### Overall: OPTIMIZATION AVAILABLE
+No CRITICAL/live failures; system is healthy and correctly configured. Optimization axis = the build/NVFP4 upgrade (Entry 081). Housekeeping: stale `SPARK_CONFIG.md`, ~7.6 GiB secondary-service swap (planned-restart clears), ~160 GB prunable docker cache.
+
+#### Recommendations
+1. **Update `SPARK_CONFIG.md`** §6.1 + §11 to the Entry 073/076 live state (pre-quant FP8, no quant/kv-dtype flags, batched-tokens 32768, FLASH_ATTN) — the only correctness fix; prevents a wrong disaster-recovery rebuild.
+2. **Planned restart at next maintenance** to clear ~7.6 GiB secondary-service swap (Entry 064 procedure) — non-urgent.
+3. **`docker builder prune` + `docker image prune`** to reclaim ~160 GB — non-urgent (2 TB free).
+4. **Cross-ref Entry 081:** the NVFP4-on-vLLM eval + Arm C build upgrade are the real performance levers (sandbox only).
+5. **Optional ops fix:** `sudo usermod -aG systemd-journal claude` so future audits can read kernel logs (`journalctl -k`) without sudo — closes the Xid-visibility gap.

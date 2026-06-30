@@ -261,7 +261,7 @@ phase_overrides:
 **Acceptance Criteria:** prefix-caching accuracy impact quantified; keep ON only if AR holds.
 
 ### 5.3 Arm C — eugr 0.22.1 build (build variable)
-**Status:** PENDING · **Execution Mode:** GATED · **Depends On:** 5.1
+**Status:** ABSORBED 2026-06-30 → `IMPLEMENTATION_PLAN_2026-06-30.md` Phase 3 (CS-B). Arm C is now **coupled with the NVFP4 eval** (target build raised to **v0.23.x / v0.24.0** per recon Entry 081); executed there as items 3.2 (obtain v0.23.x image) + 3.4 (FP8/MTP=2 build control). · **Execution Mode:** GATED · **Depends On:** 5.1
 **Tasks:** adapt eugr 0.22.1 stack to single-node TP=1 with our exact prod flags; fresh Triton cache `/home/claude/.cache/triton-eugr022`; prod-equivalent config to isolate build effect; re-validate pre-quant FP8 under #41215. Watch for the ~12h cuDNN graph-corruption bug (fixed only in v0.23.0 — if it reproduces, stop and wait for 0.23).
 **Acceptance Criteria:** build effect measured vs Entry 078; pre-quant-vs-on-the-fly verdict re-confirmed for 0.22; soak stability.
 

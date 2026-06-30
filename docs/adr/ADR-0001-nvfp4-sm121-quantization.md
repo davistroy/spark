@@ -1,6 +1,6 @@
 # ADR-0001 — NVFP4 quantization on SM121 (GB10): eval-gated adoption decision
 
-**Status:** Proposed (eval-gated — resolved by Phase 3 of `IMPLEMENTATION_PLAN_2026-06-30.md`)
+**Status:** Proposed (eval-gated). **Update 2026-06-30 (Entry 083):** B1 confirmed NVFP4 **cannot load on the current v0.19.1 build** (`KeyError w2_input_scale`, `qwen3_5.py:407` — loader lacks NVFP4 MoE expert-scale mapping; not a kernel/#2776/Marlin issue). The eval is therefore blocked on **B2 (build a v0.23.x SM121 image)** and deferred to a user-scheduled window. Decision remains open pending that build.
 **Date:** 2026-06-30
 **Deciders:** Troy Davis (owner), Claude Code (analysis)
 **Related:** LAB_NOTEBOOK Entry 081 (recon), Entry 082 (audit); SPARK_ROADMAP §5.3 (Arm C, absorbed); CLAUDE.md verified-rule "no viable INT4 path on SM121"

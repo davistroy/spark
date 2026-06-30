@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-30
 **Branch:** main
-**Status:** IN PROGRESS (2026-06-30) — CS-A (CVE) ✅ 1.1–1.4 done (1.5 davistroy); CS-C: 2.3 ✅, 2.2 partial (re-verify B6), 2.1 davistroy; CS-B started (NVFP4 download in flight). See LAB_NOTEBOOK Entry 083.
+**Status:** IN PROGRESS (2026-06-30) — CS-A (CVE) ✅ 1.1–1.4 done (1.5 davistroy); CS-C: 2.3 ✅, 2.2 partial (re-verify B6), 2.1 davistroy; **CS-B: 3.0 ✅, B1 ✅ RAN → NVFP4 fails to LOAD on current build (`KeyError w2_input_scale` — needs v0.23.x; U1 RESOLVED). B2–B4 require the v0.23.x build window (deferred — user decision).** Production restored. See LAB_NOTEBOOK Entry 083.
 **Based On:** spark-recon Entry 081 + spark-audit Entry 082 (2026-06-30); ultra-plan Phases 0–5 (this session).
 **Relationship to prior plans:**
 - `IMPLEMENTATION_PLAN.md` (Performance Sprint) — COMPLETE 2026-04-30, reference only.
@@ -133,14 +133,14 @@ sudo chmod 600 /etc/ssh/ssh_host_*_key && sudo chmod 644 /etc/ssh/ssh_host_*_key
 **Resolves:** U4 (flag plumbing).
 
 ### 3.1 B1 — NVFP4 cheap probe on CURRENT build
-**Status:** PENDING · **Mode:** GATED
+**Status:** ✅ DONE 2026-06-30 — **NVFP4 does NOT load on the current build.** EngineCore died at weight-load: `KeyError: 'layers.0.mlp.experts.w2_input_scale'` (`qwen3_5.py:407`) — the v0.19.1 loader has no mapping for NVFP4 MoE per-expert input scales. **NOT a kernel/#2776/Marlin-hang issue** (no GPU risk realized) — a weight-schema gap no flag fixes. **Resolves U1/U2: NVFP4 is coupled to Arm C (v0.23.x).** No current-build shortcut. · **Mode:** GATED
 **Profile `nvfp4_curbuild.env`:** `LLM_IMAGE=vllm-cu132-test:latest`, `LLM_MODEL=nvidia/Qwen3.6-35B-A3B-NVFP4`, `LLM_KV_DTYPE=fp8`, `LLM_SPEC_TOKENS=3`, `LLM_EXTRA_ARGS=--moe-backend marlin --attention-backend flashinfer`, `VLLM_MARLIN_USE_ATOMIC_ADD=1`.
 **Do:** Stop prod qwen35; launch profile; **smoke only** — observe whether NVFP4+Marlin loads with FULL CUDA graph capture (not forced eager) and serves `/health` 200.
 **Acceptance (decision, not gate):** Records one of {loads-with-full-graphs | needs-enforce-eager (#2776) | unsupported-on-this-build}. **Resolves U1/U2 cheaply.** If it runs, capture a quick c1/c8 datapoint to isolate quant-vs-build.
 **Then:** restore production (or proceed to 3.2 if continuing same window).
 
 ### 3.2 B2 — Obtain v0.23.x image (Arm C)
-**Status:** PENDING · **Mode:** GATED · **Depends On:** 3.1
+**Status:** PENDING — **REQUIRED & NOW ON THE CRITICAL PATH** (B1 proved NVFP4 needs it). **Deferred to a user-scheduled build window** (not pullable → `git pull /home/claude/spark-vllm-docker` + build; multi-hour + memory pressure on a box holding ~102 GB models → run prod-down or with limited BUILD_JOBS). Prefer eugr prebuilt v0.23.x wheels if available (faster than source). · **Mode:** GATED · **Depends On:** 3.1
 **Do:** Acquire a v0.23.x build — pull eugr prebuilt (`prebuilt-vllm-current` + FlashInfer 0.6.13) or build from `~/spark-vllm-docker`. **Verify the image contains FlashInfer (#164)** and registers `modelopt_fp4` + Marlin sm_121 kernels. Tag locally (e.g. `vllm-cu132-test:v0.23x`). Keep `:pre-eugr-v0201` rollback intact.
 **Acceptance:** Image present, FlashInfer confirmed, quant methods include `modelopt_fp4`. **Resolves U5.**
 

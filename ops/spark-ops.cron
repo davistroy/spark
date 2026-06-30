@@ -1,0 +1,16 @@
+# Spark ops routines (run from this VM; reach the Spark over SSH).
+# Install (append-only):  ops/install-cron.sh
+# Alerts: each script exits nonzero + prints on anomaly. Delivery options:
+#   - set MAILTO below (requires a working mailer, e.g. msmtp/sendmail), and/or
+#   - export SPARK_ALERT_WEBHOOK=<ntfy/Slack/Discord URL> in the cron environment.
+MAILTO=""
+# SPARK_ALERT_WEBHOOK=https://ntfy.sh/your-spark-topic
+
+# Daily liveness + error check (13:05 UTC) — quiet unless something is wrong.
+5 13 * * *   /home/davistroy/dev/personal/spark/ops/spark-healthcheck.sh
+# Weekly NON-DISRUPTIVE inference smoke / perf-drift (Mon 13:30 UTC).
+30 13 * * 1  /home/davistroy/dev/personal/spark/ops/spark-smoke.sh
+# Weekly security posture (Mon 14:00 UTC).
+0 14 * * 1   /home/davistroy/dev/personal/spark/ops/spark-security.sh
+# Weekly LLM config audit (Tue 02:00 UTC) — DISABLED until headless `claude` auth is verified.
+# 0 2 * * 2  /home/davistroy/dev/personal/spark/ops/spark-audit-cron.sh

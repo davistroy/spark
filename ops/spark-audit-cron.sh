@@ -16,9 +16,9 @@ cd "$REPO" || { notify "$ROUTINE" CRIT "repo not found: $REPO"; exit 1; }
 git pull --rebase --quiet origin main 2>/dev/null || true
 
 # Runs the audit skill; it SSHes to the box, appends an audit Entry to LAB_NOTEBOOK,
-# and (per skill) can open a PR. acceptEdits lets it write the entry; SSH/docker reads
-# should be pre-allowlisted in your project settings.json to avoid prompts under cron.
+# and (per skill) can open a PR. bypassPermissions is required: under cron there is no
+# TTY to approve tool calls, and the SSH/docker/git commands are not allowlisted.
 claude -p "Invoke the personal-plugin:spark-audit skill against the live DGX Spark (SSH claude@spark.k4jda.net via ~/.ssh/id_claude_code). Run the read-only config audit, append a concise audit Entry to LAB_NOTEBOOK.md with the next Entry number, and commit to a new branch + open a PR. Do NOT modify the running system." \
-  --permission-mode acceptEdits 2>&1 | tail -30
+  --permission-mode bypassPermissions 2>&1 | tail -30
 
 log_ok "$ROUTINE" "weekly audit invoked"

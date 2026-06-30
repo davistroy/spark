@@ -12,5 +12,5 @@ MAILTO=""
 30 13 * * 1  /home/davistroy/dev/personal/spark/ops/spark-smoke.sh
 # Weekly security posture (Mon 14:00 UTC).
 0 14 * * 1   /home/davistroy/dev/personal/spark/ops/spark-security.sh
-# Weekly LLM config audit (Tue 02:00 UTC) — DISABLED until headless `claude` auth is verified.
-# 0 2 * * 2  /home/davistroy/dev/personal/spark/ops/spark-audit-cron.sh
+# Weekly LLM config audit (Tue 02:00 UTC). Headless `claude -p` verified 2026-06-30 (runs with bypassPermissions).
+0 2 * * 2  /home/davistroy/dev/personal/spark/ops/spark-audit-cron.sh

@@ -6777,3 +6777,28 @@ No CRITICAL/live failures; system is healthy and correctly configured. Optimizat
 3. **`docker builder prune` + `docker image prune`** to reclaim ~160 GB — non-urgent (2 TB free).
 4. **Cross-ref Entry 081:** the NVFP4-on-vLLM eval + Arm C build upgrade are the real performance levers (sandbox only).
 5. **Optional ops fix:** `sudo usermod -aG systemd-journal claude` so future audits can read kernel logs (`journalctl -k`) without sudo — closes the Xid-visibility gap.
+
+---
+
+## Entry 083 — Plan Execution: CVE remediation + housekeeping + NVFP4 eval start (2026-06-30)
+**Date:** 2026-06-30
+**Operator:** Claude Code (executing `IMPLEMENTATION_PLAN_2026-06-30.md`, user-directed)
+**Status:** IN PROGRESS — CS-A (CVE) DONE; CS-C builder-prune DONE, swap partial; CS-B eval started (NVFP4 download in flight). Branch `recon-081-cve-nvfp4`.
+
+#### Phase 0 — idle confirm ✅
+GPU 0% / 11.7 W, 0 `/v1` POSTs in prior 5 min → safe for disruptive steps. Recorded factory host-key fingerprints (ed25519 `ah+SGtSN…`, ecdsa `T/P4tDRW…`, rsa `sJFmblk…`) for change-verification.
+
+#### Phase 1 — CS-A: CVE-2026-24218 SSH host-key remediation ✅ (1.1–1.4)
+Claude-automated via NOPASSWD primitives (`davistroy` not required). **1.1** backed up factory keys → `/home/claude/ssh-hostkey-backup-20260630/` (6 files). **1.2** generated fresh ed25519/rsa-3072/ecdsa as user, validated with `ssh-keygen -lf`, installed via `sudo cp`+`chown root:root`+`chmod 600/644`. **1.3** `sudo systemctl restart ssh` → active (session survived; built-in rollback-to-backup armed if restart failed — not triggered). **NEW fingerprints (all rotated from factory):** ed25519 `xXNusbupisxTmURNJV5khmepwIoym0UldLz3020g14c`, ecdsa `lQ9gqI8gmpqTLka4rg5qeb5kbUiUQb1CpDJIKjacnAo`, rsa `vEjO1Ydc/b6C8PM0/vWPSCC9VQupAITe1NmuT25GRq4`. **1.4** cleared stale pins on this VM (`ssh-keygen -R` ×3) + reconnected `accept-new` → `RECONNECT_OK host=spark`, sshd active, pinned fp matches new ed25519. **1.5 (Windows-laptop re-pin) PENDING — requires davistroy.**
+
+#### Phase 2 — CS-C housekeeping (partial)
+- **2.3 builder prune ✅** — `docker builder prune -f` reclaimed **53.42 GB**.
+- **2.2 swap restart — PARTIAL** — restarted secondary swap-holders (qwen3-embed, bge-m3, gliner, ce-service) sequentially, all healthy; qwen35 untouched. Swap 7.6 → 6.8 GiB only: **the concurrent NVFP4 download's page-cache pressure is re-swapping cold pages.** Lesson: don't run the swap-clearing restart during a large download (plan correctly said fold into B6). **Re-verify at B6 when box is quiet.**
+- **2.1 journal group — PENDING — requires davistroy** (`sudo usermod -aG systemd-journal,adm claude`; `usermod` not in claude NOPASSWD).
+
+#### Phase 3 — CS-B: NVFP4 + Arm C eval (started)
+- **3.0 prep:** verified `nvidia/Qwen3.6-35B-A3B-NVFP4` exists on HF (17 files); started detached download (`nvfp4-dl` throwaway container, no GPU) into HF cache. Current build already registers `modelopt_fp4` quant (good sign for B1). Download in flight (blobs not yet landed at check time).
+- **B1–B6 PENDING** (B1 cheap-probe on current build gated on download completion; B2 v0.23.x image acquisition is the heavy/long step).
+
+#### Verification (this session)
+CVE: `ssh … 'sudo systemctl is-active ssh'`=active; fresh connect OK; ed25519 fp ≠ factory `ah+SGtSN…` ✓. Builder prune: 53.42 GB reclaimed ✓.

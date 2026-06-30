@@ -7237,3 +7237,54 @@ All 5 checks stable. No releases, no new Qwen weights, no Arena movement, no new
 2. **[PRIORITY 2] Monitor eugr for resumed build cadence** — first 2-day gap detected (June 28–29). If dev cadence resumes, Arm C eval target may shift again before eval window opens; consider pinning dev448 as stable known-good DSV4F baseline rather than chasing the nightly.
 3. **[CARRY-FORWARD] Asus GX10 60W GPU power cap (/t/374791):** Still no NVIDIA response. Watch for corresponding NVIDIA-branded DGX Spark thread before treating as production risk.
 4. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment:** No new community reports. Gate before Arm D NVFP4 eval. Requires explicit user approval + physical console.
+
+---
+
+## Entry 093 - DGX Spark Recon (2026-06-30)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore `benchmarks` REST returned `{}` (403/empty in remote execution env — consistent with all prior remote-env entries). No evidence of new FP8 Qwen3.6-35B-A3B single-node vLLM entry above trigger threshold (88.3 tok/s, 10% above 80.27 baseline). Arena FP8 vLLM baseline unchanged: 80.27 tok/s (Stojanovic, DFlash n8). Arena top overall: 218.85 tok/s (NVFP4 on Atlas). **Trigger NOT fired.**
+
+**Check 2 — vLLM releases: MAJOR FINDING — v0.24.0 CONFIRMED REAL.** GitHub API returned v0.24.0 published 2026-06-29T19:41:59Z; PyPI confirmed upload June 30 01:17-01:18 UTC. **NOTE: Entry 091 labeled "v0.24.0" a search engine hallucination — this was correct at that time (the search referenced June 26; actual release was June 29, after that check). Today's check is the first to catch it.** Key v0.24.0 highlights (408 commits, 200 contributors): (1) **DFlash with FlashInfer (#43081) MAINLINED** — enables official Arm B eval path without a fork; (2) **EAGLE3 for Qwen3 (#43132)** — new spec decode method directly applicable to our production model; (3) Dynamic SD (#32374); (4) CUTLASS FP8 scaled-mm padding bypass (+20%); (5) MoE-permute buffer pre-alloc (+9–14%); (6) SM120 DSV4 support (SM120 = RTX PRO 6000, NOT SM121/GB10 — distinct chip); (7) PDL support for DeepGEMM; (8) Gemma4: Unified FA4 + mm_prefix (#42175) + parser/serving fixes; (9) MRv2 now default for Llama/Mistral dense (in addition to Qwen3). **No explicit SM121 / GB10 / DGX Spark text in release notes.** PR #41834 (SM121 DSV4F support, 116 files): STILL OPEN per community sources (hazyumps/deepseek-v4-flash-gb10 patch repo exists precisely because mainline still lacks SM121 DSV4F). Issue #45317 (DSA models cannot select attention backend on SM121) filed against v0.23.x+ confirms continuing SM121 coverage gaps for sparse-attention models — not a production Qwen3.6-FP8 concern. Gemma4 PRs #39138/#40099: no merge evidence found; treating as still OPEN. DeepGEMM #41063: presumed still open (blocked by #41834).
+
+**Check 3 — eugr/spark-vllm-docker: CORRECTION — dev537 build found (missed by Entry 092).** GitHub releases API returned: `0.23.1rc1.dev537+g6eb63a1da.d20260628` published June 28, 11:45:16 UTC + FlashInfer `0.6.13-5f2bdc41-d20260628`. Entry 092 incorrectly reported "no new build for June 28–29 — first 2-day gap"; the dev537 build existed on June 28 but was apparently missed by that run's check window. dev537 = +17 commits vs dev520 (June 27); still on 0.23.1rc1 dev branch (pre-v0.24.0). No new builds detected June 29–30 in this run. With v0.24.0 released June 29, **eugr is expected to rebuild against v0.24.x in the coming days** — Arm C eval target will likely shift to a v0.24.x-based build. PR #279 (DFlash + FP8 KV Cache): still OPEN. instanttensor/DFlash caveat unchanged.
+
+**Check 4 — Qwen models:** Qwen3.7 open weights **NOT released** — now 42 days past Qwen3.7-Max API launch (May 19, 2026). Confirmed via multiple sources: no Qwen3.7-* repo under official Qwen HF org as of June 30. One search snippet claimed "Qwen 3.7 dominating HF downloads June 16-20" — inconsistent with all prior tracking and likely refers to Qwen3.6 models or is inaccurate; disregarded. No Qwen4 announcement found. No new A3B-class models from other labs. **Next check: July 3 per Watch Item.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json returns 403 in remote env):** No new threads found from June 30, 2026. Search surfaced one previously untracked thread: **/t/374742 "GUIDE: DeepSeek-V4-Flash on 2× DGX Spark (GB10) — Reproducible vLLM Serving Recipe up to 1M Token Context"** (community post, hazyumps; 2-node TP=2+EP setup, SM121 indexer patch not in mainline vLLM, NCCL 2.30.4/RDMA, 384K ctx, MTP=2 — **2-node only, not single-node relevant**). Hard-power-off cluster unchanged at 5 threads (MODS-020000600139). /t/374791 (Asus GX10 60W GPU cap, June 27-28) still no NVIDIA response. No new driver/firmware/crash/OOM reports.
+
+### Cross-correlated findings
+
+1. **v0.24.0 release + eugr rebuild imminent (Checks 2 + 3 — HIGH CONFIDENCE):** v0.24.0 is the new stable baseline (June 29/30). eugr's current build (dev537, June 28) is still on 0.23.1rc1. With a major stable release, eugr is expected to rebase against v0.24.x shortly. **Arm C eval target (currently dev537) will likely shift again before the eval window opens.** Consider waiting for the first v0.24.x-based eugr build before scheduling Arm C, or pin dev537/dev448 as a known-stable baseline.
+
+2. **DFlash mainlined in v0.24.0 (#43081) + eugr PR #279 still OPEN (Checks 2 + 3 — HIGH CONFIDENCE):** DFlash with FlashInfer is now in official v0.24.0. This removes the fork dependency for Arm B eval — but PR #279 (DFlash + FP8 KV Cache, the eugr-specific enhancement) remains open. Arm B eval can proceed against v0.24.0 directly, without waiting for PR #279, to test the mainline DFlash path.
+
+3. **SM121 still not explicitly targeted (Checks 2 + 5 — MEDIUM CONFIDENCE):** v0.24.0 adds SM120 DSV4 support and CUTLASS FP8 improvements but contains no explicit SM121/GB10 text. Community PR #41834 (SM121 DSV4F) still open; issue #45317 (SM121 DSA attention backend) filed. NVFP4 MoE (CUTLASS-FP4) from v0.23.0 forward remains the primary SM121 enablement for NVFP4; no regression visible. Production FP8 config unchanged.
+
+4. **EAGLE3 for Qwen3 in v0.24.0 (Check 2 — new experiment candidate):** EAGLE3 (#43132) provides another speculative decoding option alongside MTP=2 and DFlash. EAGLE3 typically outperforms MTP on single-stream latency (c=1); expect similar tradeoff to DFlash (good c1, uncertain c8+). Add as Arm B4 or standalone eval after Arm C (vLLM upgrade) confirms stability. Requires an EAGLE3 draft model (none pre-built for Qwen3.6-35B-A3B publicly known — may need to generate or identify).
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 >88.3 tok/s (10% above 80.27) | NOT FIRED — Firestore empty/403 in remote env |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — no merge evidence; Gemma4 FA4 (#42175) in v0.24.0 but not the specific guided-JSON + repetition PRs |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — PR #41834 still open; PDL for DeepGEMM in v0.24.0 is unrelated |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 42 days past 3.7-Max; no HF release |
+| speculative AND (Qwen OR MoE) — INFO | PARTIAL MATCH: EAGLE3 for Qwen3 + Dynamic SD in v0.24.0; INFO level only |
+| MXFP4 online quantization on Qwen | NOT FIRED |
+
+### Overall classification: WORTH WATCHING
+
+Primary: vLLM v0.24.0 is a confirmed new stable release (June 29/30, 2026) that materially reshapes the eval roadmap — DFlash mainlined (Arm B eval unlocked officially), EAGLE3 for Qwen3 (new Arm B4 candidate). No SM121/GB10 explicit improvements. Arm C eval target will shift to a v0.24.x-based eugr build when it appears (watch for dev540+). eugr dev537 (June 28) confirmed, correcting Entry 092's "2-day gap" report. Qwen3.7 and all formal triggers remain unfired.
+
+### Recommendations
+
+1. **[PRIORITY 1] Pause Arm C on dev537 — wait for first v0.24.x eugr build.** v0.24.0 released June 29 (+408 commits over v0.23.x). eugr is expected to rebase to v0.24.x shortly. Scheduling Arm C against dev537 (still v0.23.1rc1) risks re-doing the eval when the v0.24.x build arrives. If eval window is imminent, pin dev448 (known-good DSV4F baseline) rather than chasing dev537; upgrade to v0.24.x build on next recon.
+2. **[PRIORITY 2] Add EAGLE3 for Qwen3 to eval roadmap.** v0.24.0 includes EAGLE3 (#43132) natively. Before scheduling, identify whether a pre-built Qwen3.6-35B-A3B EAGLE3 draft model exists (check HF; EAGLE3 for Qwen3 may require building a draft from fine-tune). Expected tradeoff: better c1 vs MTP=2, similar or worse c8+. Add as Arm B4 after Arm B (DFlash) and Arm C (vLLM upgrade).
+3. **[PRIORITY 3] Arm B (DFlash eval) now targets v0.24.0 official.** DFlash with FlashInfer (#43081) mainlined in v0.24.0. Arm B can use `vllm==0.24.0` directly without fork. Separate from eugr PR #279 (DFlash + FP8 KV Cache) which adds FP8 KV on top — that remains a bonus once PR #279 merges.
+4. **[PRIORITY 4] Qwen3.7 next check: July 3.** 42 days past 3.7-Max API launch. June window closed. If absent July 16, treat closed-weight-first as working conclusion and shift attention to Qwen4, North Mini Code 1.0 FP8, Nex-N2-mini.
+5. **[CARRY-FORWARD] Asus GX10 60W GPU power cap (/t/374791):** Still no NVIDIA response. /t/374742 (DSV4 guide) is new useful signal for 2-node users but doesn't affect single-node production.
+6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment:** Gate before Arm D NVFP4 eval. No new community reports. Requires explicit user approval + physical console.

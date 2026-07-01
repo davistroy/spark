@@ -17,6 +17,7 @@ modify it. Each is **quiet on healthy** and, on anomaly, prints + logs + exits n
 ops/install-cron.sh          # append the spark-ops block (idempotent)
 crontab -l                   # verify
 ```
+> **Status: installed on `obvm` 2026-06-30.** healthcheck (daily) + smoke + security (weekly) active and tested green; audit cron enabled (commit `9be3a77`). Alert channel not yet wired — see below.
 **Alerts:** set `MAILTO=` in `ops/spark-ops.cron` (needs a mailer) and/or
 `export SPARK_ALERT_WEBHOOK=https://ntfy.sh/<topic>` so anomalies are pushed.
 Logs accrue in `~/spark-ops-logs/<routine>.log`.

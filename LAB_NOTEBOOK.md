@@ -7318,3 +7318,51 @@ Downloaded `nvidia/Qwen3.6-35B-A3B-NVFP4` (22 GB, `quant_method: modelopt`, arch
 
 #### Artifacts
 `IMPLEMENTATION_PLAN_2026-06-30.md` (CVE ✅; NVFP4/Arm-C deferred; housekeeping); `docs/adr/ADR-0001-nvfp4-sm121-quantization.md` (Proposed). CLAUDE.md verified rules added (NVFP4 load-gap + CVE rotation). `SPARK_CONFIG.md` §6.1/§11/§12 corrected. Eval harness: profile `nvfp4_curbuild.env`.
+
+---
+
+## Entry 095 - DGX Spark Recon (2026-07-01)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore `benchmarks` REST returned empty/403 (consistent with all prior daily routine remote-env checks; the world-readable path works from interactive sessions but not the cloud execution env). No new FP8 Qwen3.6-35B-A3B single-node vLLM entry detectable. Arena FP8 vLLM baseline unchanged: **80.27 tok/s** (Stojanovic, DFlash n8). Arena top overall (NVFP4 on Atlas): **218.85 tok/s**. Arena top NVFP4-on-vLLM: **118.91 tok/s** (Poveda, Entry 094 manual — not visible in routine checks). **Trigger NOT fired.**
+
+**Check 2 — vLLM releases:** v0.24.0 (published 2026-06-29T19:41:59Z, PyPI June 30) confirmed still the latest stable; **no v0.25.x release**. Latest open PR numbers in flight: #47279–#47287 (all July 1, 2026 — project active). Additional v0.24.0 detail found this run: SM120 DSV4 now enabled alongside GLM-5.1 (#43477); Gemma4 legacy parsers replaced with engine-based implementation (#45588); Gemma4 FA4 + mm_prefix (#42175). **No SM121/GB10/DGX Spark text.** Status of watched PRs/issues: PR **#39138** (Gemma4 reasoning-parser xgrammar bypass) **STILL OPEN** — 24 tests passing, awaiting code-owner review; PR **#40099** (Gemma4 repetition-loop auto-fix) **STILL OPEN** — 13 tests, v1 API branch; Issue **#41063** (DeepGEMM SM12x) **STILL OPEN**. PR **#41834** (SM12x DSV4F support, 143 commits, 118 files, 43 reviewers): **STILL OPEN** — last updated **2026-07-01** (active review today). EAGLE3 for Qwen3 (#43132) in v0.24.0 — INFO-level spec-decode match. **No formal triggers fired.**
+
+**Check 3 — eugr/spark-vllm-docker:** Releases API confirms **dev537** (`0.23.1rc1.dev537+g6eb63a1da.d20260628`, June 28 11:45 UTC, FlashInfer `0.6.13-5f2bdc41-d20260628`) is still the latest build — **unchanged from Entry 093**. Commits API returned empty for window after June 28 noon UTC (no new commits in ~2.5 days since dev537). With v0.24.0 released June 29 and eugr rebuilding at each minor vLLM release, **a v0.24.x-based eugr build is imminent but not yet published**. Arm C eval target remains dev537 as the stable pre-v0.24.x baseline (or pin dev448 if dev537 regresses); will shift to first v0.24.x build when it appears. PR #279 (DFlash + FP8 KV Cache): still OPEN.
+
+**Check 4 — Qwen models:** Qwen3.7 open weights (27B/35B) **NOT released** — now **43 days past 3.7-Max API launch** (May 19, 2026). Confirmed via multiple search results; no `Qwen/Qwen3.7-*` repo under the official Qwen HF org. Qwen4 also **not released** — prediction market assigns ~50% probability before September 2026, ~61% before October 2026. No new A3B-class models from other labs detected. HuggingFace Qwen collection shows Qwen3.6-35B-A3B and Qwen3.6-27B as the current open-weight flagship series (both April 2026). **Trigger NOT fired. Next check: July 3.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json 403 in remote env):** No new threads from July 1, 2026 found. Search surfaced one marginal item: deal alert `/t/374387` ("DGX Spark for $3,999 at Micro Center", ~1 week old) — no perf/driver/firmware relevance. Hard-power-off cluster (5 threads; MODS-020000600139) unchanged. Asus GX10 60W GPU cap (/t/374791, June 27-28) still no NVIDIA response. No new driver/firmware/crash/OOM reports.
+
+### Cross-correlated findings
+
+1. **PR #41834 (SM12x DSV4F) updated 2026-07-01 — active review, still OPEN** (Checks 2 + Forum signal): The PR targeting SM120/SM121 DSV4F support (143 commits, 118 files, 43 reviewers) received updates today. Not a blocker for production Qwen3.6-35B-A3B FP8, but this is the gateway that closes issue #41063 (DeepGEMM SM12x) and brings DSV4F to mainline vLLM. When merged, eugr will pick up in the next nightly. Monitor.
+
+2. **eugr v0.24.x build imminent but not yet published** (Checks 2 + 3): v0.24.0 is now 2 days old; eugr dev537 is still on v0.23.1rc1. The ~2-day lag is well within normal eugr rebuild cadence. **Arm C eval window: wait for the first v0.24.x-based eugr build before scheduling** to avoid re-doing the eval against a stale base.
+
+3. **Qwen3.7 open weights — June window definitively closed** (Check 4, multi-source): 43 days since 3.7-Max API launch with no HF repo. Original timing model (3.5→3.6 lag = 51-59 days) has been exceeded. The closed-weight pattern (3.7-Max → 3.7-Plus API-only; 3.6-Plus API-only) is accumulating evidence. Next check July 3; if still absent July 16 per Watch Item, shift focus to Qwen4 and new A3B-class entrants.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 >88.3 tok/s (10% above 80.27 baseline) | NOT FIRED — Firestore 403 in remote env |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both still open |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open; #41834 active but unmerged |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 43 days post-3.7-Max, no HF repo |
+| speculative AND (Qwen OR MoE) — INFO | Previously matched (EAGLE3 in v0.24.0, Entry 093); no new matches this run |
+| MXFP4 AND (online OR Qwen) — INFO | NOT FIRED |
+
+### Overall classification: NO ACTION
+
+Hold pattern. Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. All formal triggers unfired. Eval roadmap: waiting on eugr v0.24.x build (Arm C); Qwen3.7 next check July 3; PR #41834 worth monitoring. No driver/firmware/crash news from the forum.
+
+### Recommendations
+
+1. **[PRIORITY 1] Continue holding Arm C on dev537 — watch for first v0.24.x eugr build.** v0.24.0 is 2 days old; rebased eugr build expected shortly (watch for dev540+ or major version tag). When it appears, update Arm C eval target and schedule.
+2. **[PRIORITY 2] Qwen3.7 next check July 3.** If absent July 16, update Watch Item to closed-weight-first working conclusion and shift focus to Qwen4 and A3B-class alternatives (North Mini Code 1.0 FP8, Nex-N2-mini, Poolside Laguna XS.2).
+3. **[PRIORITY 3] Monitor PR #41834.** Active review as of July 1 with 43 reviewers. When merged, will enable SM121 DSV4F mainline support and close #41063 — note in next entry.
+4. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval — no new community data this run.
+5. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.

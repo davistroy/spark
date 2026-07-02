@@ -7369,3 +7369,53 @@ Hold pattern. Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1
 3. **[PRIORITY 3] Monitor PR #41834.** Active review as of July 1 with 43 reviewers. When merged, will enable SM121 DSV4F mainline support and close #41063 — note in next entry.
 4. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval — no new community data this run.
 5. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.
+
+---
+
+## Entry 096 - DGX Spark Recon (2026-07-02)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore `benchmarks` REST returned empty/403 (consistent with all prior daily routine remote-env checks). No new FP8 Qwen3.6-35B-A3B single-node vLLM entry detectable. Arena FP8 vLLM baseline unchanged: **80.27 tok/s** (Stojanovic, DFlash n8). Arena top overall (NVFP4/Atlas): **218.85 tok/s**. Arena top NVFP4-on-vLLM: **118.91 tok/s** (Poveda, Entry 094 manual — not visible in routine checks). **Trigger NOT fired.**
+
+**Check 2 — vLLM releases:** v0.24.0 (June 29/30, 571 commits, 256 contributors) confirmed still the latest stable; **no v0.25.x release**. SM120 (not SM121) enabled for DeepSeek-V4/GLM-5.1; Gemma4 parsers replaced with engine-based implementation (legacy parsers gone — does not fix #39138/#40099). **No explicit SM121/GB10/DGX Spark text in v0.24.0.** NEW finding: **PR #46756 (ModelOpt MIXED_PRECISION MXFP8 routing) was merged into v0.24.0 — it corrupts NVFP4 generation for `Qwen3.6-35B-A3B-NVFP4` and `Nemotron-3-Super-120B-A12B-NVFP4`** (eugr is working around it in the Dockerfile — see Check 3). Status of watched items: PR **#39138** STILL OPEN (needs-rebase since 2026-06-15; blocked on code-owner approvals); PR **#40099** STILL OPEN; Issue **#41063** (DeepGEMM SM12x) STILL OPEN; PR **#41834** (SM12x DSV4F, 159 commits, 116 files) STILL OPEN — **updated July 1–2, 2026** (DSpark proposer integrated; debugging GPU kernel hangs under concurrent load; 6-node GB10 cluster validation ongoing). **No formal triggers fired.**
+
+**Check 3 — eugr/spark-vllm-docker:** **NEW BUILD published July 1, 2026:** `0.23.1rc1.dev701+g00eb7cefa.d20260701` (vLLM wheels, 18:06 UTC) + **FlashInfer `0.6.14-8fc7f079-d20260701`** (18:04 UTC) — **FlashInfer MINOR VERSION BUMP from 0.6.13 → 0.6.14.** dev537→dev701 = +164 commits in ~3 days. Still v0.23.1rc1 base (NOT v0.24.x-based yet; v0.24.x build is next expected milestone). New commits July 1: (a) **NVFP4 regression fix** — Dockerfile reverts PR #46756 which corrupts NVFP4 for Qwen3.6-NVFP4/Nemotron-120B-NVFP4; (b) tf5 image/flag deprecated; (c) removed deprecated tf5 recipe references. June 29 commits: Gemma4-26B recipe with MTP added; NCCL switched to main branch; Rust frontend support. DSV4F recipe (2-node only) was added June 20-25. PR #279 (DFlash + FP8 KV Cache): still OPEN. **Arm C eval target updates: dev537 → dev701 + FlashInfer 0.6.14.**
+
+**Check 4 — Qwen models:** Qwen3.7 open weights (27B/35B) **NOT released** — now **44 days past 3.7-Max API launch** (May 19, 2026). No `Qwen/Qwen3.7-*` repo under the official Qwen HF org. Qwen4 also not released; Manifold Markets ~50% probability before September 2026. Search confirms "realistic landing zone late June through mid-July" for Qwen3.7 open weights (window still technically open). No new A3B-class models from other labs detected this run. **Trigger NOT fired. Next check: July 3.**
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json 403 in remote env):** No new threads from July 1–2, 2026 found. Hard-power-off cluster (5 threads, MODS-020000600139) unchanged. Asus GX10 60W GPU cap (/t/374791) still no NVIDIA response. No new driver/firmware/crash/OOM reports.
+
+### Cross-correlated findings
+
+1. **NVFP4 regression (vLLM PR #46756) confirmed in v0.24.0 — Arm D eval constraint** (Checks 2 + 3): PR #46756 (merged into v0.24.0) routes ModelOpt MIXED_PRECISION MXFP8 entries through MXFP8 linear/MoE methods, which corrupts generation for `Qwen3.6-35B-A3B-NVFP4` and `Nemotron-3-Super-120B-A12B-NVFP4`. eugr dev701 includes a conditional Dockerfile revert of this commit. **Consequence: Arm D NVFP4 eval MUST use eugr dev701+ (which carries the revert) rather than any plain v0.24.0 vLLM install.** Add to Arm D eval protocol.
+
+2. **New eugr dev701 + FlashInfer 0.6.14 is the current Arm C candidate** (Checks 2 + 3): +164 commits past dev537 with a FlashInfer minor version bump (0.6.13→0.6.14). Still v0.23.1rc1, not v0.24.x-based. Whether to proceed with dev701 Arm C eval or wait for the first v0.24.x-based eugr build is the key eval scheduling question.
+
+3. **PR #41834 (SM12x DSV4F) is at peak activity** (Check 2): July 1–2 commits (DSpark proposer integration, GPU kernel hang debugging, 6-node GB10 cluster validation). Still open; the kernel hang investigation adds uncertainty to merge timeline. Watch for resolution of the concurrent-load kernel hang issue as the merge gate.
+
+4. **Qwen3.7 window narrowing but not closed** (Check 4): 44 days since 3.7-Max launch; "late June through mid-July" window is its last active phase. No release yet; July 3 check is the next scheduled probe per Watch Item.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 >88.3 tok/s (10% above 80.27 baseline) | NOT FIRED — Firestore 403 in remote env |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 needs-rebase; #40099 open |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open; #41834 active (July 1-2) but unmerged |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 44 days post-3.7-Max, no HF repo |
+| MXFP4/NVFP4 AND (Qwen OR regression) | INFO: PR #46756 NVFP4 regression in v0.24.0 (eugr workaround applied in dev701) |
+
+### Overall classification: WORTH WATCHING
+
+Two actionable items emerged: (1) new eugr dev701 + FlashInfer 0.6.14 build available (July 1) — Arm C eval target updated; (2) NVFP4 regression (PR #46756 in v0.24.0) constrains Arm D eval to use eugr dev701+ with revert. Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No hardware/driver news from the forum.
+
+### Recommendations
+
+1. **[PRIORITY 1] Update Arm C eval target to dev701** (`0.23.1rc1.dev701+g00eb7cefa.d20260701`, FlashInfer `0.6.14-8fc7f079-d20260701`, published July 1 2026). The +164-commit jump and FlashInfer 0.6.13→0.6.14 minor bump make dev701 the strongest current Arm C candidate. Decision: proceed with dev701 Arm C eval OR wait for first v0.24.x-based eugr build (no clear timeline; v0.24.x base is preferred but dev701 is ready now).
+2. **[PRIORITY 1] Add NVFP4 regression constraint to Arm D eval protocol.** vLLM PR #46756 (in v0.24.0) corrupts NVFP4 generation for Qwen3.6-35B-A3B-NVFP4. Arm D MUST use eugr dev701+ (which reverts #46756). Note in CLAUDE.md / Arm D eval checklist.
+3. **[PRIORITY 2] Qwen3.7 next check July 3.** If absent July 16, update Watch Item to closed-weight-first working conclusion and shift focus to Qwen4 and A3B-class alternatives.
+4. **[PRIORITY 3] Monitor PR #41834.** Most active yet (July 1–2: DSpark proposer, 6-node GB10 validation, kernel hang debugging). Watch for hang resolution as merge gate.
+5. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+6. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.

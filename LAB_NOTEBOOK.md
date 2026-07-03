@@ -7419,3 +7419,59 @@ Two actionable items emerged: (1) new eugr dev701 + FlashInfer 0.6.14 build avai
 4. **[PRIORITY 3] Monitor PR #41834.** Most active yet (July 1–2: DSpark proposer, 6-node GB10 validation, kernel hang debugging). Watch for hang resolution as merge gate.
 5. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 6. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.
+
+---
+
+## Entry 097 - DGX Spark Recon (2026-07-03)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore `benchmarks` REST inaccessible (403 in remote env; consistent with all prior routine daily checks). Partial result returned with fake test key contained only gpt-oss-120b entries — no Qwen3.6-35B-A3B FP8 single-node vLLM data. Arena FP8 vLLM baseline unchanged: **80.27 tok/s** (Stojanovic, DFlash n8). Arena top overall (NVFP4/Atlas): **218.85 tok/s**. **Trigger NOT fired.**
+
+**Check 2 — vLLM releases:** v0.24.0 (June 29/30) remains latest stable; **no v0.25.x release**. GitHub API 403 in remote env; WebSearch + PR-specific WebFetch used as fallback. Critical new finding on PR **#41834** (SM12x DSV4F): `persistent_topk` sparse indexer kernel requires ≥128KB shared memory per SM block — GB10/SM121 runtime exposes only ~99KB — causing hard failures when accumulated KV context exceeds ~384–512K tokens (~49% of production-scale requests). Merge conflicts flagged by Mergify as of July 2. **This is a fundamental SM121 hardware ceiling, not a code-review gate** — DSV4F on single-node GB10 is limited to low-concurrency / short-context regimes even after merge. PRs **#39138** and **#40099** (Gemma4 guided/grammar) confirmed still open. Issue **#41063** (DeepGEMM SM12x) still open. No formal triggers fired.
+
+**Check 3 — eugr/spark-vllm-docker:** GitHub API 403 in remote env; WebSearch/DeepWiki fallback. **No confirmed new build beyond dev701** (`0.23.1rc1.dev701+g00eb7cefa.d20260701`, July 1 2026). Repo metadata shows last update ≤ July 1 — consistent with dev701 being current latest. Recent adds (captured prior): `--load-format instanttensor`, PyTorch pinned to 2.11.0 (transformers 5.x fix), FlashInfer cubins cached across rebuilds, DSV4F recipe (2-node only, based on vLLM SM100 mainline). **No v0.24.x-based eugr build yet** — v0.24.0 is 4 days old; prior lag suggests 1–5 day rebuild cadence; may appear July 3–7.
+
+**Check 4 — Qwen models:** Qwen3.7 open weights (27B/35B) **NOT released** — now **45 days past 3.7-Max API launch** (May 19, 2026). InsiderLLM analysis confirms pattern: "Alibaba pushed the 3.7 generation into a closed, proprietary frontier tier while keeping a current open mid-tier roughly one generation behind." No Qwen4 release. Manifold Markets ~50% probability for Qwen4 before September 2026. Qwen3.6-35B-A3B-FP8 remains best available open-weight A3B-class model. **Trigger NOT fired.** July 16 is the Watch Item conclusion date — if still absent, shift to closed-weight-first working conclusion.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json 403 in remote env):** **NEW: /t/375158 "Air conditioned GB10 x 2 — How I stopped sudden shutdowns"** (July 1, 2026) — community user confirms thermal root cause for the hard-power-off cluster: moved dual-GB10 setup into an air-conditioned room, shutdowns stopped. Complements prior GPU clock-throttle workaround (cap at 2200 MHz). Also surfaced: fan headless-mode bug (some GB10 units' fans do not spin when booted without a connected display — relevant for production headless deployments). ai-muninn.com published "[DGX Spark] Overheating, 100W Power Cap, 30W Safety Mode — Complete Diagnostic Guide" detailing a power-capping progression (140W → 100W → 30W) relevant to the Asus GX10 cap tracking. No new driver/firmware/OOM reports since Entry 096.
+
+### Cross-correlated findings
+
+1. **PR #41834 SM121 `persistent_topk` shared-memory constraint — fundamental hardware ceiling for single-node DSV4F** (Check 2, PR WebFetch): The `persistent_topk` kernel requires ≥128KB shared memory per SM block; GB10 SM121 runtime limit is ~99KB (same constraint as the Triton MoE vLLM-Tune kernel from Entry 061). For any accumulated KV context exceeding ~384–512K tokens, the sparse indexer hard-faults. With BF16 KV at 504,912 token capacity and max_model_len 131K, a single GB10 can accumulate >384K tokens at moderate concurrency. **Consequence: PR #41834 merge does not unlock DSV4F for single-node high-concurrency workloads on GB10. DSV4F on single-node Spark is narrowly applicable to single-stream interactive use (the same regime where Entry 080 DFlash showed c8+ regression).** This effectively demotes PR #41834 from "key eval enabler" to a capability for a narrow corner case — not a throughput unlock for our workload.
+
+2. **Thermal shutdown root cause confirmed; community mitigation stack now three layers** (Check 5 + Watch Items): /t/375158 (room A/C, July 1) adds to GPU clock cap (2200 MHz, prior entries) and ASUS v0103 firmware (−8–10°C, March 2026). Three independent mitigations now community-validated. Root cause is thermal, not power-delivery, for the majority of hard-power-off cases. Power-instability cluster now **6 threads** (adding /t/375158). Also: headless fan-bug note is relevant to production unit (running headless 45+ days, zero thermal events — likely unaffected but worth verification).
+
+3. **eugr dev701 still current ceiling; v0.24.x-based build overdue by cadence** (Checks 2 + 3): v0.24.0 released June 29; typical eugr rebuild lag 1–3 days; dev701 (July 1) is on v0.23.1rc1. A v0.24.x-based build is within the expected window for July 3–7. Hold Arm C eval decision until first v0.24.x-based eugr build appears or until July 10 (whichever comes first — at July 10, run dev701 Arm C and re-run against v0.24.x when available).
+
+4. **Qwen3.7 open-weight window entering terminal phase** (Check 4): At 45 days post-3.7-Max API launch, "late June through mid-July" window is in its final ~2 weeks. July 16 is the Watch Item conclusion date. If absent then, shift focus to Qwen4, Poolside Laguna XS.2, Nex-N2-mini, North Mini Code 1.0 FP8 as A3B-class comparators.
+
+### Informational findings (no trigger, no immediate action)
+
+- **Gemma4 MTP 108.78 tok/s single-stream, 670 tok/s aggregate** (ai-muninn.com; FP8 26B-A4B instruction-tuned + Google's official MTP drafter γ=4; PR #41745 merged ~2026-05-05; article date unconfirmed from this run — 403 in remote env). Not previously in SPARK_BASELINE.md Gemma4 reference table. Not actionable until PRs #39138/#40099 merge. Informational: if structured output is ever unblocked, Gemma4 + MTP would offer 108 tok/s c1 vs. our current 66.9 tok/s.
+- **NVFP4 Triton FP8 bypass patch (+17% on GB10)** — ai-muninn.com/en/blog/dgx-spark-nvfp4-fp8-triton-patch (403 in this run; article exists). Potentially relevant to Arm D NVFP4 eval. Note for follow-up access from non-remote env.
+- **Fan headless-mode bug on some GB10 units**: fans may not spin in headless boot. Our production unit shows zero thermal events over 45+ days, suggesting it is unaffected, but verify `nvidia-smi -q | grep Fan` at next maintenance window.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 >88.3 tok/s (10% above 80.27) | NOT FIRED — Firestore 403 in remote env |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both still open |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open; PR #41834 has fundamental SM121 hardware constraint |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 45 days post-3.7-Max, no HF repo |
+| forum power-instability cluster | INFO: /t/375158 (July 1) brings cluster to 6 threads; thermal root cause confirmed; A/C workaround validated |
+
+### Overall classification: WORTH WATCHING
+
+Notable update this run: PR #41834 (DSV4F SM121 support) has a fundamental shared-memory ceiling on GB10 (`persistent_topk` needs ≥128KB, SM121 runtime exposes ~99KB) that limits its applicability for single-node high-concurrency long-context workloads — **this demotes #41834 from a key throughput-unlock to a narrow single-stream capability** even after merge. Forum: power-instability cluster now 6 threads with thermal root cause confirmed and room-A/C workaround added. Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired.
+
+### Recommendations
+
+1. **[PRIORITY 1] Arm C eval — target first v0.24.x-based eugr build (expected July 3–7); gate at July 10.** If no v0.24.x-based build by July 10, run dev701 Arm C eval and schedule a second pass against the v0.24.x build when it arrives. Dev701 is a solid baseline (+164 commits vs dev537, FlashInfer 0.6.14) and is ready now.
+2. **[PRIORITY 1] Revise PR #41834 priority: demote from "key eval enabler" to "low-concurrency corner case."** The `persistent_topk` SM121 shared-memory constraint (~99KB vs. ≥128KB) means DSV4F is only viable on single-node GB10 at short accumulated context. Same c8+ regression profile as DFlash (Entry 080). Stop monitoring merge ETA as a roadmap dependency; watch only for resolution of the SM121 constraint itself (would require kernel rewrite or SM121 shmem patch — not on near horizon).
+3. **[PRIORITY 2] Qwen3.7: July 16 is the Watch Item deadline.** Begin contingency planning: if absent July 16, the A3B-class comparator list (Poolside Laguna XS.2, Nex-N2-mini, North Mini Code 1.0 FP8) becomes the next model eval queue, and NVFP4 (Arm D) is the primary throughput path.
+4. **[PRIORITY 3] Fan headless-mode bug: verify fans spinning on production unit** at next maintenance window. `nvidia-smi -q | grep Fan` or equivalent. Zero thermal events in 45+ days suggests unit is unaffected, but document as a known failure mode.
+5. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+6. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.

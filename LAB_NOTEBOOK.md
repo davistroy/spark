@@ -7475,3 +7475,62 @@ Notable update this run: PR #41834 (DSV4F SM121 support) has a fundamental share
 4. **[PRIORITY 3] Fan headless-mode bug: verify fans spinning on production unit** at next maintenance window. `nvidia-smi -q | grep Fan` or equivalent. Zero thermal events in 45+ days suggests unit is unaffected, but document as a known failure mode.
 5. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 6. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.
+
+---
+
+## Entry 098 - DGX Spark Recon (2026-07-04)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore `benchmarks` REST accessible (world-readable, no API key required, 147 docs across 3 pages). Top FP8 Qwen3.6-35B-A3B vLLM single-node c1: **80.27 tok/s** (Stojanovic, DFlash+FlashQLA) — UNCHANGED since May 2026; no new FP8 vLLM single-node entries. Trigger NOT fired (threshold >88.3 tok/s). **New notable entries: Holo-3.1-35B-A3B-NVFP4 at 99.91 tok/s (submitted 2026-07-04, vLLM, single-node)** — brand-new A3B-class model, first appearance; Ornith-1.0-35B-NVFP4 at 68.22 tok/s (2026-07-02); DeepSeek-V4-Flash at 50.17 tok/s (2026-07-02). Poveda NVFP4 118.91 tok/s consistent with CLAUDE.md tracking. Top overall: NVFP4 Atlas 218.85 tok/s (Rajendra Rawat) — unchanged. No new runtimes.
+
+**Check 2 — vLLM releases:** v0.24.0 (2026-06-29) remains latest stable; **no v0.25.x**. PR **#39138** (Gemma4 xgrammar bypass): OPEN, needs-rebase since 2026-06-15. PR **#40099** (Gemma4 repetition loop): OPEN, stalled since 2026-04-21 (2.5 months). Issue **#41063** (DeepGEMM SM12x): OPEN. PR **#41834** (SM12x DSV4F): OPEN, merge conflicts as of July 2, no new activity July 3–4. Moderate finding: v0.24.0 enables NVFP4 MoE SwiGLU/clamp on **SM120** — SM121 not explicit but shares same kernel path; probe during Arm C/D eval to assess whether Entry 094 weight-schema gap is closed.
+
+**Check 3 — eugr/spark-vllm-docker:** **NEW BUILD: dev764** (`0.23.1rc1.dev764+g54b16d8a9.d20260703`, July 3 18:20 UTC) + FlashInfer `0.6.14-b5ac097e-d20260703`. dev701→dev764 = +63 commits in 2 days; still v0.23.1rc1 base (no v0.24.x-based build — 5+ day lag past v0.24.0 June 29 release). Key changes vs dev701: **(a) `--reasoning-parser qwen3` added to `recipes/qwen3.6-35b-a3b-fp8.yaml`** (issue #302 — flag was missing); **(b) #46756 MIXED_PRECISION revert patch DROPPED** — upstream fix applied, patch removed (note for Arm D NVFP4 eval protocol); (c) MiniMax M3 support (PRs #47445, #47392); (d) "Use prebuilt container by default." PR #279 (DFlash + FP8 KV Cache): still OPEN. **Arm C eval target updated to dev764.**
+
+**Check 4 — Qwen models:** Qwen3.7 open weights (27B/35B) **NOT released** — **46 days** post-3.7-Max API launch (May 19); July 16 Watch Item deadline in 12 days. No Qwen4. NEW A3B-class model: **`deepreinforce-ai/Ornith-1.0-35B-FP8`** (released 2026-06-25, MIT) — RL post-train of Qwen3.5-35B-A3B; 35B total / ~3B active MoE, hybrid GDN attention; SWE-bench Verified 75.6 (claimed); FP8 variant on HF. Hybrid GDN attention = MTP acceptance risk (same as Entry 071 Coder-Next — pre-screen required). No HF open weights for Holo-3.1-35B-A3B confirmed. Name-squat: `RscriptSQuen/Qwen3.7-plus` (non-official).
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json/721.json 403):** **NEW: /t/375016 "Device hangs under load"** (~July 3) — hard freeze under sustained GPU/LLM inference, DGX OS 7.5.0, zero kernel trace, requires power cycle. Extends power-instability cluster to **7 threads**. /t/374699 "Gigabyte AI TOP Atom high temps in idle" — Gigabyte OEM fan controller defect on one of two same-batch units; hardware defect, distinct from thermal cluster. Background: RTX Spark (consumer Windows ARM GB10 variant, fall 2026, Asus/Dell/HP/Lenovo/Microsoft/MSI) announced at Computex — will expand SM121 ecosystem. DGX OS 7.5.0 confirmed current (ConnectX-7 hot-plug, Ubuntu 6.14 HWE, multi-Spark perf regression fix from 7.4.0); no July update. /t/374791 (Asus GX10 60W cap) still no NVIDIA response.
+
+### Cross-correlated findings
+
+1. **Ornith-1.0-35B confirmed in two independent sources** (Check 4 + Check 1): HF FP8 variant (`deepreinforce-ai/Ornith-1.0-35B-FP8`, June 25, MIT) and Arena NVFP4 entry at 68.22 tok/s (July 2). Two-source corroboration. Hybrid GDN attention = MTP acceptance risk identical to Entry 071 Coder-Next; pre-screen required before Spark trial. Queue after Arm C/D eval.
+
+2. **NVFP4 ecosystem momentum across four checks** (Checks 1+2+3 and forum background): Arena has Holo-3.1 (99.91, today) + Ornith (68.22) + Poveda (118.91); eugr dev764 drops #46756 patch (upstream fix applied); vLLM v0.24.0 enables SM120 NVFP4 MoE; PR #40082 (FlashInfer b12x FP4 GEMM for SM120/121, merged May 20) already provides kernel-level support. Four independent signals — Arm D NVFP4 eval path continues to strengthen.
+
+3. **eugr dev764 is new Arm C eval target** (Check 3): Supersedes dev701 (+63 commits). Most actionable dev764 change: `--reasoning-parser qwen3` added to production recipe — verify current production `docker-compose.yml` already has this flag. If no v0.24.x eugr build by July 7–8, proceed with dev764 Arm C eval.
+
+4. **Power-instability cluster grows to 7 threads** (Check 5 + Watch Item): /t/375016 (~July 3, zero kernel trace, hard freeze) adds another case. The zero-kernel-trace signature may represent a distinct sub-cluster from the thermal root cause confirmed in /t/375158. Production unit: 47+ days clean, zero restarts/OOM — unchanged.
+
+### Informational findings (no trigger, no immediate action)
+
+- **Holo-3.1-35B-A3B-NVFP4 (99.91 tok/s, Arena today 2026-07-04)**: First appearance; brand-new A3B-class model. No confirmed HF open weights. At 99.91 tok/s NVFP4 on vLLM single-node, significantly above Ornith (68.22) and approaching Poveda's 118.91 (official NVIDIA checkpoint). Track for open-weight release.
+- **v0.24.0 SM120 NVFP4 MoE note**: `"It is now enabled on SM120 alongside GLM-5.1"` in release notes. SM120 = GB200/B100; SM121 = GB10 (DGX Spark) — not automatic, but same architecture generation. Probe during Arm C/D eval.
+- **PR #40082 context** (FlashInfer b12x MoE + FP4 GEMM for SM120/121, merged May 20 in v0.19.x): The enabling NVFP4 kernel was already present. Entry 094 NVFP4 failure was a weight-schema KeyError (loader gap), not a kernel gap. Confirms v0.23.x+ has both kernel (PR #40082) and loader support needed.
+- **RTX Spark consumer expansion** (fall 2026): Same GB10 SoC in consumer Windows ARM form factor from major OEMs. Will substantially expand SM121 ecosystem — positive externality for upstream kernel/driver quality.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | NOT FIRED — 80.27 unchanged since May 2026 |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 needs-rebase; #40099 stalled April 21 |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open; PR #41834 merge-conflict blocked |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 46 days post-3.7-Max, no HF repo; July 16 deadline in 12 days |
+| Power-instability cluster | INFO: /t/375016 (~July 3) extends cluster to 7 threads |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Notable: (1) eugr dev764 (July 3) updates Arm C target and corrects `--reasoning-parser qwen3` in the Qwen3.6 FP8 recipe; (2) Holo-3.1-35B-A3B-NVFP4 is a brand-new A3B-class model on Arena today at 99.91 tok/s; (3) Ornith-1.0-35B-FP8 cross-confirmed; (4) NVFP4 ecosystem momentum across four checks; (5) Qwen3.7 deadline July 16 in 12 days.
+
+### Recommendations
+
+1. **[PRIORITY 1] Update Arm C eval target to dev764** (`0.23.1rc1.dev764+g54b16d8a9.d20260703`, FlashInfer `0.6.14-b5ac097e-d20260703`). Supersedes dev701. If no v0.24.x-based eugr build by July 7–8, proceed with dev764 now.
+2. **[PRIORITY 1] Verify `--reasoning-parser qwen3` in production docker-compose.yml.** eugr issue #302 found this flag missing from the official Qwen3.6 FP8 recipe (fixed in dev764). Check current production config — if absent, add at next maintenance window (low-risk append to vLLM args).
+3. **[PRIORITY 2] Watch Holo-3.1-35B-A3B for open-weight release.** First appeared on Arena today (2026-07-04) at 99.91 tok/s NVFP4 single-node vLLM. No confirmed HF weights yet. If FP8 variant materializes, queue alongside Ornith-1.0-35B-FP8 for future eval.
+4. **[PRIORITY 2] Queue Ornith-1.0-35B-FP8 for post-Arm-C/D eval; pre-screen MTP.** Two-source confirmation (HF + Arena). Before any Spark trial: check MTP acceptance with hybrid GDN — same failure mode as Entry 071 Coder-Next.
+5. **[PRIORITY 2] Qwen3.7: July 16 deadline in 12 days.** If absent, shift A3B comparator focus to Ornith-1.0-35B-FP8, Holo-3.1-35B-A3B (if weights), and Poolside Laguna XS.2.
+6. **[PRIORITY 3] Note #46756 patch removal in dev764 for Arm D eval protocol.** Upstream fix applied; patch no longer in dev764 Dockerfile. Log in Arm D eval checklist.
+7. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+8. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.

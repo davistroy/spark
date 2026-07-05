@@ -7534,3 +7534,60 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 6. **[PRIORITY 3] Note #46756 patch removal in dev764 for Arm D eval protocol.** Upstream fix applied; patch no longer in dev764 Dockerfile. Log in Arm D eval checklist.
 7. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 8. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.
+
+---
+
+## Entry 099 - DGX Spark Recon (2026-07-05)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore `benchmarks` REST API inaccessible today — first page returned only stale gpt-oss-120b entries; subsequent ordered/paginated requests returned HTTP 400/empty. Carrying forward from Entry 098: top FP8 Qwen3.6-35B-A3B vLLM single-node tg128 c1 = **80.27 tok/s** (Stojanovic, DFlash+FlashQLA). Trigger NOT fired (threshold 88.3 tok/s). Top NVFP4 vLLM: Poveda 118.91 tok/s. Top overall: Atlas NVFP4 218.85 tok/s. All values unchanged — Arena data unconfirmed for today.
+
+**Check 2 — vLLM releases:** v0.24.0 (2026-06-29) confirmed latest; **no v0.25.x**. GitHub API returns 403 in remote env; WebFetch + WebSearch used. PR **#39138** (Gemma4 xgrammar bypass): OPEN, needs-rebase since June 15 — unchanged. PR **#40099** (Gemma4 repetition loop): OPEN, last activity April 21 (2.5 months stalled) — unchanged. Issue **#41063** (DeepGEMM SM12x): OPEN, reporter has patch staged, no upstream merge — unchanged. PR **#41834** (SM12x DSV4F): STILL OPEN with merge conflicts as of July 2; WebFetch of the PR page mentioned a possible `sm120-pr-41834-stable-preview-20260705` stable tag created today with SM121 `persistent_topk` long-context fixes — but commit history page shows last visible commits at June 20, no July tag confirmed. **Treat as UNCONFIRMED candidate noise.** SM121 ~99KB shmem constraint remains documented blocker per Entry 097.
+
+**Check 3 — eugr/spark-vllm-docker:** dev764 (`0.23.1rc1.dev764+g54b16d8a9.d20260703`, July 3) **confirmed still latest** — no new build today. Still v0.23.1rc1 base; no v0.24.x-based eugr image published. Arm C eval target remains dev764. All prior Entry 098 notes unchanged.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights (27B/35B) **NOT released** — **47 days** post-3.7-Max API launch (May 19). July 16 Watch Item deadline in 11 days. No Qwen4. **KEY NEW FINDING: Holo-3.1-35B-A3B open weights confirmed on HuggingFace** — `Hcompany/Holo-3.1-35B-A3B` (Apache 2.0) and `Hcompany/Holo-3.1-35B-A3B-NVFP4` available. Critical qualification: **Holo-3.1 is a VLM (Vision-Language Model) for computer-use agents** (screen reading, UI grounding, mobile automation) — NOT a general-purpose LLM. 35B/~3B active MoE, 64k context (vs our 128k). Arena NVFP4 entry 99.91 tok/s is real, but domain mismatch limits production relevance as a Qwen3.6 successor.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json/721.json 403):** No new DGX Spark threads identified for July 5, 2026. Background finding: DGX Spark price raised to **$4,699 (+$700 from $3,999)** — NVIDIA citing "memory supply constraints" (~July 2026). Power-instability cluster unchanged at 7 threads. No new driver/firmware/crash/OOM reports for July 5.
+
+### Cross-correlated findings
+
+1. **Holo-3.1-35B-A3B VLM confirmed two-source** (Check 4 HF + prior Entry 098 Arena): `Hcompany/Holo-3.1-35B-A3B-NVFP4` open-weight confirmed; 99.91 tok/s Arena NVFP4 single-node vLLM. Critical: **it is a computer-use agent VLM — not a general-purpose LLM**. Domain mismatch with production. Not a Qwen3.6 successor candidate; deprioritize.
+
+2. **Qwen3.7 still absent + no new general A3B LLM challenger** (Check 4 + Check 1): 47 days post-3.7-Max, no open weights. A3B-class open-weight general LLM remains: Qwen3.6-35B-A3B-FP8 (production) and Ornith-1.0-35B-FP8 (hybrid GDN MTP risk). No new pure LLM entrant this cycle.
+
+3. **Gemma4 structured output still blocked; vLLM v0.24.0 still latest** (Check 2): PRs #39138 (needs-rebase) and #40099 (stalled 2.5 months) both OPEN. Not a production blocker.
+
+4. **PR #41834 SM121 DSV4F: OPEN + possible unconfirmed July 5 activity** (Check 2): Merge conflicts July 2; WebFetch mentioned stable preview tag with SM121 shmem fix — commit history does not confirm. Verify next check.
+
+### Informational findings (no trigger, no immediate action)
+
+- **DGX Spark price +$700 to $4,699**: NVIDIA "memory supply constraints" cited (~July 2026). No config impact.
+- **PR #41834 unconfirmed stable-preview-20260705**: If the SM121 `persistent_topk` oversubscription fix is confirmed real, re-elevate PR #41834 from "low-concurrency corner case." Verify July 7.
+- **Holo-3.1 NVFP4 at 99.91 tok/s**: Highest non-NVIDIA-source NVFP4 single-node A3B Arena entry. Confirms NVFP4 kernel path works for this architecture class even if model domain doesn't match.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | NOT FIRED — Arena API inaccessible today; carried from Entry 098 |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 needs-rebase; #40099 stalled April 21 |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open; patch staged, no upstream merge |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 47 days post-3.7-Max; July 16 deadline in 11 days |
+| Power-instability cluster | INFO: unchanged at 7 threads |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Notable: (1) Holo-3.1-35B-A3B open weights confirmed — VLM domain, not a Qwen3.6 successor; (2) PR #41834 possible new SM121 activity today (unconfirmed stable preview tag — verify July 7); (3) Arena Firestore API inaccessible today; (4) Qwen3.7 deadline July 16 in 11 days; (5) DGX Spark price raised to $4,699.
+
+### Recommendations
+
+1. **[PRIORITY 1] Verify PR #41834 stable-preview-20260705 at next check (July 7).** If the SM121 `persistent_topk` shmem fix is confirmed real, re-elevate from "corner case" to active SM121 DSV4F enabler.
+2. **[PRIORITY 1] Arm C eval target: dev764 still latest.** Proceed with Arm C if no v0.24.x eugr build by July 7–8.
+3. **[PRIORITY 2] Qwen3.7: July 16 deadline in 11 days.** If absent, Ornith-1.0-35B-FP8 becomes primary A3B comparator (pre-screen MTP acceptance first).
+4. **[PRIORITY 2] Holo-3.1-35B-A3B: deprioritize as general LLM candidate.** VLM domain mismatch — not a Qwen3.6 production successor. Track only if multimodal/agent workload planned.
+5. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3` in production docker-compose.yml** (eugr issue #302, flagged Entry 098).
+6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+7. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.

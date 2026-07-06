@@ -7537,6 +7537,60 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 
 ---
 
+## Entry 100 - DGX Spark Recon (2026-07-06)
+
+### Per-check summaries
+
+**Check 1 — Arena (spark-arena.com):** Firestore `benchmarks` REST API inaccessible — same remote env limitation as Entry 099; all direct WebFetch and REST calls return 403. WebSearch fallback finds no new FP8 Qwen3.6 vLLM Arena results from today. Carrying forward: top FP8 Qwen3.6-35B-A3B vLLM tg128 c1 = **80.27 tok/s** (Stojanovic, DFlash-n8 recipe). 10% trigger threshold 88.3 tok/s: **NOT FIRED**. Top NVFP4 vLLM: Poveda 118.91 tok/s. Top overall: Atlas NVFP4 218.85 tok/s. All Arena values unchanged.
+
+**Check 2 — vLLM releases:** v0.24.0 (2026-06-29) **still latest** — no v0.25 or v0.24.1. GitHub API returns 403 in remote env; WebSearch fallback used. **PR #41834** (SM12x DSV4F / GB10 support): confirmed still **OPEN** — Entry 099's "stable-preview-20260705" tag was unconfirmed noise and is now **DEBUNKED**. Community confirms PR enables DeepSeek-V4-Flash on SM120/SM121 (validated on 2×RTX PRO 6000 + 2-node GB10/DGX Spark) but is NOT merged; SM121 ≤99KB shmem constraint vs ≥128KB requirement remains documented blocker (Entry 097). Downgrade urgency from "verify at next check" to "monitor only." PRs **#39138** (Gemma4 xgrammar) and **#40099** (repetition loop): no merge evidence — still OPEN. Issue **#41063** (DeepGEMM SM12x): still OPEN. No new SM121/GB10-specific patches in mainline.
+
+**Check 3 — eugr/spark-vllm-docker:** dev764 (`0.23.1rc1.dev764+g54b16d8a9.d20260703`) **confirmed still latest** — no new build published July 6 (3 days stable at dev764). Still v0.23.1rc1 base; no v0.24.x-based eugr image. Arm C eval target remains **dev764**. All prior Entry 098/099 notes unchanged.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights (27B/35B) **NOT RELEASED** — **48 days** post-3.7-Max API launch (May 19, 2026). July 16 Watch Item deadline in **10 days**. InsiderLLM analysis: "If we get to mid-July without one, the gap is widening." No Qwen4. No new A3B-class open-weight general LLM found. Holo-3.1 small model sizes (0.8B/4B/9B) confirmed on HF — VLM domain unchanged, not production-relevant. Ornith-1.0-35B-FP8: no new community data found.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json 403):** No new DGX Spark threads identified for July 6, 2026. **Tom's Hardware/Carmack coverage** surfaced in search ("AMD swoops in to help as John Carmack slams Nvidia's DGX Spark...") — Carmack X post dated October 2025 (early unit; Hacker News re-discussion #45739844 is a July 2026 thread). All content maps to already-tracked power-instability cluster and ai-muninn.com 100W/30W article (tracked since Entry 097). Not a new hardware finding. Power-instability cluster: **unchanged at 7 threads**. DGX Spark price: $4,699 — unchanged. No new driver/firmware/crash/OOM reports.
+
+### Cross-correlated findings
+
+1. **PR #41834 OPEN + stable-preview debunked (Check 2 cross-validate):** Entry 099 flagged "sm120-pr-41834-stable-preview-20260705" as unconfirmed noise; today's WebSearch confirms PR is still OPEN. SM121 ≤99KB shmem constraint remains the documented blocker for `persistent_topk` kernel. Downgrade urgency — no imminent merge path visible.
+
+2. **Qwen3.7 absence corroborated two-source (Check 4 + Check 1):** InsiderLLM + HF search confirm no open weights at 48 days. Probability of release before July 16 declining per published analysis. Ornith-1.0-35B-FP8 remains best confirmed alternate A3B general LLM.
+
+3. **eugr dev764 stable at 3 days (Check 3):** No new eugr build since July 3. Arm C eval can proceed immediately against dev764 without risking a version churn.
+
+### Informational findings
+
+- **TH/Carmack coverage**: Carmack Oct 2025 tweet + HN July 2026 re-discussion. Three-problem taxonomy now on record: (1) 30W PD defect (hardware/RMA), (2) 100W thermal throttle (normal protection), (3) 5W driver bug (software). All map to existing Watch Items; production unit remains 48+ days clean.
+- **Holo-3.1 small models** (0.8B/4B/9B): confirmed on HF; same VLM domain (computer-use agents). Not production-relevant.
+- **No July 2026 NVIDIA DGX Spark software/firmware update**: June 2026 release remains current.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | NOT FIRED — API inaccessible; no new community numbers |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both still OPEN |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 48 days post-3.7-Max; July 16 deadline in 10 days |
+| Power-instability cluster | INFO: unchanged at 7 threads |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Key resolution: PR #41834 stable-preview-20260705 debunked — urgency reduced to monitor-only. Key escalating item: Qwen3.7 now 48 days post-3.7-Max with July 16 deadline in 10 days. Arm C eval can proceed now with dev764.
+
+### Recommendations
+
+1. **[DEBUNKED — downgrade] PR #41834 stable-preview-20260705**: Tag does not exist. PR still OPEN; SM121 shmem constraint is the blocker. No action until PR actually merges or a new stable-preview build is publicly announced.
+2. **[PRIORITY 1] Arm C eval: dev764 confirmed stable at 3 days.** Proceed with Arm C eval against dev764 now — no reason to wait for a newer eugr build.
+3. **[PRIORITY 2] Qwen3.7: July 16 deadline in 10 days.** If absent on July 16, shift A3B comparator to Ornith-1.0-35B-FP8 (pre-screen MTP acceptance) and update Watch Item to "closed-weight-first conclusion."
+4. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302, flagged Entry 098).
+5. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+6. **[CARRY-FORWARD] Asus GX10 60W GPU cap** (/t/374791) — still no NVIDIA response; watch for community workaround.
+
+---
+
 ## Entry 099 - DGX Spark Recon (2026-07-05)
 
 ### Per-check summaries

@@ -7645,3 +7645,58 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 5. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3` in production docker-compose.yml** (eugr issue #302, flagged Entry 098).
 6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 7. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.
+
+---
+
+## Entry 101 - DGX Spark Recon (2026-07-07)
+
+### Per-check summaries
+
+**Check 1 — Arena:** Firestore REST API `benchmarks` endpoint returned empty JSON `{}` again (same as Entries 099–100); sparkrun.dev leaderboard 403; spark-arena.com 403. WebSearch returned only old April-era community benchmarks, not Arena-sourced data. Carrying forward from Entry 098: top FP8 Qwen3.6-35B-A3B vLLM single-node tg128 c1 = **80.27 tok/s** (Stojanovic, DFlash+FlashQLA). Trigger NOT fired (threshold 88.3 tok/s). Top NVFP4 vLLM: Poveda 118.91 tok/s. Top overall: Atlas NVFP4 218.85 tok/s. All values unconfirmed from live Arena — carried forward.
+
+**Check 2 — vLLM releases:** **v0.24.0 confirmed still latest** (GitHub releases page; no v0.25.x). A WebSearch result summary referenced "v0.25 features" but the GitHub releases page confirms v0.24.0 is current — classify as speculative/nightly blog content, not a confirmed release. **PR #41834 (SM12x DSV4F): STILL OPEN** as of July 5, 2026 activity. **KEY TECHNICAL UPDATE:** July 5 commits added a "2-pass histogram" top-k implementation explicitly "single-CTA / 99 KB-smem-safe" with automatic fallback to streaming radix on overflow. Commits: (a) `9f18be7` — 2.43× speedup at 1M context single-row kernel time; (b) `b43470e` — Triton recompilation memory leak fix (5–6 GB/hour → ~1.9 MB/hour on unified memory). 4-node GB10 prefill profiling: sparse-MLA attn ≈50%, MoE ≈37%, indexer ≈12%. PR still OPEN with unresolved merge conflicts from July 2. **Partial revision of Entry 097 "hard failure" assessment — the SM121 shmem constraint now has an explicit in-PR software workaround, but PR not yet merged.** Gemma4 PRs #39138 and #40099 both still OPEN — no new info. Issue #41063 (DeepGEMM SM12x) still OPEN.
+
+**Check 3 — eugr/spark-vllm-docker:** dev764 (`0.23.1rc1.dev764+g54b16d8a9.d20260703`) **confirmed still latest** — no new build published July 7 (4 days stable). Still v0.23.1rc1 base; no v0.24.x-based eugr image. Arm C eval target remains dev764.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights (27B/35B) **NOT released** — **49 days** post-3.7-Max API launch (May 19, 2026). July 16 Watch Item deadline in **9 days**. Multiple sources confirm no official Qwen3.7 repo on HF. Blog post at `qwen.ai/blog?id=qwen3.7` exists but returned 403 in remote env — could be a Qwen3.7 open-weights announcement or teaser page; check from non-proxy browser. No Qwen4. No new A3B-class (~35B/~3B active) open-weight general LLM found. Ornith-1.0-35B-FP8: no new community data.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json/721.json 403):** No new DGX Spark threads identified for July 7, 2026. Forum showed activity "3 days ago" (July 4) — consistent with /t/375016 already tracked in Entry 100. Power-instability cluster: **unchanged at 7 threads**. /t/374791 (Asus GX10 60W GPU cap): still no NVIDIA response. No new driver/firmware/crash/OOM reports. June 2026 software release remains current.
+
+### Cross-correlated findings
+
+1. **PR #41834 SM121 shmem workaround (Check 2 — direct GitHub):** July 5 commits introduce "99 KB-smem-safe" 2-pass histogram for `persistent_topk`, directly addressing Entry 097's "hard failure" constraint. The constraint is not removed at the hardware level, but the PR now has an explicit software mitigation. PR still OPEN (merge conflicts unresolved). Revise Entry 097 label from "hard failure" to "mitigated-in-PR, pending merge." Cannot evaluate actual c8+ regression profile improvement until PR merges and eugr picks it up.
+
+2. **Qwen3.7 absence corroborated (Check 4 + Check 1):** No HF listing found and no new Arena entrant with 3.7-class model. 49 days post-3.7-Max. July 16 deadline in 9 days.
+
+3. **eugr dev764 stable 4 days (Check 3 cross-validates Check 2):** No new eugr build confirms Arm C eval can proceed against dev764 without risk of immediate version churn. PR #41834 shmem fix not yet in any eugr build.
+
+### Informational findings
+
+- **Possible Qwen3.7 blog post at `qwen.ai/blog?id=qwen3.7`:** URL exists (403 in remote env). Could be Qwen3.7 open-weights announcement/teaser. Worth a direct browser check.
+- **v0.25.x vLLM phantom:** Search result described "v0.25 features" (Model Runner V2 default for Qwen3, online FP8 PTPC, DeepSeek-V4 MTP index-share). Not confirmed by GitHub releases page — classify as speculative/pre-release blog. Monitor only.
+- **Forum "3 days ago" activity:** Consistent with July 4 thread (Entry 100), not a new July 7 finding.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | NOT FIRED — Arena API inaccessible; carried from Entry 098 |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 needs-rebase; #40099 stalled April 21 |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — still open |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 49 days post-3.7-Max; July 16 deadline in 9 days |
+| Power-instability cluster | INFO: unchanged at 7 threads |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Key development: PR #41834 July 5 commits add 99 KB-smem-safe path for SM121, partially revising Entry 097's "hard failure" label — PR still OPEN but reduces post-merge severity uncertainty. Qwen3.7 deadline July 16 in 9 days: if absent, shift A3B comparator to Ornith-1.0-35B-FP8.
+
+### Recommendations
+
+1. **[UPDATED] PR #41834 SM121 shmem:** Revise Watch Item from "hard failure" to "mitigated-in-PR, pending merge." Monitor for actual merge. When it merges into eugr, re-evaluate c8+ regression profile vs Entry 080 DFlash baseline — the 2-pass histogram fallback may improve high-concurrency performance.
+2. **[PRIORITY 1] Arm C eval: dev764 confirmed stable at 4 days.** Proceed now against dev764.
+3. **[PRIORITY 2] Qwen3.7: July 16 deadline in 9 days.** If absent, shift comparator to Ornith-1.0-35B-FP8 (pre-screen MTP acceptance per Entry 098).
+4. **[MONITOR] `qwen.ai/blog?id=qwen3.7`** — check from non-proxy browser; may be Qwen3.7 open-weights announcement.
+5. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302, flagged Entry 098).
+6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+7. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.

@@ -7700,3 +7700,59 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 5. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302, flagged Entry 098).
 6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 7. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.
+
+## Entry 102 - DGX Spark Recon (2026-07-08)
+
+### Per-check summaries
+
+**Check 1 — Arena (Firestore REST — ACCESSIBLE today; 149 entries):** FP8+vLLM+c1 baseline **80.27 tok/s (Stojanovic, DFlash n=8)** UNCHANGED — no new challenger in that lane. Arena trigger NOT fired (threshold 88.3 tok/s). New entries since last check: Poveda NVFP4 109.29 tok/s (July 3, repeat run, below prior 118.91 peak); **Ornith-1.0-35B NVFP4 68.22 tok/s** (Janos Toberling, July 2 — new model on Arena); Laguna-XS-2.1-NVFP4 37.53 tok/s (Iein Valdez, July 4); Holo-3.1-35B-A3B-NVFP4 99.91 tok/s (cem degirmenci, July 4, cluster=2 — not single-node). Top overall: Atlas NVFP4 218.85 tok/s (unchanged). Top FP8 non-vLLM: Atlas FP8 172.03 tok/s (unchanged). Note: Firestore returned 149 real documents today vs. empty JSON in Entry 101 — prior Arena carries may have been inaccurate.
+
+**Check 2 — vLLM releases:** v0.24.0 **still the latest stable** — no v0.25.0 published. PR #41834 (SM12x DSV4F) STILL OPEN; Mergify rebase request July 4, latest commit July 5 ("sparse-MLA decode optimization," commit `616a572`). Merge conflicts unresolved. PRs #39138/#40099 (Gemma4 structured output) both still OPEN. Issue #41063 (DeepGEMM SM12x) OPEN, stale since April 27. Issue #45317 (SM121 DSA attn-backend gap) OPEN. SM120 got DeepSeek-V4 in v0.24.0; SM121 absent from release notes.
+
+**Check 3 — eugr/spark-vllm-docker: THREE NEW BUILDS since dev764 (July 3).** Latest: `nightly-20260707` (= `latest`, published July 7, 16:59 UTC). Changes: (a) `nightly-20260704`: PR #47604 added to VLLM_PRESET_PRS ("Fixes regression in main"); (b) `nightly-20260706`: PR #47618 supersedes #47604; (c) `nightly-20260707`: inline patch for Gemma4 MTP regression (vLLM PR #43957 broke Gemma4 draft embedding width check; PR #47794 upstream tracking; Qwen3.6 MTP unaffected). vLLM base still `0.23.1rc1.devXXX` — no v0.24.x-based build yet. **NEW RECIPES**: `qwen3.6-35b-a3b-nvfp4.yaml` and `qwen3.6-35b-a3b-nvfp4-no-mtp.yaml` added — staging for NVFP4 (not loadable on v0.19.1 production build, but ready for Arm C+D). No changes to FP8 or DFlash recipes. DFlash recipe still uses `num_speculative_tokens=15` (vs. n=8 used in Entry 080 eval and in the Stojanovic Arena submission — canon recipe is n=15). PR #279 (DFlash+FP8 KV) still appears open (no fp8-kv in DFlash recipe).
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights (27B/35B) **NOT released — 50 days post-3.7-Max API launch** (May 19). July 16 deadline in 8 days. No official Qwen3.7 HF repo. Qwen4: nothing. **NEW: `nvidia/Nemotron-Cascade-2-30B-A3B`** (March 20, 2026, Apache 2.0, 30B/3B active, 1M ctx, hybrid Mamba-2+Transformer+MoE) — matches Spark's A3B profile on paper but HARD-BLOCKED on SM121 by Mamba-2 GDN Triton crash (`cudaErrorIllegalInstruction` under CUDA graph capture, vLLM issue #37431 OPEN). Only workaround `--enforce-eager` kills CUDA graphs + MTP — ~37% throughput penalty, not viable. **NEW: Mistral July 2026 MoE** — CEO Mensch described "fat but sparse" MoE entering July early access; no parameter counts or HF repo yet. Monitor 2–3 weeks.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json/721.json 403 in remote env):** **NEW /t/376039** (July 8, ~today): "DGX Spark (GB10) GPU clock pinned at 721 MHz under full load — no throttling, not liftable via nvidia-smi." SM clock hard-capped at 721 MHz (vs. 3003 MHz rated max) despite 96% GPU utilization; nvidia-smi frequency-set commands have no effect. Related to prior /t/361296 "Investigating 513MHz cap" but at a different frequency floor. No NVIDIA response yet. /t/375876 (July 7): BIOS password lock — low relevance. /t/375986 (July 7): GPU stress test query (confirms 30W/50°C idle-ish pattern). Multi-Spark threads (not single-node relevant): /t/375851 Hy3-295B 2× Spark; /t/375923 MiMo-V2.5 + NVFP4 KV cache vLLM v0.24.0 on 2× Spark; multiple MiniMax-M3 threads (4× Spark). NVFP4 working on GB10 with v0.22+ confirmed via community (/t/372559 + PR #40082 merged 2026-05-20). Power-instability cluster unchanged at 7 threads. No new driver/firmware since ~June 15. EAGLE3 emerging as dominant spec-decode for multi-Spark large-model deployments (not single-node relevant).
+
+### Cross-correlated findings
+
+1. **eugr NVFP4 recipes staged (Check 3) × Forum NVFP4 working on v0.22+ (Check 5) × Arena NVFP4 entries (Check 1):** NVFP4 path is confirmed end-to-end at the community level — working kernel (PR #40082 in v0.22+), working Arena submissions, and eugr has the staging recipes ready. Only gate remaining for production eval is the Arm C build upgrade. Three-source corroboration.
+
+2. **Qwen3.7 absent confirmed (Check 4 × Check 5):** No HF repo, no forum mention anywhere. 50 days post-3.7-Max. July 16 deadline in 8 days. If absent July 16, shift to closed-weight-first conclusion (as Watch Item specifies).
+
+3. **eugr nightly-20260707 supersedes dev764 as Arm C target (Check 3 alone):** dev764 was previously the stable target (Entry 101). Now 5 days old; `nightly-20260707` is current. Arm C eval should target `nightly-20260707`. No recipe changes affect the eval protocol.
+
+4. **DFlash recipe n=15 discrepancy (Check 3 × prior eval):** Entry 080 DFlash eval used n=8 (matching the Stojanovic Arena submission); the canonical eugr recipe now uses n=15. Re-running the DFlash eval with n=15 during Arm C could yield higher throughput at c1 than Entry 080's 77.7 tok/s — worth testing explicitly.
+
+### Informational findings
+
+- **GPU clock pinning at 721 MHz (/t/376039, July 8):** Single report, no NVIDIA response. Production unit is 47+ days clean at normal throughput — this issue is not currently manifesting. It may be triggered by a specific firmware state, crash sequence, or GPU workload type. The prior-tracked 14W/513 MHz throttle was post-crash/sleep; 721 MHz under active load is a distinct failure mode. Worth monitoring; add to power-instability cluster as distinct category.
+- **MiMo-V2.5 NVFP4 KV cache confirmed on v0.24.0 (/t/375923):** This is a 2× Spark config and not directly producible on single-node, but it confirms FP8 KV cache + NVFP4 weights is a working combination on the vLLM v0.24.0 stack.
+- **Nemotron-Cascade-2-30B-A3B rejection (Check 4):** vLLM issue #37431 (Mamba-2 SM121 Triton crash) is open with no resolution timeline. Not a current production candidate.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | NOT FIRED — 80.27 confirmed unchanged (Firestore live read) |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 needs-rebase; #40099 stalled |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — stale open |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 50 days post-3.7-Max; July 16 in 8 days |
+| Power-instability cluster | INFO: unchanged at 7 threads; new distinct category /t/376039 (721 MHz clock pin) |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Key developments: (1) eugr shipped 3 new builds — Arm C eval target advances from dev764 to nightly-20260707; (2) eugr added NVFP4 staging recipes signaling imminent Arm D path readiness; (3) new GPU clock-pinning report (/t/376039) — not manifesting on production unit but worth monitoring; (4) Qwen3.7 July 16 deadline in 8 days — if absent, shift to closed-weight-first conclusion; (5) Nemotron-Cascade-2-30B-A3B: new A3B-class model blocked by Mamba-2 on SM121.
+
+### Recommendations
+
+1. **[UPDATED] Arm C eval target: advance to `nightly-20260707`** (was dev764). Changes are minor (regression fixes + Gemma4 patch); FP8 recipe unchanged; eval protocol unaffected. Proceed now.
+2. **[NEW] Re-run DFlash eval with n=15 during Arm C** (canonical recipe changed from n=8 to n=15; prior Entry 080 used n=8). Could shift the DFlash c1 result above 77.7 tok/s, potentially closing the gap with 80.27 baseline.
+3. **[NEW] NVFP4 staging recipes in eugr:** Arm D NVFP4 eval protocol is now ready — recipes are there, model is cached (22 GB). Arm D becomes executable immediately after Arm C upgrade. Gate: confirm driver 610 / CUDA 13.3 safety assessment first.
+4. **[MONITOR] /t/376039 GPU clock pinning at 721 MHz.** Production unit clean; no action now. Watch for NVIDIA response and additional reports.
+5. **[PRIORITY] Qwen3.7 July 16 deadline in 8 days.** Check daily if approaching July 16. If absent, shift A3B comparator formally to Ornith-1.0-35B-FP8 (pre-screen MTP acceptance per Entry 098 Watch Item).
+6. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302).
+7. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+8. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.

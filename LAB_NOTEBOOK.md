@@ -7756,3 +7756,61 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 6. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302).
 7. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 8. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.
+
+## Entry 103 - DGX Spark Recon (2026-07-09)
+
+### Per-check summaries
+
+**Check 1 — Arena (Firestore REST — ACCESSIBLE today; 150 entries):** FP8+vLLM baseline **80.27 tok/s (Stojanovic, DFlash n=8)** UNCHANGED — trigger NOT fired (threshold 88.3 tok/s). New entry since 2026-07-08: **Ornith-1.0-35B-NVFP4 (sakamakismile, 87.23 tok/s tg128 c1, 2-node, July 9)** — first Ornith Arena submission but 2-node only, not single-node comparable. Top vLLM single-node Qwen3.6 overall: 118.91 NVFP4 (Poveda, June 30) unchanged. Top overall by engine: Atlas NVFP4 218.85 (unchanged since May 23); Atlas FP8 172.03 (unchanged). No Atlas entries since May 24. No FP8+vLLM Qwen3.6 entry above 88.3 tok/s.
+
+**Check 2 — vLLM releases:** v0.24.0 **still the latest stable** — no v0.25.x published. PR #41834 (SM12x DSV4F): STILL OPEN, last updated 2026-07-05 (sparse-MLA decode optimization, commit `616a572`). PR #39138 (Gemma4 xgrammar structured output): STILL OPEN, last update 2026-06-16, needs-rebase. PR #40099 (Gemma4 repetition detection): STILL OPEN, **updated 2026-07-08** — most recent activity of the two Gemma4 PRs; adds auto-enabled repetition detection for grammar-constrained decoding. Issue #41063 (DeepGEMM SM12x): OPEN, stale. No SM121/GB10-specific release notes in v0.24.0.
+
+**Check 3 — eugr/spark-vllm-docker: NEW BUILD published July 8.** `0.23.1rc1.dev961+gbc6fbf472.d20260708` (tagged `prebuilt-vllm-current`, July 8 21:11 UTC) + FlashInfer `0.6.14-3fd5c55b-d20260708`. Commits: DiffusionGemma regression fix (July 8), Gemma4 MTP patch (July 7). **NEW: 4 DiffusionGemma recipes** (bf16, bf16-thinking, nvfp4, nvfp4-thinking) — new model family support, Qwen3.6 unrelated. NVFP4 Qwen3.6 recipes unchanged (`qwen3.6-35b-a3b-nvfp4.yaml` + `no-mtp` variant). FP8 recipe unchanged. DFlash recipe: `num_speculative_tokens=15`, `flash_attn` backend. PR #279 (DFlash+FP8 KV): OPEN. **Arm C eval target advances from nightly-20260707 to dev961.** Still v0.23.1rc1 base — no v0.24.x-based eugr build yet.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights **NOT released — 51 days post-3.7-Max API launch** (May 19). July 16 deadline in 7 days. No Qwen4. **NEW: Mistral "fat but sparse" July MoE — CEO Mensch confirmed entering July early access** (TechTimes 2026-07-06) — no model name, no parameter count, no HF weights published yet. This is a frontier-scale MoE, not an A3B-class comparator. No other confirmed 30-40B MoE open-weight releases since July 1.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json/721.json 403):** **NEW /t/376103 "Sparks have recently powered off randomly"** (posted ~17h ago, July 9) — user reports units that ran 55 days straight began shutting off randomly; no OOM or thermal logs at time of shutdown; adds to power-instability cluster. /t/376039 (July 8 "GPU SM clock pinned at 721 MHz"): no NVIDIA response after ~1 day. No July firmware/driver release (June 2026 OTA remains current). **NVFP4 env var correction confirmed: `VLLM_MXFP4_BACKEND=marlin`** (not `VLLM_NVFP4_GEMM_BACKEND=marlin` — the latter silently no-ops on SM121). Power-instability cluster now **8 tracked threads** (+/t/376103). Historical search surfaced 15+ total threads in this cluster — prior tracking was conservative.
+
+### Cross-correlated findings
+
+1. **Arm C eval target advances to dev961 (Check 3):** Two new builds in two days (nightly-20260707 July 7, dev961 July 8). dev961 is the current `latest`. FP8 and NVFP4 recipes unchanged — eval protocol unaffected. Proceed with dev961.
+
+2. **NVFP4 Arm D path fully ready (Check 1 × Check 3 × Check 5):** Arena confirms 118.91 tok/s NVFP4 vLLM at c1 (Poveda, June 30); eugr has NVFP4 recipes; dev961 is the required build tier. Ornith-1.0-35B-NVFP4 (Arena, July 9) confirms NVFP4 weights working across model families. NVFP4 env var correction identified (Check 5). Only remaining gates: (a) Arm C upgrade first, (b) driver 610 / CUDA 13.3 safety assessment.
+
+3. **Qwen3.7 July 16 deadline approaching (Check 4 × prior context):** 51 days vs. historical 3-5 week release pattern. 7 days to deadline. InsiderLLM characterizes gap as "strategic shift toward closed-weight frontier models." No HF repo, no forum speculation. If absent July 16, shift A3B comparator formally to Ornith-1.0-35B-FP8.
+
+4. **Power-instability cluster growing (Check 5):** /t/376103 (July 9) is 8th tracked thread. New additions in consecutive days: /t/376039 July 8, /t/376103 July 9. Production unit 48+ days clean — not manifesting. NVIDIA has not publicly acknowledged MODS-020000600139.
+
+5. **PR #40099 (Gemma4 structured output, Check 2) shows signs of life:** Updated 2026-07-08 — still OPEN but most recent of the two required Gemma4 PRs. PR #39138 (xgrammar bypass, also required) stalled since June 16 with merge-conflict rebase needed.
+
+### Informational findings
+
+- **DiffusionGemma in eugr (Check 3):** 4 new recipes (bf16, bf16-thinking, nvfp4, nvfp4-thinking). New diffusion-style Gemma model family added to eugr. No Qwen3.6 relevance.
+- **Mistral frontier-scale MoE (Check 4):** "Fat but sparse" early access — "fat" likely implies ≥100B total parameters; no details. Not an A3B-class SM121 candidate. Watch for public weights release.
+- **NVFP4 env var correction (Check 5):** `VLLM_MXFP4_BACKEND=marlin` is the correct env var for SM121 (silently correct; `VLLM_NVFP4_GEMM_BACKEND=marlin` silently no-ops). Update Arm D recipe YAML accordingly.
+- **Ornith-1.0-35B-NVFP4 (Arena, July 9):** 87.23 tok/s c1, 2-node only. First Ornith Arena entry. The NVFP4 variant's MTP acceptance profile vs. the FP8 variant's hybrid-GDN risk (Entry 098 Watch Item) is uncharacterized — pre-screen remains required before any Spark single-node trial.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | NOT FIRED — 80.27 confirmed unchanged (Firestore live read, 150 docs) |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 needs-rebase (stalled Jun 16); #40099 updated Jul 8 (still OPEN) |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — stale open |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 51 days post-3.7-Max; July 16 deadline in 7 days |
+| Power-instability cluster | INFO: new thread /t/376103 (Jul 9); cluster 8 tracked threads |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Key developments: (1) eugr dev961 published July 8 — Arm C eval target advances; (2) power-instability cluster now 8 tracked threads with two new reports in 48h; (3) Qwen3.7 July 16 deadline in 7 days; (4) Mistral "fat but sparse" frontier MoE in early access (not A3B-class); (5) NVFP4 env var correction identified for Arm D recipe prep.
+
+### Recommendations
+
+1. **[PRIORITY 1] Arm C eval: advance target to dev961** (July 8). FP8 recipe unchanged; protocol unaffected. Two builds in 2 days suggests active development but dev961 is current `latest` — proceed now.
+2. **[PRIORITY 2] Qwen3.7 July 16 deadline in 7 days.** If absent, formally shift A3B comparator to Ornith-1.0-35B-FP8 (pre-screen MTP acceptance per Entry 098 Watch Item).
+3. **[NOTE] NVFP4 env var for Arm D recipe:** Use `VLLM_MXFP4_BACKEND=marlin` (not `VLLM_NVFP4_GEMM_BACKEND`). Update recipe YAML before Arm D eval.
+4. **[MONITOR] Power-instability cluster at 8 tracked threads.** /t/376039 (Jul 8, 721 MHz clock pin) and /t/376103 (Jul 9, random power-off) both new. No NVIDIA response on either. Production unit 48+ days clean; no action. Watch for NVIDIA response pattern.
+5. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302).
+6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+7. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.

@@ -7814,3 +7814,59 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 5. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302).
 6. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 7. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.
+
+## Entry 104 - DGX Spark Recon (2026-07-10)
+
+### Per-check summaries
+
+**Check 1 — Arena (INACCESSIBLE today):** Firestore REST `GET /documents/benchmarks` returned `{}` (empty; API key lookup failed — spark-arena.com 403 in remote env, JS bundle unreachable). spark-arena.com leaderboard also 403. Arena baseline **assumed unchanged from Entry 103 (80.27 tok/s FP8 vLLM tg128 c1)**; trigger threshold 88.3 tok/s cannot be confirmed today. Informational data point: sparkarena X account (`@spark_arena`) has a post claiming Qwen3.6-35B-A3B-FP8 at "130 tokens/sec on vLLM at concurrency 10 for 128-token reply with 100k tokens prior context in memory" — this is a cached-prefix/high-concurrency metric, **not tg128 c1 fresh-context**, and not directly comparable to our 80.27 baseline. Post date unknown. No new confirmed c1 FP8 vLLM entry above 88.3 tok/s.
+
+**Check 2 — vLLM releases:** v0.24.0 **still the latest stable** — no v0.25.x published. PR #41834 (SM12x DSV4F): **OPEN**, last update July 9 2026 — new commit switching default DSV4 sparse-MLA decode to the FlashInfer SM120 path (from False → True). PR still has unresolved merge conflicts from prior rebase; SM121 1M-context stability validated on 4-node GB10 (single-node Qwen3.6 unchanged). PR #39138 (Gemma4 xgrammar structured output): **OPEN**, stalled — last substantive activity June 16 (needs-rebase). PR #40099 (Gemma4 repetition detection): **OPEN**, last update July 8 — still active, most recent of the two required Gemma4 PRs. Issue #41063 (DeepGEMM SM12x): **OPEN**, stale. No SM121/GB10-specific notes in v0.24.0.
+
+**Check 3 — eugr/spark-vllm-docker:** **NEW BUILD dev999 (`0.23.1rc1.dev999+g405eda2a2.d20260709`, July 9 23:52 UTC)** + FlashInfer `0.6.14-38f9ba9e-d20260709`. This is the 3rd consecutive-day build (nightly-20260707 Jul 7, dev961 Jul 8, dev999 Jul 9). Tagged `prebuilt-vllm-current`. Changes vs dev961 unknown — GitHub release detail page returned loading errors. Still v0.23.1rc1 base; no v0.24.x-based eugr build published. **Arm C eval target advances from dev961 to dev999.**
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights **NOT released — 52 days post-3.7-Max API launch** (May 19). July 16 deadline in **6 days**. No Qwen4 general model. "Qwen 4 Coder 32B-A3B" claim from one search result **DEBUNKED** — hallucination by AI summarizer; no such model exists on HuggingFace. Latest Qwen coding model is Qwen3-Coder-Next (80B total/3B active, already rejected for SM121 as Entry 071). No new 30-40B MoE open-weight releases from any lab confirmed since July 1.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json/721.json 403):** **NEW: /t/376239 "GPU clock bug - looks like 5 min wait is enough"** (posted ~18h ago = July 9-10) — a follow-up thread to /t/376039 (721 MHz SM clock pin under active load). Thread title strongly implies a **lightweight workaround was found: waiting ~5 minutes (without full power cycle) is sufficient to restore the GPU clock to normal speed**. Full thread content inaccessible (403), so exact procedure unconfirmed. This would be significantly easier than the wall-power-cycle fix documented for the 14W throttle bug. /t/376039 (Jul 8, 721 MHz pin): still no NVIDIA response. No new driver/firmware release (June 2026 OTA remains current). Power-instability cluster: unchanged at 8 tracked threads; /t/376239 is a workaround thread, not a new failure report.
+
+### Cross-correlated findings
+
+1. **eugr daily build cadence (Check 3 alone):** 3 builds in 3 consecutive days (Jul 7, Jul 8, Jul 9). Pattern suggests active daily CI development on the v0.23.1rc1 branch. dev999 is current `latest`. Changes in dev999 unknown but FP8/NVFP4 recipes have been stable across this run. Arm C eval can proceed on dev999; if another build lands before the eval window, re-pin.
+
+2. **GPU clock bug workaround status (Check 5):** /t/376039 (Jul 8, 721 MHz pin under load) spawned a direct follow-up /t/376239 within ~24h claiming a 5-min wait resolves it. If confirmed, this reduces the 721 MHz clock-pin from a "power-cycle required" bug to a transient recoverable condition. Distinction matters for production: 5-min idle vs 5-min downtime + physical intervention. Watch for reply confirmations in /t/376239.
+
+3. **Qwen3.7 July 16 deadline tightening (Check 4):** 52 days post-3.7-Max with 6 days to self-imposed deadline. All open-weight search returns only Qwen3.6 links. "Qwen 4 Coder" hallucination confirms search noise is high for this topic — rely on direct HF org probe only. If absent July 16, shift A3B comparator to Ornith-1.0-35B-FP8 as Watch Item specifies.
+
+4. **Arena inaccessible vs. consistent pattern (Check 1):** Entry 103 had live Firestore access (150 docs). Entry 104 cannot reach it. This is consistent with the documented remote-env intermittent pattern — Firestore is world-readable but key lookup requires JS bundle, which is 403'd. No evidence of a new top FP8 vLLM entry; 80.27 baseline stands.
+
+### Informational findings
+
+- **PR #41834 default flip to FlashInfer SM120 path (Check 2):** The new commit switches `default_dsv4_sparse_mla_to_flashinfer_sm120 = True`. For SM121 specifically, the PR's sparse-MLA decode path uses Triton fallback (not FlashInfer SM120 directly), so this default flip may not affect SM121 behavior, but is worth noting when PR merges.
+- **"Qwen 4 Coder" hallucination (Check 4):** AI search summarizers are now generating fake Qwen model names with plausible architectures (32B/3B active, Apache 2.0, SWE-Bench 82%). Verify any new Qwen model claims directly against HF `Qwen` org page before acting.
+- **sparkarena X post (Check 1):** 130 tok/s at c10 with 100k cached context ≠ 80.27 tok/s tg128 c1. Likely a cherry-picked metric demonstrating KV-cache efficiency in high-reuse scenarios. Not an Arena leaderboard entry; no recipe attached.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | NOT FIRED — Arena inaccessible today; baseline assumed unchanged at 80.27 |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 stalled (Jun 16); #40099 updated Jul 8, OPEN |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — stale open |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 52 days post-3.7-Max; July 16 deadline in 6 days |
+| Power-instability cluster | INFO: /t/376239 workaround thread for /t/376039; cluster at 8 failure threads + 1 workaround thread |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Key developments: (1) eugr dev999 published July 9 — 3rd consecutive daily build, Arm C eval target advances again; (2) GPU clock bug workaround found — /t/376239 claims 5-min idle wait restores clock without power cycle; (3) Qwen3.7 deadline now 6 days away; (4) Arena inaccessible today (intermittent remote-env Firestore access).
+
+### Recommendations
+
+1. **[PRIORITY 1] Arm C eval: proceed on dev999** (July 9 23:52 UTC). 3 consecutive daily builds indicate active development — if another build lands before eval window opens, re-pin to `prebuilt-vllm-current` at that time. FP8 recipe and NVFP4 recipes both stable across the run. Protocol unchanged from prior recommendation.
+2. **[PRIORITY 2] Monitor /t/376239 GPU clock bug workaround.** If the 5-min idle wait is confirmed by multiple users, update production operating procedure: if 721 MHz clock pin observed, idle the unit 5 minutes before re-testing throughput (before escalating to power cycle). Check thread tomorrow.
+3. **[PRIORITY 3] Qwen3.7 July 16 deadline — 6 days.** Daily check warranted. If absent July 16, formally shift A3B comparator to Ornith-1.0-35B-FP8 and pre-screen MTP acceptance (Entry 098 Watch Item).
+4. **[NOTE] Beware Qwen model hallucinations.** AI search summarizers now generating plausible-but-fake model names (e.g., "Qwen 4 Coder 32B-A3B"). Always verify against the official HF `Qwen` org page directly before treating as real.
+5. **[CARRY-FORWARD] NVFP4 env var for Arm D recipe:** Use `VLLM_MXFP4_BACKEND=marlin`.
+6. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml.
+7. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+8. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.

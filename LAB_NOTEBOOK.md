@@ -7870,3 +7870,51 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 6. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml.
 7. **[CARRY-FORWARD] Driver 610 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 8. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.
+
+## Entry 105 - DGX Spark Recon (2026-07-11)
+
+### Per-check summaries
+
+**Check 1 — Arena (LIVE, Firestore REST):** 151 docs (+1 from Entry 104's 150). FP8 vLLM top = **80.27 tok/s** UNCHANGED (trigger NOT fired; threshold 88.3 tok/s). Top overall single-node: 218.85 tok/s (Atlas, NVFP4, unchanged). No new entries >88.3 tok/s for FP8 Qwen3.6-35B-A3B on vLLM. Atlas remains the only runtime ahead of vLLM; vLLM ceiling stable. The +1 doc confirms collection is live but no new high-water marks.
+
+**Check 2 — vLLM releases:** v0.24.0 **still the latest stable** (no v0.25.x stable). PR #41834 (SM12x DSV4F): **OPEN**, last activity July 7 — most recent commit flips default DSV4 sparse-MLA decode to FlashInfer SM120 path (`default_dsv4_sparse_mla_to_flashinfer_sm120 = True`); SM121/GB10 still uses Triton fallback path. PR #39138 (Gemma4 xgrammar): **OPEN**, stalled June 16 (merge conflicts, awaiting code-owner approvals). PR #40099 (Gemma4 repetition detection): **OPEN**, last activity July 8 — most active of the two Gemma4 PRs, pending review. Issue #41063 (DeepGEMM SM12x): **OPEN**, stale (last update April 27). No SM121/GB10-explicit notes in v0.24.0 release text.
+
+**Check 3 — eugr/spark-vllm-docker:** **NEW BUILD `0.25.1.dev24+g96bb89286.d20260710`**, published July 10 11:39 UTC, tagged `prebuilt-vllm-current`. This is a **major version jump** from 0.23.1rc1.dev999 — the **entire 0.24.x series was skipped** in prebuilt releases. FlashInfer updated to **0.6.15** (refreshed commit `2c0d595f`, July 10). NCCL SM gencode PR #315 merged (affects multi-node NCCL build args; single-node irrelevant). Changes vs dev999 otherwise unspecified ("New stable build"). PR #279 (DFlash + FP8 KV Cache) still OPEN. No v0.24.x build was ever published — eugr jumped directly from 0.23.1rc1 to 0.25.1.dev. **Arm C eval target advances to 0.25.1.dev24.**
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights **NOT released** — 53 days post-3.7-Max API launch (May 19, 2026). July 16 deadline in **5 days**. No Qwen4. No new ~30-40B MoE open-weight releases from any lab confirmed since July 1. "Qwen 4 Coder 32B-A3B" claim from prior search (Entry 104) confirmed DEBUNKED — AI summarizer hallucination; no such model on HuggingFace. Latest downloadable Qwen: Qwen3.6-35B-A3B-FP8 (April 2026), unchanged.
+
+**Check 5 — Forum (WebSearch fallback; 719.json/721.json 403):** **NEW /t/375946 "DGX Spark freezes during heavy Docker vLLM workloads (manual power cycle needed) — check container-toolkit/CDI"** (~July 7, not previously tracked) — identifies CDI/container-toolkit misconfiguration as a potentially software-fixable root cause for some freeze/hang reports. **/t/376239 GPU clock workaround CLARIFIED:** "5 min wait" = **full power cable disconnect** (unplug entirely, let circuitry discharge, reconnect) — NOT a passive idle wait as the title implied. This is the same physical procedure as the 14W throttle fix. Physical access to the unit required. NEW /t/376536 "DGX Spark Multi-user" (July 11, ~5h ago) — team of 8-10 planning multi-Spark purchase, Kubernetes/Slurm query; no perf/driver relevance. Power-instability cluster: **9+ tracked threads** (+/t/375946). No new driver/firmware (June 2026 OTA remains current). No July announcement posted.
+
+### Cross-correlated findings
+
+1. **eugr 0.25.1.dev24 likely resolves the NVFP4 weight-schema gap (Checks 2+3):** eugr prebuilt is now at 0.25.1.dev24, built on vLLM 0.24.x+ sources (stable v0.24.0 was June 29). NVFP4 support on vLLM was gated on v0.23.x+ (the `Qwen3.6-35B-A3B-NVFP4` weight-schema gap in `qwen3_5.py:407` is resolved in the 0.23.x series — Entry 094 confirmed prod v0.19.x was the blocker). Since 0.25.1.dev24 is built on a codebase well beyond 0.23.x, Arm D (NVFP4) and Arm C (FP8/DFlash) can likely be **combined into one upgrade window** rather than sequenced.
+
+2. **GPU clock workaround is more burdensome than Entry 104 implied (Check 5):** Yesterday's Watch Item noted "/t/376239 claims 5-min idle wait restores clock without power cycle." Today's forum content clarifies this is a **full power cable disconnect** — same physical intervention as the 14W throttle bug fix. This changes the operational calculus: the 721 MHz clock-pin is not self-healing with a software idle; it requires physical access. Revises the Watch Item.
+
+3. **CDI/container-toolkit as a software-fixable freeze root cause (Check 5):** /t/375946 is newly surfaced (~July 7) and distinguishes from the hard-power-off thermal cluster. If container-toolkit CDI misconfiguration is the root cause for some freezes, it would be verifiable from the production unit's `/etc/cdi/` or `nvidia-ctk` config without any hardware intervention. Low-risk check.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s | NOT FIRED — 80.27 confirmed (151 docs live) |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 stalled Jun 16; #40099 updated Jul 8, OPEN |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — stale open |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 53 days post-3.7-Max; July 16 deadline in 5 days |
+| Power-instability cluster | INFO: /t/375946 (CDI root cause ~Jul 7) + /t/376536 (multi-user Jul 11); cluster now 9+ threads |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Key developments: (1) **eugr prebuilt jumped to 0.25.1.dev24** (July 10) — skips entire 0.24.x series, Arm C eval target advances significantly, NVFP4 weight-schema gap likely resolved enabling Arm C+D combined window; (2) GPU clock bug workaround CLARIFIED — physical power cable disconnect required (not passive idle), same as 14W fix; (3) /t/375946 CDI/container-toolkit as potential software-fixable freeze root cause; (4) Qwen3.7 July 16 deadline in 5 days.
+
+### Recommendations
+
+1. **[PRIORITY 1] Arm C eval: advance target to `0.25.1.dev24`** (July 10 11:39 UTC). This build is ahead of stable v0.24.0 and resolves the NVFP4 weight-schema gap from Entry 094. Consider combining Arm C (FP8 re-eval + DFlash n=15) and Arm D (NVFP4 + MTP=3) into a single upgrade window rather than sequencing. Both `qwen3.6-35b-a3b-fp8.yaml` and `qwen3.6-35b-a3b-nvfp4.yaml` recipes available in eugr. Gate: driver 610 safety assessment still required before Arm D NVFP4 eval.
+2. **[PRIORITY 2] Revise GPU clock operating procedure.** /t/376239 confirms the 721 MHz SM clock-pin fix requires **full power cable disconnect** (not idle wait). Update procedure: if 721 MHz clock pin observed during inference, power off completely → unplug power cable → wait 5 minutes → reconnect → power on. Physical access to the unit required.
+3. **[PRIORITY 3] Check container-toolkit CDI config on production unit.** /t/375946 identifies CDI misconfiguration as a potential root cause for some vLLM freeze reports. Verify `/etc/cdi/` config and `nvidia-ctk` CDI state at next maintenance window — low-risk check, no downtime needed.
+4. **[PRIORITY 4] Qwen3.7 July 16 deadline — 5 days.** If absent July 16, formally shift A3B comparator to Ornith-1.0-35B-FP8 per Entry 098 Watch Item (pre-screen MTP acceptance before any Spark trial).
+5. **[CARRY-FORWARD] NVFP4 env var for Arm D:** `VLLM_MXFP4_BACKEND=marlin` (not `VLLM_NVFP4_GEMM_BACKEND`).
+6. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302).
+7. **[CARRY-FORWARD] Driver 610.43.02 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+8. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.

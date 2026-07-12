@@ -108,3 +108,5 @@ NEVER use `~/.cache/huggingface`.
 ## Project
 
 Reference documentation for NVIDIA DGX Spark AI system — configuration notes and user manual.
+
+Routine ops sessions: suggest `/fast`.

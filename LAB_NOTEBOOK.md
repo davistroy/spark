@@ -7918,3 +7918,52 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 6. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302).
 7. **[CARRY-FORWARD] Driver 610.43.02 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
 8. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.
+
+## Entry 106 - DGX Spark Recon (2026-07-12)
+
+### Per-check summaries
+
+**Check 1 — Arena (INACCESSIBLE):** spark-arena.com returns HTTP 403 in remote execution environment (consistent with all prior remote-env entries). Firestore REST benchmarks endpoint unreachable without API key from JS bundle. sparkarena X post references 130 tok/s at c10 with 100k cached context — cherry-picked KV-cache efficiency scenario, not tg128 c1; not an Arena leaderboard entry. Cannot confirm trigger (>88.3 tok/s tg128 c1 FP8 vLLM). Baseline 80.27 tok/s tg128 c1 assumed unchanged.
+
+**Check 2 — vLLM releases:** **NEW STABLE: v0.25.0 released July 11 2026 at 20:06 UTC** — 558 commits, 232 contributors. SM12x-adjacent highlights: (a) "B12x backend for non-gated MoEs" (PR #43328, merged Jul 6) — FlashInfer B12xMoEWrapper enabling FlashInfer SM12x MoE path for both SiLU-gated (Qwen3.6) and ReLU2-ungated (Nemotron) architectures; (b) "skip cooperative top-K on SM120" (PR #47164) — SM120-specific optimization, may apply to SM121; (c) "restored NVFP4 swizzled-scale zero-init to recover Blackwell decode throughput" (PR #45739) — NVFP4 decode fix for Blackwell family; (d) Model Runner V2 default for all dense models. No explicit SM121/GB10/DGX Spark text in release notes. PR #39138 (Gemma4 xgrammar): **OPEN**, last activity Jun 16 (merge conflict, code-owner approvals needed). PR #40099 (Gemma4 repetition): **OPEN**, last activity Jul 8 (stalled — reproduction issue unconfirmed + logic error flagged in review). Issue #41063 (DeepGEMM SM12x): **OPEN**, stale since Apr 27.
+
+**Check 3 — eugr/spark-vllm-docker:** NEW BUILD July 11 20:00 UTC: **`0.23.1rc1.dev1043+ga4b4b5787.d20260711`** (tagged `prebuilt-vllm-current`) + FlashInfer **`0.6.15-1aca0f88-d20260711`** (same 0.6.15, new commit; tagged `prebuilt-flashinfer-current`). This build supersedes the July 10 `0.25.1.dev24` as the current stable — dev24 was an experimental build, not a sustained track. Base vLLM line is **0.23.1rc1** (pre-v0.24.0 lineage), not v0.25.0. July 12 commit "Fixes #317" + "Updated README" indicates active development; another build likely imminent. PR #279 (DFlash + FP8 KV Cache): still OPEN. Recipes (FP8, NVFP4, no-mtp variants) unchanged.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights **NOT released** — 55 days post-3.7-Max API launch (May 19). July 16 deadline in **4 days**. No Qwen4. No new ~30-40B MoE open-weight releases confirmed from any lab. Qwen3.6-35B-A3B remains the latest open-weight Qwen. Multiple sources confirm "through July, 3.6 remains the newest Qwen you can actually run locally."
+
+**Check 5 — Forum (WebSearch fallback; 719.json/721.json 403 in remote env):** **NEW /t/376574 "Easy-vllm — Let a code agent build & serve any model on vLLM for your DGX Sparks"** (July 11-12, ~19h before recon): open-source tool easing LLM deployment via vLLM on DGX Spark; informational, no perf/driver relevance. **DISCOVERED PREVIOUSLY UNTRACKED: /t/373314 "NOTE: Latest updates break vLLM -- see thread"** (~June 22-28 per thread-number pattern; not captured in Entries 086-105): DGX Spark dashboard OTA updates broke some vLLM installations; fix committed to community docker by @eugr_nv. Already resolved. Power-instability cluster: **9+ tracked threads** (unchanged from Entry 105). No new driver/firmware (June 2026 OTA remains current). No July NVIDIA announcement posted.
+
+### Cross-correlated findings
+
+1. **vLLM v0.25.0 stable + eugr July 12 activity (Checks 2+3):** v0.25.0 released July 11 20:06 UTC; eugr dev1043 published July 11 20:00 UTC (6 minutes earlier, on 0.23.1rc1 base). July 12 eugr commit "Fixes #317" signals imminent new build. Once eugr packages a v0.25.0-based prebuilt, it will include B12x MoE (PR #43328) and NVFP4 Blackwell decode fix (PR #45739) — both relevant to Arm C+D eval. Arm C target should be `prebuilt-vllm-current` at eval time, not pinned dev24 or dev1043.
+
+2. **v0.25.0 B12x/SM12x MoE + NVFP4 decode fix strengthen combined Arm C+D case (Checks 2+3):** PR #43328 (FlashInfer B12xMoEWrapper, SM12x, gated+ungated) and PR #45739 (NVFP4 swizzle-scale zero-init recovery for Blackwell decode) merged into v0.25.0. Both directly relevant to SM121 production eval. Combined Arm C+D window on a v0.25.0-based eugr build is now even more compelling.
+
+3. **Dashboard break + eugr community fix (Checks 3+5 / /t/373314 + eugr):** DGX Spark dashboard updates reportedly broke vLLM installs; @eugr_nv committed a fix to community docker. Production uses `vllm-cu132-test:latest` (not eugr), so not directly affected, but relevant: verify vLLM works after any future dashboard OTA.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s | INDETERMINATE (Arena 403 in remote env; baseline 80.27 assumed unchanged) |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 OPEN (Jun 16 stall); #40099 OPEN (Jul 8 activity, stalled) |
+| DeepGEMM SM12x (#41063) resolved | NOT FIRED — OPEN, stale since Apr 27 |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | INFO: v0.25.0 includes PR #43328 (B12x FlashInfer MoE, SM12x) + #47164 (skip cooperative topK on SM120) + #45739 (NVFP4 Blackwell decode); no SM121/GB10-explicit text — does NOT fire HIGH trigger |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 55 days post-3.7-Max; July 16 deadline in 4 days |
+| Power-instability cluster | INFO: /t/376574 (new tooling thread); /t/373314 (discovered untracked — already resolved); cluster 9+ threads, no change |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) unchanged and stable. No formal triggers fired. Standout finding: **vLLM v0.25.0 stable released July 11** with B12x SM12x MoE improvement and NVFP4 Blackwell decode fix — not a production-upgrade trigger today, but materially advances the Arm C+D eval case once eugr packages a v0.25.0-based prebuilt (likely imminent). eugr current stable (dev1043) remains on 0.23.1rc1 base. Qwen3.7 deadline now 4 days.
+
+### Recommendations
+
+1. **[PRIORITY 1] Await eugr v0.25.0-based prebuilt — use `prebuilt-vllm-current` at eval time.** Current `prebuilt-vllm-current` (dev1043) is on 0.23.1rc1. July 12 commit activity suggests a new build is imminent, likely incorporating v0.25.0. Do NOT pin to dev24 or dev1043 — use the floating tag at eval window open.
+2. **[PRIORITY 2] vLLM v0.25.0 B12x MoE + NVFP4 Blackwell decode fix: plan combined Arm C+D window.** PR #43328 (FlashInfer B12xMoEWrapper for SM12x, gated MoEs including Qwen3.6) and PR #45739 (NVFP4 swizzle-scale zero-init recovery) directly target SM121. Once a v0.25.0-based eugr build is available, combine Arm C (FP8 re-eval + DFlash n=15) and Arm D (NVFP4 + MTP=3) into a single window. DFlash canonical n=15; confirm `VLLM_MXFP4_BACKEND=marlin` for NVFP4. Gate: driver 610 safety assessment still required.
+3. **[PRIORITY 3] Qwen3.7 July 16 deadline — 4 days.** If absent July 16, formally shift primary A3B comparator to Ornith-1.0-35B-FP8 (pre-screen MTP acceptance per Entry 098 before Spark trial).
+4. **[NOTE] Dashboard OTA break (/t/373314, resolved).** After any future DGX Spark dashboard update, verify vLLM container health before resuming production. eugr community docker already patched.
+5. **[CARRY-FORWARD] NVFP4 env var for Arm D:** `VLLM_MXFP4_BACKEND=marlin`.
+6. **[CARRY-FORWARD] Verify `--reasoning-parser qwen3`** in production docker-compose.yml (eugr issue #302).
+7. **[CARRY-FORWARD] Driver 610.43.02 / CUDA 13.3 safety assessment** before Arm D NVFP4 eval.
+8. **[CARRY-FORWARD] Fan headless-mode bug** — verify fans spinning on production unit at next maintenance window.

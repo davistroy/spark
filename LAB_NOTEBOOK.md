@@ -8017,3 +8017,50 @@ No formal baseline trigger fired, but the standing gate condition from Entry 106
 4. **[NOTE] Driver 610 gate looks relaxable for Arm D** — community NVFP4/b12x results are on our exact driver 580.159.03 (with `nvidia-cutlass-dsl` ≥4.5.3). Verify during eval prep instead of blocking.
 5. **[NOTE] Pin `nvidia-cutlass-dsl>=4.5.3`** in any custom b12x/CuteDSL build on 580.159.03 (4.5.2 compile failure, /t/374125 #157).
 6. **[CARRY-FORWARD]** `VLLM_MXFP4_BACKEND=marlin` for Arm D; verify `--reasoning-parser qwen3` in production compose (eugr #302); fan headless-mode check at next maintenance window; Mistral July early-access open MoE watch; TokenSpeed `sm12x-stable` watch; Qwen3.6 long-context tool-call-loop anecdote (contradicts our AR pass — monitor).
+
+## Entry 108 - DGX Spark Recon (2026-07-13)
+
+### Per-check summaries
+
+**Check 1 — Arena (Firestore REST direct — ACCESSIBLE; spark-arena.com still 403):** Firestore `benchmarks` collection confirmed fully world-readable without any API key (HTTP 200 on direct unauthenticated REST call — no JS-bundle key extraction needed). 154 documents fetched. Top FP8 Qwen3.6-35B-A3B vLLM single-node tg128 c1: **80.27 (Stojanovic, May 2026) — flat, 0% delta** (full Firestore read; no new FP8/vLLM entries since May 2026). Arena trigger threshold (>88.3 tok/s) not reached. Top overall: 218.85 (Atlas NVFP4, unchanged). **New entry since Entry 107: Ornith-1.0-35B-NVFP4 87.23 c1 (Jul 9)** — second Arena data point for Ornith, up from 68.22 (Jul 2); likely better recipe config; still below trigger threshold and well below NVFP4 cluster (102–118). NVFP4 vLLM cluster at 102–118 tok/s (Jun–Jul, on newer builds) unchanged.
+
+**Check 2 — vLLM releases:** v0.25.0 (2026-07-11) still latest — no v0.25.1 or new RC. **KEY FINDING: v0.25.0 PR #47304 "DeepGEMM updated to enable SM120 support"** (new, not captured in Entries 106/107) — SM120 is the direct sibling of SM121 in the SM12x family; may extend DeepGEMM to GB10, but SM121 not yet explicitly confirmed. Issue #41063 (GB10 DeepGEMM gap tracking) still OPEN, no activity since creation (Apr 27). **PR #41834 (SM12x DSV4F): active commit today (2026-07-13)** — prefix-cache/spec-decode bug fix; SM12x Triton fallbacks still unmerged (178+ commits, merge conflicts). PR #39138: OPEN, needs-rebase, stalled Jun 16. PR #40099: OPEN, last activity Jul 8.
+
+**Check 3 — eugr/spark-vllm-docker:** No new build since Entry 107 dev1053 (2026-07-12 17:23 UTC). `prebuilt-vllm-current` = `0.23.1rc1.dev1053+gf2317c227.d20260712`; FlashInfer = `0.6.15-1aca0f88-d20260711`. Build-infrastructure fix commit 8b00816 was pre-cutoff (15:46 UTC). PR #279 (DFlash+FP8 KV): still OPEN, stalled since Jun 12. All recipes (FP8, NVFP4, DFlash, no-mtp) unchanged.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights **NOT released — T-3d to July 16 deadline** (re-confirmed; zero new signals; projected Jun 6-14 open-weight window blown by 4+ weeks). No Qwen4. No new 30-40B MoE open-weight models suitable for Spark since Jul 12. Qwen3.6-35B-A3B-FP8 remains the latest open-weight Qwen on HF. InsiderLLM framing: Qwen may be bifurcating into closed frontier (3.7-Max, 3.7-Plus) vs. open mid-tier (3.6 ceiling).
+
+**Check 5 — Forum (WebSearch fallback; 719.json/721.json 403):** No confirmed new threads dated 2026-07-13. GPU clock 721 MHz bug (/t/376039, /t/376239): still no NVIDIA response (~5 days). **SIGNIFICANT COMMUNITY FINDING: AEON-7 has a working NVFP4 solution on SM121** (origin date ~Jun 18 based on image tag; not surfaced in prior recon runs). Container: `ghcr.io/aeon-7/aeon-vllm-ultimate:latest` (vLLM 0.23.0 source-built for GB10/sm_121a, 7 upstream patches, tagged 2026-06-18). Model: `AEON-7/Qwen3.6-35B-A3B-heretic-NVFP4` (community recalibrated checkpoint that avoids the v0.19.x KeyError). Config: `--moe-backend marlin`, `--attention-backend flash_attn`, DFlash n=11. Reported performance: ~97 tok/s c1, ~360–415 tok/s agg c8, 78% DFlash acceptance. **Architecture clarification from forum: SM121 has NO native FP4 tensor cores** — NVFP4 advantage on SM121 is purely memory-bandwidth (FP4→BF16 dequantize via Marlin), not FP4 compute. Community independently confirmed our Entry 094 KeyError root cause (vLLM issue #38980 closed as stale). **vLLM 0.23 MoE backend rename:** `VLLM_FLASHINFER_MOE_BACKEND=latency` → `--moe-backend {marlin,flashinfer_cutlass,...}` (production migration note for Arm C). No July OTA/driver release; DGX Spark User Guide PDF re-dated Jul 9 but content inaccessible.
+
+### Cross-correlated findings
+
+1. **DeepGEMM SM120 in v0.25.0 + Issue #41063 still open (Check 2):** v0.25.0 PR #47304 adds SM120 DeepGEMM support — closest upstream progress yet toward GB10/SM121 DeepGEMM. Issue #41063 tracks the GB10-specific gaps and remains open with no activity since creation. Momentum is positive but SM121 benefit is not confirmed; awaiting test on actual hardware.
+
+2. **AEON-7 NVFP4 community path + official path blocked on v0.19.x schema (Checks 3+5):** Community has achieved ~97 tok/s c1 NVFP4 on SM121 via a patched vLLM 0.23.0 build + recalibrated heretic-NVFP4 model. This corroborates Entry 094 diagnosis and shows the fix is viable in v0.23.0. The AEON-7 image applies 7 patches — requires patch inventory + license review before sandbox consideration. Official NVFP4 path still couples to v0.23.x upgrade (eugr dev1053); whether the official `nvidia/Qwen3.6-35B-A3B-NVFP4` model would still KeyError on dev1053 is unconfirmed.
+
+3. **MoE backend rename migration note (Checks 3+5):** Upgrading to eugr 0.23.x/dev1053 requires renaming `VLLM_FLASHINFER_MOE_BACKEND=latency` to the new `--moe-backend` CLI flag in production compose. No impact on current v0.19.1rc1.dev219+cu132 production; plan for Arm C migration.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s | NOT FIRED — 80.27 confirmed flat (full Firestore read, no API key required) |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — #39138 OPEN (needs-rebase, stalled Jun 16); #40099 OPEN (Jul 8) |
+| DeepGEMM AND (SM12x/GB10) | INFO — v0.25.0 PR #47304 "DeepGEMM updated to enable SM120 support"; issue #41063 still OPEN; SM121 not yet confirmed |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | INFO — PR #47304 (DeepGEMM SM120) + PR #47164 (skip cooperative topK SM120); no explicit SM121/GB10 text |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — T-3d to July 16 deadline, zero new signals |
+| Power-instability cluster | INFO — 9+ tracked threads, unchanged; GPU clock 721 MHz bug no NVIDIA response (5 days) |
+
+### Overall classification: WORTH WATCHING
+
+Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu132) stable and unchanged. No formal triggers fired. Standout findings: (1) **AEON-7 community NVFP4 solution on SM121 now available** (~97 tok/s c1, vLLM 0.23.0 source-built, Jun 18) — alternative NVFP4 eval path pre-dates official eugr prebuilt and requires vetting; (2) **DeepGEMM SM120 support landed in v0.25.0** (PR #47304) — closest upstream progress toward GB10 DeepGEMM, SM121 benefit unconfirmed; (3) Qwen3.7 T-3d to July 16 deadline with zero signals. No new eugr build since Entry 107 dev1053. Arena 80.27 flat.
+
+### Recommendations
+
+1. **[PRIORITY 1] Qwen3.7 July 16 deadline — T-3d, zero signals.** Tomorrow's recon is the last before the deadline. If absent July 16, formally execute the closed-weight-first conclusion. Fold Laguna XS 2.1 FP8 (no GDN, DFlash speculator) and North Mini Code 1.0 FP8 (SWE-bench 80.2% pass@10) into the Arm C eval plan as alternative comparators — both require the new build.
+2. **[PRIORITY 2] DeepGEMM SM120 in v0.25.0 — verify SM121 benefit at Arm C eval.** Add `VLLM_USE_DEEP_GEMM=1` as a secondary test in the Arm C eval matrix. Check if Issue #41063 closes or gains activity once the eugr dev1053 build is tested. Do not act before SM121 confirmation.
+3. **[PRIORITY 3] AEON-7 NVFP4 community path — vet before eval consideration.** `ghcr.io/aeon-7/aeon-vllm-ultimate:latest` + `AEON-7/Qwen3.6-35B-A3B-heretic-NVFP4` is an alternative NVFP4 path on SM121. Requires: (a) patch inventory (7 patches applied to upstream vLLM 0.23.0); (b) AGPLv3 / license review for the image; (c) model provenance check for heretic-NVFP4. Official path (eugr dev1053 + `nvidia/Qwen3.6-35B-A3B-NVFP4`) still preferred; AEON-7 is a fallback if official NVFP4 still KeyErrors on dev1053.
+4. **[NOTE] MoE backend rename for Arm C migration.** When upgrading to eugr dev1053/0.23.x, replace `VLLM_FLASHINFER_MOE_BACKEND=latency` with `--moe-backend marlin` (or appropriate value per eugr FP8 recipe). Verify before running eval.
+5. **[NOTE] Ornith-1.0-35B-NVFP4 second Arena data point: 87.23 c1 (Jul 9).** Improvement over prior 68.22 (Jul 2) likely reflects better recipe. Deprioritization decision (Entry 107, user) stands — hybrid GDN MTP acceptance risk unresolved.
+6. **[CARRY-FORWARD]** Arm C+D eval: use `prebuilt-vllm-current` at eval time per Entry 107 Priority 1. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. MTP=3 + TRITON_ATTN drafter variant in eval matrix. Fan headless-mode check at next maintenance window. Driver 610 safety assessment before Arm D (but may be relaxable — verify during eval prep).

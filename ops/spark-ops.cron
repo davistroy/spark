@@ -14,3 +14,9 @@ MAILTO=""
 0 14 * * 1   /home/davistroy/dev/personal/spark/ops/spark-security.sh
 # Weekly LLM config audit (Tue 02:00 UTC). Headless `claude -p` verified 2026-06-30 (runs with bypassPermissions).
 0 2 * * 2  /home/davistroy/dev/personal/spark/ops/spark-audit-cron.sh
+# Weekly LLM landscape recon (Sat 13:00 UTC). Headless `claude -p` spark-recon skill; commits its own LAB_NOTEBOOK entry.
+0 13 * * 6  /home/davistroy/dev/personal/spark/ops/spark-recon-cron.sh
+# Weekly Jetson landscape recon (Sat 14:00 UTC). NOTE: this script lives here (spark/ops) but
+# operates entirely against ~/dev/personal/jetson/ — see the placement comment atop the script
+# for why (no jetson/ops/ tree exists yet; not worth scaffolding one for a single job).
+0 14 * * 6  /home/davistroy/dev/personal/spark/ops/jetson-recon-cron.sh

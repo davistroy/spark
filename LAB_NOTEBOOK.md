@@ -8064,3 +8064,51 @@ Production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, v0.19.1rc1.dev219+cu1
 4. **[NOTE] MoE backend rename for Arm C migration.** When upgrading to eugr dev1053/0.23.x, replace `VLLM_FLASHINFER_MOE_BACKEND=latency` with `--moe-backend marlin` (or appropriate value per eugr FP8 recipe). Verify before running eval.
 5. **[NOTE] Ornith-1.0-35B-NVFP4 second Arena data point: 87.23 c1 (Jul 9).** Improvement over prior 68.22 (Jul 2) likely reflects better recipe. Deprioritization decision (Entry 107, user) stands — hybrid GDN MTP acceptance risk unresolved.
 6. **[CARRY-FORWARD]** Arm C+D eval: use `prebuilt-vllm-current` at eval time per Entry 107 Priority 1. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. MTP=3 + TRITON_ATTN drafter variant in eval matrix. Fan headless-mode check at next maintenance window. Driver 610 safety assessment before Arm D (but may be relaxable — verify during eval prep).
+
+## Entry 109 - DGX Spark Recon (2026-07-14)
+
+### ⚠ ACTION NEEDED — vLLM v0.25.1 (released today) fixes NVFP4 output corruption; Arm D eval must use a patched build
+
+### Per-check summaries
+
+**Check 1 — Arena (Firestore REST — returned empty body this run; WebSearch fallback):** Firestore `benchmarks` REST endpoint returned HTTP 200 but empty body (WebFetch JSON-parsing issue; was accessible Entry 108). WebSearch surfaces Spark Arena @sparkarena tweet: "Qwen3.6-35B-A3B-FP8 achieved 130 tok/s on vLLM at concurrency 10, 128-token reply with 100k tokens already in KV cache" — this is an aggregate c=10 metric, NOT our tracked tg128 c=1 baseline; not directly comparable to 80.27. No evidence of FP8 vLLM c=1 entries above 80.27. Arena trigger (>88.3 tok/s tg128 c1) NOT FIRED. Treating 80.27 as current baseline (last confirmed Entry 108 full Firestore read).
+
+**Check 2 — vLLM releases:** **v0.25.1 released 2026-07-14 08:51 UTC — NEW, not in Entry 108.** Patch release with two fixes: (1) #47888 TorchCodec FFmpeg import deferral (not SM121/FP8/MTP relevant); (2) **#48330 "Guard mixed-dtype allreduce RMSNorm quant fusions" — ARM D CRITICAL:** fixes NVFP4 output corruption (repeated "!!!!" tokens) when BF16 activation + FP32-weight RMSNorm (Qwen/Gemma-style NVFP4 models) match the allreduce+RMSNorm+quantization fusion path; dtype-match guard now routes incompatible graphs to the safe path. PR opened July 11 by hugo-cen. PR #41834 (SM12x DSV4F): status OPEN, no new merge since Entry 108 July 13 active commit. Gemma4 PRs #39138 and #40099: both OPEN, no change. Issue #41063 (DeepGEMM GB10): still OPEN.
+
+**Check 3 — eugr/spark-vllm-docker:** **NEW BUILD dev1069** (`0.23.1rc1.dev1069+g8fc000ac8.d20260713`, July 13 11:39 UTC) + FlashInfer `0.6.15-e1798001-d20260713` (same date). Both are one day newer than Entry 108's dev1053 (July 12 17:23 UTC). Still on 0.23.1rc1 base (functionally containing v0.25.0 content). **The v0.25.1 patch (#48330, merged July 11/released July 14) may or may not be in dev1069 — verify at eval time.** Recipes unchanged (FP8, NVFP4, DFlash, no-mtp). PR #279 (DFlash+FP8 KV): still OPEN, stalled Jun 12.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights **NOT released — T-2d to July 16 deadline.** Zero new signals; multiple sources confirm closed-frontier bifurcation pattern ongoing. No Qwen4 general release. **NEW (previously untracked in Watch Items): `Qwen/Qwen3-Coder-30B-A3B-Instruct` + `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8`** — official Qwen org on HuggingFace, released ~June 2, 2026. 30B/3B active, standard Qwen3 MoE architecture, 256K ctx, Apache 2.0. **DISTINCT from rejected Qwen3-Coder-Next** (Qwen3-Coder-Next is based on Qwen3-Next-80B-A3B-Base with hybrid GDN attention; Qwen3-Coder-30B uses standard Qwen3 MoE base — no hybrid GDN). SWE-Verified ~82% (vs prod Qwen3.6 73.4%) per review sources. Colloquially mislabeled "Qwen 4 Coder 32B" by some review sites (misnomer — still Qwen3 series, 30B not 32B). FP8 variant (`-Instruct-FP8`) available = potential SM121 eval candidate. MTP compatibility unverified but likely better than Coder-Next given standard MoE base architecture.
+
+**Check 5 — Forum (WebSearch fallback; 719.json 403 in remote env):** No new threads dated 2026-07-14 identified. GPU clock 721 MHz bug (/t/376039, /t/376239): still no NVIDIA response (~6 days since first report July 8). Power-instability cluster: 9+ tracked threads, unchanged. No new OTA/driver/firmware (DGX OS 7.5.0 = April line, current). DGX Spark User Guide PDF re-dated July 9, 2026.
+
+### Cross-correlated findings
+
+1. **vLLM v0.25.1 #48330 NVFP4 corruption fix modifies Arm D eval build requirement (Checks 2+3):** PR #48330 guards allreduce+RMSNorm fusions for mixed-dtype graphs (BF16 activation + FP32 weight in Qwen/Gemma-style NVFP4 models). Without it, NVFP4 inference produces corrupted output silently. The eugr dev1069 (July 13 11:39 UTC) pre-dates v0.25.1 (July 14 08:51 UTC) — the patch commit (PR opened July 11) might be in dev1069 if eugr cherry-picked it, or might not. **Arm D eval must verify #48330 presence before accepting NVFP4 quality results.** Also: prior Arena NVFP4 results (e.g., Poveda 118.91 tok/s, Jun 30) were obtained on pre-fix builds — tok/s numbers from those runs may be understated if corrupted samples caused early termination, or inflated if "!!!!" garbage was counted as valid tokens. Re-validation post-fix is the safe path.
+
+2. **Qwen3-Coder-30B-A3B-FP8 fills the Arm C coding comparator slot if Qwen3.7 misses July 16 (Check 4):** Entry 108 Rec 1 called for folding Laguna XS 2.1 FP8 + North Mini Code 1.0 FP8 into Arm C if Qwen3.7 absent July 16. Qwen3-Coder-30B-A3B-FP8 is a third candidate (official Qwen, June 2, higher SWE-Verified 82%). Unlike Coder-Next, its Qwen3 standard-MoE base architecture doesn't have the hybrid-GDN 0%-MTP-acceptance risk. MTP architecture pre-check still required before adding to eval plan.
+
+3. **Two concurrent Arm D blockers now lifted or specified (Checks 2+3):** Weight-schema gap fixed in 0.23.x+ (Entry 094 confirmed; eugr dev1069 available). NVFP4 output corruption fixed in v0.25.1 (#48330). Both blockers had independent root causes; both now addressed in different release milestones. Arm D eval can proceed once the build in use is verified to contain both fixes.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s | NOT FIRED — 80.27 (Firestore inaccessible this run; last confirmed Entry 108) |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both OPEN |
+| DeepGEMM AND (SM12x/GB10) | INFO — no new activity since Entry 108 PR #47304; issue #41063 OPEN |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | INFO — v0.25.1 #48330 NVFP4 fix (not SM121-specific; directly relevant to Arm D) |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — T-2d to July 16 deadline, zero signals |
+| Power-instability cluster | INFO — 9+ threads unchanged; GPU clock 721 MHz bug no NVIDIA response (6 days) |
+
+### Overall classification: ACTION NEEDED
+
+vLLM v0.25.1 released today (2026-07-14 08:51 UTC) with NVFP4 output-corruption fix (#48330) that is a prerequisite for valid Arm D quality benchmarks. The eugr dev1069 build (July 13) pre-dates this patch; eval build must be verified to include it. Production config stable and unchanged.
+
+### Recommendations
+
+1. **[PRIORITY 1 — ACTION] Arm D NVFP4 eval: verify #48330 in the build before accepting quality results.** v0.25.1 #48330 fixes NVFP4 BF16-activation+FP32-RMSNorm corruption (Qwen-style NVFP4 models → "!!!!" garbage). The patch commit was opened July 11; dev1069 (July 13) may or may not include it depending on eugr's cherry-pick cadence. Check at eval window open: `grep -r "48330\|mixed.dtype.*allreduce\|allreduce.*rms" /path/to/vllm/compilation/` or inspect the wheel's changelog. If absent, wait for dev1070+ or manually verify output quality. Prior Poveda 118.91 Arena result (pre-fix) should be re-validated post-fix before treating as a reliable throughput ceiling.
+2. **[PRIORITY 2] Qwen3.7 July 16 deadline — T-2d, zero signals; prepare the deadline decision.** If absent July 16: (a) update Watch Items with closed-weight-first conclusion; (b) fold Laguna XS 2.1 FP8, North Mini Code 1.0 FP8, and Qwen3-Coder-30B-A3B-FP8 into Arm C eval plan as A3B coding comparators — all three require the new build, none runnable on current v0.19.x image.
+3. **[PRIORITY 3] Qwen3-Coder-30B-A3B-FP8 MTP architecture pre-screen before adding to eval.** `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8` (official Qwen, Apache 2.0, ~June 2). Verify base architecture: if standard Qwen3 MoE (no hybrid GDN), MTP acceptance should be normal and it's safe to include in Arm C; if hybrid GDN is present, reject same as Coder-Next. Check `config.json` for `attention_implementation` or `hybrid_attn` fields. SWE-Verified 82% vs prod 73.4% — worth the screen.
+4. **[NOTE] eugr prebuilt-vllm-current is now dev1069** (`0.23.1rc1.dev1069+g8fc000ac8.d20260713`). Re-pull at eval window to pick up any dev1070+ build that explicitly cherry-picks v0.25.1 patches.
+5. **[CARRY-FORWARD]** MTP=3 + TRITON_ATTN drafter variant in eval matrix. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. Fan headless-mode check at next maintenance window. Driver 610 gate may be relaxable (Entry 108 Rec 4 — NVFP4 community results on 580.159.03 + cutlass-dsl ≥4.5.3).

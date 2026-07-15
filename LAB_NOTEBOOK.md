@@ -8112,3 +8112,51 @@ vLLM v0.25.1 released today (2026-07-14 08:51 UTC) with NVFP4 output-corruption 
 3. **[PRIORITY 3] Qwen3-Coder-30B-A3B-FP8 MTP architecture pre-screen before adding to eval.** `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8` (official Qwen, Apache 2.0, ~June 2). Verify base architecture: if standard Qwen3 MoE (no hybrid GDN), MTP acceptance should be normal and it's safe to include in Arm C; if hybrid GDN is present, reject same as Coder-Next. Check `config.json` for `attention_implementation` or `hybrid_attn` fields. SWE-Verified 82% vs prod 73.4% — worth the screen.
 4. **[NOTE] eugr prebuilt-vllm-current is now dev1069** (`0.23.1rc1.dev1069+g8fc000ac8.d20260713`). Re-pull at eval window to pick up any dev1070+ build that explicitly cherry-picks v0.25.1 patches.
 5. **[CARRY-FORWARD]** MTP=3 + TRITON_ATTN drafter variant in eval matrix. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. Fan headless-mode check at next maintenance window. Driver 610 gate may be relaxable (Entry 108 Rec 4 — NVFP4 community results on 580.159.03 + cutlass-dsl ≥4.5.3).
+
+## Entry 110 - DGX Spark Recon (2026-07-15)
+
+### ⚠ ACTION NEEDED — July 2026 OTA is live with Ubuntu HWE kernel stack change; apply with CLAUDE.md kernel pre-flight rules before rebooting
+
+### Per-check summaries
+
+**Check 1 — Arena (Firestore REST — returned empty body again; WebSearch fallback):** Firestore `benchmarks` endpoint returned HTTP 200 but `{}` empty body (same failure as Entry 109). WebSearch yielded no new FP8 Qwen3.6 tg128 c1 leaderboard entries above 80.27. Arena baseline holds at 80.27 tok/s (last confirmed full read: Entry 108). Trigger NOT FIRED.
+
+**Check 2 — vLLM releases:** No new vLLM release since v0.25.1 (captured Entry 109, 2026-07-14 08:51 UTC). Still latest stable. Gemma4 PRs #39138 and #40099: both OPEN, no change. Issue #41063 (DeepGEMM GB10): still OPEN. **Informational — new community build surfaced:** `r0b0tlab/vllm-v0250-cu130-sm121` (GitHub) — v0.25.0 source-built for CUDA 13.0/ARM64/SM121; independent community effort; no eval implication vs eugr prebuilt track but confirms community interest in SM121-native v0.25.x builds.
+
+**Check 3 — eugr/spark-vllm-docker:** **NEW BUILD dev1104** `0.23.1rc1.dev1104+ga0eebc3c1.d20260714` (2026-07-14 11:41 UTC) — +35 commits from Entry 109's dev1069 (July 13 11:39 UTC). Build post-dates v0.25.1 release (08:51 UTC) by 2h50m — PR #48330 cherry-pick status unconfirmed in brief release note ("New stable build"); must verify at eval time. FlashInfer version not captured from release page. Recipes: unchanged (FP8, NVFP4, DFlash, no-mtp). This is now `prebuilt-vllm-current`.
+
+**Check 4 — Qwen / new models:** Qwen3.7 open weights NOT released — now T-1d to July 16 self-imposed deadline. Multiple independent sources confirm no HF repo under official Qwen org (yottalabs, InsiderLLM, aimadetools). InsiderLLM closed-frontier bifurcation analysis still stands. No Qwen4 general release. No new A3B-class models from official Qwen org or major labs today beyond what is already tracked.
+
+**Check 5 — Forum (WebSearch fallback; 719.json 403 in remote env):** **NEW /t/376736 "DGX Spark Software Updates - July 2026 Release"** (~July 14-15, NVIDIA official, confirmed via NVIDIA AI Dev X post): OTA rolling out via DGX Dashboard — includes (a) **Ubuntu HWE 6.14 kernel stack** (kernel upgrade); (b) **EC firmware update** ("improves performance and stability of Embedded Controller"); (c) ConnectX-7 NIC hot-plug support (saves up to 18W idle power); (d) display/Bluetooth/audio/Wi-Fi UEFI-disable improvements; (e) Enterprise Management Guide for IT admins; (f) updated JupyterLab with CUDA 13.0.2 + latest PyTorch. **NEW /t/376890 "New firmware available"** (403 on fetch, separate thread) — likely companion EC firmware post for the July release; content not accessible. GPU clock 721 MHz bug (/t/376039, /t/376239): still no NVIDIA response (7 days). Power-instability cluster: 9+ tracked threads, unchanged.
+
+### Cross-correlated findings
+
+1. **July OTA kernel change + CLAUDE.md kernel safety rules (Check 5):** The July 2026 OTA includes a transition to the Ubuntu HWE 6.14 kernel stack, meaning a kernel version bump will occur on apply. CLAUDE.md documents that kernel changes require the matching `linux-modules-nvidia-580-open-$(uname -r)` package to be installed post-reboot, and that `apt dist-upgrade` risks flipping nvidia to DKMS with an unenrolled MOK key — which would brick GPU access after reboot. The DGX Dashboard update path is NVIDIA's recommended route (vs `apt dist-upgrade`) and may handle module installation correctly, but this must be verified. Physical console access is required before rebooting on any kernel change (CLAUDE.md reboot pre-flight rule). Do NOT apply this update evenings or weekends without physical access confirmed.
+
+2. **eugr dev1104 (11:41 UTC) post-dates v0.25.1 (08:51 UTC) — potential #48330 cherry-pick (Checks 2+3):** dev1104 was built 2h50m after v0.25.1 was released. The Entry 109 Priority 1 gate (verify #48330 in the eval build before accepting NVFP4 quality results) may already be resolved if eugr cherry-picked the patch. The release note is terse ("New stable build"); check the commit changelog or test for "!!!!" output at eval time. If confirmed present, the Arm D eval gate from Entry 109 is cleared.
+
+3. **Qwen3.7 T-1d — closed-weight conclusion now operationally certain (Check 4):** T-1d with zero signals. Tomorrow's entry should formally close the Qwen3.7 watch and redirect Arm C comparator planning to Qwen3-Coder-30B-A3B-FP8, Laguna XS 2.1 FP8, and North Mini Code 1.0 FP8.
+
+### Triggered alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s | NOT FIRED — 80.27 baseline (Firestore empty again; Entry 108 last confirmed) |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both OPEN, no change |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — no new activity since Entry 109 PR #47304 |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | INFO — no new SM121-specific PR since Entry 109 |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — T-1d to July 16 deadline, zero signals |
+| Power-instability cluster | INFO — 9+ threads unchanged; GPU clock 721 MHz bug no NVIDIA response (7 days) |
+
+### Overall classification: ACTION NEEDED
+
+July 2026 NVIDIA OTA is live with an Ubuntu HWE kernel stack change. Applying this update triggers CLAUDE.md kernel pre-flight rules (match prebuilt nvidia module; avoid DKMS trap; physical console before reboot). Must not apply evenings/weekends without physical access. eugr prebuilt is now dev1104 (July 14 11:41 UTC), potentially containing v0.25.1 PR #48330 — verify at Arm D eval open. Qwen3.7 deadline T-1d with zero signals; closed-weight conclusion operationally certain.
+
+### Recommendations
+
+1. **[PRIORITY 1 — ACTION] July OTA has a kernel change — follow CLAUDE.md pre-flight before applying.** Ubuntu HWE 6.14 kernel stack update requires: (a) verify `apt install linux-modules-nvidia-580-open-$(uname -r)` for the new kernel version BEFORE rebooting; (b) confirm `modinfo -F signer` of the new `nvidia.ko` shows Canonical Ltd. (enrolled) NOT the unenrolled MOK key from a prior DKMS substitution; (c) verify `dpkg --audit` is clean; (d) physical console access confirmed before reboot. **Recommended path: use DGX Dashboard**, NOT `apt dist-upgrade` (which triggered the DKMS trap in Entry 078). EC firmware update and NIC hot-plug support (18W savings) are safe to apply at same time. Do NOT apply evenings/weekends without physical access. Container downtime: ~90s model reload per CLAUDE.md.
+2. **[PRIORITY 2] eugr dev1104 may have cherry-picked v0.25.1 PR #48330.** At Arm D eval window open, verify: inspect `git log` of the vllm wheel or grep for allreduce-rmsnorm dtype guard; or run a quick NVFP4 quality probe (10 short completions, check for "!!!!" corruption). If #48330 confirmed present in dev1104, the Entry 109 Arm D NVFP4 eval gate is cleared and quality results from dev1104 onward are valid.
+3. **[PRIORITY 3 — TOMORROW] Qwen3.7 July 16 deadline: T-1d, execute closed-weight decision.** If absent July 16: (a) update Watch Items to "Qwen3.7 open weights: CLOSED, confirmed closed-frontier"; (b) formally fold Qwen3-Coder-30B-A3B-FP8 (SWE-Verified 82%), Laguna XS 2.1 FP8 (SWE-bench Verified 68.2%, DFlash speculator), and North Mini Code 1.0 FP8 (SWE-bench 80.2%) into the Arm C eval plan as A3B comparators.
+4. **[NOTE] eugr prebuilt-vllm-current is now dev1104** (`0.23.1rc1.dev1104+ga0eebc3c1.d20260714`). Re-pull at eval window open.
+5. **[CARRY-FORWARD]** MTP=3 + TRITON_ATTN drafter variant in eval matrix. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. Fan headless-mode check at next maintenance window. Qwen3-Coder-30B-A3B-FP8 MTP architecture pre-screen (check `config.json` for hybrid GDN before adding to eval plan).

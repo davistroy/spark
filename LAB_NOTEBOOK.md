@@ -8160,3 +8160,110 @@ July 2026 NVIDIA OTA is live with an Ubuntu HWE kernel stack change. Applying th
 3. **[PRIORITY 3 — TOMORROW] Qwen3.7 July 16 deadline: T-1d, execute closed-weight decision.** If absent July 16: (a) update Watch Items to "Qwen3.7 open weights: CLOSED, confirmed closed-frontier"; (b) formally fold Qwen3-Coder-30B-A3B-FP8 (SWE-Verified 82%), Laguna XS 2.1 FP8 (SWE-bench Verified 68.2%, DFlash speculator), and North Mini Code 1.0 FP8 (SWE-bench 80.2%) into the Arm C eval plan as A3B comparators.
 4. **[NOTE] eugr prebuilt-vllm-current is now dev1104** (`0.23.1rc1.dev1104+ga0eebc3c1.d20260714`). Re-pull at eval window open.
 5. **[CARRY-FORWARD]** MTP=3 + TRITON_ATTN drafter variant in eval matrix. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. Fan headless-mode check at next maintenance window. Qwen3-Coder-30B-A3B-FP8 MTP architecture pre-screen (check `config.json` for hybrid GDN before adding to eval plan).
+
+## Entry 111 - DGX Spark Recon (2026-07-16)
+
+### ⚠ ACTION NEEDED — July OTA USB-C PD regression (/t/376431): reboots require physical cable-out; hold OTA application until resolved. Also: Qwen3.7 deadline elapsed with zero delivery — formally close watch item.
+
+**Date:** 2026-07-16 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+---
+
+#### Check 1 — Arena (Firestore GET with pageSize — 159 docs, fully paginated)
+
+- Firestore access: GET with `pageSize` param confirmed working (HTTP 200, 159 docs); POST structured-query remains broken (returns `[{"readTime":"..."}]` empty). 159 total docs (was 154 at Entry 108).
+- Top FP8/vLLM/single-node (tg128, c1): **80.27 tok/s** — UNCHANGED (last submitted 2026-05-22; no new FP8 vLLM single-node entries since then). Trigger NOT FIRED (88.3 threshold).
+- Top NVFP4/vLLM/single-node: 118.91 tok/s (Poveda, 2026-06-30) — unchanged; next cluster 109.29 (Jul 2-3). All NVFP4 entries remain blocked on current build (Entry 094 KeyError).
+- Top overall single-node (any quant/runtime): 218.85 tok/s (Atlas, NVFP4) — unchanged.
+- Atlas runtime confirmed in full dataset: 4 entries, all dated May 2026. C1 excellent (172–219) but collapses at c5 (84–100 vs vLLM 175+) — same single-stream-only profile as DFlash rejection (Entry 080). Not a production candidate.
+- No new entries in any category since 2026-07-03.
+- **WORTH WATCHING** (baseline stable; NVFP4 eval track is the pending action, not Arena)
+
+#### Check 2 — vLLM Releases
+
+- No new release since v0.25.1 (2026-07-14 08:51 UTC). v0.25.1 remains latest.
+- **NEW HIGH WATCH: PR #41834 "SM12x DSV4F" — OPEN, last commit 2026-07-15 (yesterday), validated on DGX Spark GB10.** 179 commits; includes DSpark self-drafting support, MTP spec decode paths, SM121/SM120/GB10 validation. Merge blocked by conflicts (Mergify flagged July 12). When this lands, it is the primary DSV4F→SM121 pathway and will require immediate eval.
+- PR #48330 (NVFP4 allreduce+RMSNorm dtype guard): merged July 12 into main, included in v0.25.1. Cherry-pickable for July 13-14+ builds — dev1144 (July 15) plausibly contains it.
+- Gemma4 PRs #39138 and #40099: both OPEN, no change (#39138 needs-rebase since Jun 15; #40099 logic error noted in review, last activity Jul 8).
+- Issue #41063 (DeepGEMM SM12.x): OPEN, stale since April 2026.
+- PR #47304 (DeepGEMM SM120 tag fix): MERGED in v0.25.0 (already shipped, carry-forward closed).
+- Classification: **MEDIUM** (no SM121-specific release keyword; PR #41834 is the key monitor item)
+
+#### Check 3 — spark-vllm-docker
+
+- **NEW BUILD: dev1144** (`0.23.1rc1.dev1144+ga9b0ebe7f.d20260715`, 2026-07-15 11:39 UTC) — +40 commits from dev1104 (Jul 14). FlashInfer companion: `0.6.15-517cca9c-d20260715` (also July 15). Both tagged `prebuilt-vllm-current` at commit `8b00816`.
+- Release notes: "New stable build" — terse. No explicit PR #48330 or v0.25.1 cherry-pick mention. Change is build-infra only: switched from merge-based to patch-based PR application (`git diff --binary` / `git apply --3way`). No vLLM code changes in this build.
+- PR #48330 was in vLLM main since July 12, 3 days before dev1144. Cherry-pick is plausible but unconfirmed — verify at Arm D eval time.
+- PR #279 (DFlash + FP8 KV Cache): OPEN, stalled, last updated 2026-06-06. No change.
+- New open PRs of note: **PR #319** (Jul 15 — "Add DeepSeek-V4-Flash-DSpark recipe + SM120 topk fix" — SM120 kernel fix, adjacent to SM121/GB10); PR #314 (Qwen3.6 dense + no-thinking recipes); PR #310 (HF_HUB_CACHE/OFFLINE env var support).
+- NVFP4 recipe (`qwen3.6-35b-a3b-nvfp4.yaml`): unchanged; assumes TP=2 — not directly applicable to single-Spark TP=1 config.
+- **WORTH WATCHING** (dev1144 is the new stable; no eval blocker changes confirmed yet)
+
+#### Check 4 — Qwen Models / New A3B-Class
+
+- **Qwen3.7 open weights: NOT released. Deadline elapsed (July 16 = T+0). FORMALLY CLOSED as "confirmed closed-frontier."** API-only since May 19 (Qwen3.7-Max) / June 1 (Qwen3.7-Plus via Fireworks AI). Zero signals of open-weight release across all sources. 58+ days post-API. InsiderLLM bifurcation analysis confirmed. Reopen only on direct `@QwenLM` announcement or official HF model card under the Qwen org.
+- No new A3B-class competitors from any lab found.
+- No new official Qwen org FP8 or NVFP4 variants of Qwen3.6-35B-A3B.
+- `nvidia/Qwen3.6-27B-NVFP4` (June 26, NVIDIA org): dense 27B, not MoE — not production-relevant.
+- **NO ACTION** (production config unchanged; Arm C comparator planning now executes)
+
+#### Check 5 — NVIDIA DGX Spark Forum (WebSearch fallback; 719.json 403)
+
+- **NEW CRITICAL: /t/376431 "Reboot now requires cable out power cycle"** — July OTA USB-C PD firmware update causes reboot to leave unit offline; physical cable-out + 10s drain + reinsert + power button required. Reproducible on fully-updated hardware. **Do NOT apply the July OTA remotely — physical access required.** This modifies the Entry 110 Priority 1 recommendation (which said DGX Dashboard was the safe path — it is NOT safe if /t/376431 is representative).
+- /t/376736 (July 2026 OTA, July 14): Our kernel 6.17.0-1021 is **already ahead** of the OTA's Ubuntu HWE 6.14 target. The HWE kernel portion of this OTA does not apply to our system. EC firmware (0x03000302 → 0x03000508) and NIC hot-plug changes may apply — but hold all changes until /t/376431 is resolved.
+- /t/376981 (Jul 15-16): Dashboard stuck on July update (7+ retries, no progress). Not relevant — we use apt/docker, not DGX Dashboard. SKIP.
+- GPU clock 721 MHz bug (/t/376039, /t/376239): No NVIDIA response. July OTA does not explicitly fix it; EC firmware bump (0x03000302 → 0x03000508) may or may not touch it — no community confirmation post-OTA yet.
+- Power-instability cluster: **Two new threads** — /t/376761 (Jul 14, board dead after power outage, PSU swap no fix — hardware failure); /t/376431 (USB-C PD regression — OTA-triggered). Cluster now **11+ tracked threads**.
+- svd PR #319 (DeepSeek-V4-Flash-DSpark + SM120 topk fix, Jul 15) aligns with vLLM PR #41834 activity — independent cross-repo momentum on SM12x DSV4F path.
+- No new driver/firmware/vLLM container release found.
+- **ACTION** (/t/376431 blocks July OTA; monitor GPU clock bug post-OTA community reports)
+
+---
+
+#### Cross-Correlated Findings
+
+1. **PR #41834 (Check 2, vLLM) + svd PR #319 (Check 3) — SM12x DSV4F momentum building.** PR #41834 (179 commits, July 15 last commit, validated on DGX Spark GB10) is the upstream path; svd PR #319 is the recipe layer. Both arrived within 24h. When #41834 merges, it is an immediate HIGH-priority eval candidate — will require testing under the new build (same window as Arm C+D).
+
+2. **PR #48330 (merged Jul 12, Check 2) + dev1144 (built Jul 15, Check 3) — Arm D NVFP4 eval gate likely cleared.** PR #48330 was 3 days in main before dev1144 shipped. Patch-based PR application introduced in dev1144 makes cherry-picks more reliable. Plausible but unconfirmed — verify at eval open with a short NVFP4 quality probe.
+
+3. **July OTA USB-C PD regression (Check 5) + Entry 110 Priority 1 OTA recommendation — UPDATE REQUIRED.** Entry 110 said "use DGX Dashboard" as the safe OTA path. /t/376431 directly contradicts this: the USB-C PD firmware bundled in this OTA leaves the unit unreachable after reboot. Do NOT follow Entry 110's recommendation until /t/376431 is resolved. Our kernel (6.17.0-1021) is already ahead of the OTA's 6.14 HWE — the kernel component doesn't apply to us in any case.
+
+4. **Qwen3.7 deadline elapsed (Check 4) + Forum quiet (Check 5) — confirmed closed-frontier.** Zero signals from any source. Arm C comparator planning can now formally proceed with Qwen3-Coder-30B-A3B-FP8 (SWE-Verified 82%), Laguna XS 2.1 FP8 (SWE-bench 68.2%), and North Mini Code 1.0 FP8 (SWE-bench 80.2%) as the A3B candidate set.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (single-node) | NOT FIRED — 80.27 unchanged, no new entries since Jul 3 |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both OPEN |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 open/stale; #47304 already shipped |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | **INFO — PR #41834 (SM12x DSV4F) last commit Jul 15, validated on DGX Spark GB10; elevate to HIGH monitoring** |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | **CLOSED — deadline elapsed July 16, zero delivery, confirmed closed-frontier** |
+| Power-instability cluster | **ACTION — /t/376431 USB-C PD regression blocks July OTA; cluster 11+ threads** |
+
+---
+
+#### Overall: ACTION NEEDED
+
+Two primary actions: (1) July OTA is blocked by /t/376431 USB-C PD regression — prior Entry 110 "apply via DGX Dashboard" recommendation is countermanded until resolved. (2) Qwen3.7 watch formally closed — Arm C comparator planning now executes. Secondary: PR #41834 elevated to HIGH monitoring.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — ACTION] Hold July OTA until /t/376431 (USB-C PD reboot regression) is resolved or NVIDIA posts a workaround.** The July 2026 OTA bundles a USB-C PD firmware update that causes units to become unreachable after reboot — cable-out physical cycle required. Our kernel (6.17.0-1021) is already past the OTA's 6.14 HWE target, so the kernel component provides no benefit to us. The only unapplied components are the EC firmware (0x03000302 → 0x03000508) and NIC hot-plug power savings (+18W) — neither is urgent enough to accept the reboot-unreachability risk. Monitor /t/376431 for NVIDIA response or community resolution (2-3 day window). **Countermands Entry 110 Priority 1.**
+
+2. **[PRIORITY 2 — ACTION] Qwen3.7 watch CLOSED — execute Arm C comparator plan now.** Formally mark Qwen3.7 open weights as "confirmed closed-frontier" in Watch Items. Fold these three into the Arm C eval matrix (all require eugr dev1144+ build, same window as NVFP4 Arm D): (a) `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8` (Apache 2.0, SWE-Verified 82% vs prod 73.4% — verify `config.json` for hybrid GDN before adding; should be clean standard MoE); (b) `poolside/Laguna-XS.2-FP8` + `Laguna-XS.2-speculator.dflash` (Apache 2.0, SWE-bench Verified 68.2%); (c) North Mini Code 1.0 FP8 (SWE-bench 80.2%).
+
+3. **[PRIORITY 3] PR #41834 (SM12x DSV4F): add to HIGH monitoring in Watch Items.** Last commit July 15, 179 commits, validated on DGX Spark GB10, aligned with svd PR #319. When merge conflicts resolve and it lands, evaluate immediately alongside Arm C+D — same build window. Potential high-concurrency throughput path distinct from NVFP4.
+
+4. **[PRIORITY 4] Arm D NVFP4 eval gate likely cleared in dev1144 — verify at eval open.** PR #48330 (NVFP4 output corruption fix) was in vLLM main 3 days before dev1144 shipped. Run quick quality probe at start of eval window (10 short NVFP4 completions, check for "!!!!" tokens). If clean, Entry 109 gate is cleared and quality results are valid.
+
+5. **[NOTE] Arena Firestore access method update.** GET with `pageSize` param is the confirmed working path (159 docs, fully paginated). POST structured query returns empty body. Future recon runs should use the GET + pagination approach directly.
+
+6. **[CARRY-FORWARD]** MTP=3 + TRITON_ATTN drafter variant in eval matrix. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. Fan headless-mode check at next maintenance window. Qwen3-Coder-30B-A3B-FP8 MTP architecture pre-screen required (`config.json` for hybrid GDN). eugr current stable: dev1144.

@@ -5,6 +5,10 @@
 #   - export SPARK_ALERT_WEBHOOK=<ntfy/Slack/Discord URL> in the cron environment.
 MAILTO=""
 # SPARK_ALERT_WEBHOOK=https://ntfy.sh/your-spark-topic
+# Times below are UTC, pinned by CRON_TZ. Plain cron interprets them in the
+# system timezone (America/New_York on this VM), which fired these 4 h late;
+# CRON_TZ makes the documented UTC schedule authoritative (fixed 2026-07-16).
+CRON_TZ=UTC
 
 # Daily liveness + error check (13:05 UTC) — quiet unless something is wrong.
 5 13 * * *   /home/davistroy/dev/personal/spark/ops/spark-healthcheck.sh

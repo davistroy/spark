@@ -8369,3 +8369,104 @@ Primary: the July EC/UEFI firmware (EC `0x03000508`) breaks the GB10 fan curve a
 5. **[NOTE] Arena access divergence — re-verify next run with the `pageSize` GET path.** This run (field-mask + per-doc GET) returned ~130 docs / 54 single-node and did not find the stored baseline holders (Stojanovic 80.27, Poveda 118.91); Entry 111's `pageSize` pagination returned 159. Treat 80.27/118.91 as stored high-water-marks, not live targets, until the next run reconciles the doc-count gap. Do not overwrite Arena baseline values on this single divergent run.
 
 6. **[CARRY-FORWARD]** eugr current stable now **dev1207** (was dev1144). MTP=3 + TRITON_ATTN drafter variant in eval matrix; NVFP4 checkpoint `nvidia/Qwen3.6-35B-A3B-NVFP4`, `VLLM_MXFP4_BACKEND=marlin`. Qwen3-Coder-30B-A3B-FP8 `config.json` hybrid-GDN pre-screen still required (no eugr recipe yet). Arm C comparator set unchanged (Qwen3-Coder-30B-A3B-FP8, Laguna-XS.2-FP8, North Mini Code 1.0 FP8). /t/376431 (USB-C PD reboot) softened → downgrade its Watch-Item urgency. Fan headless-mode check at next maintenance window (now doubly relevant given the fan-curve regression).
+
+---
+
+## Entry 113 - DGX Spark Recon (2026-07-17)
+
+### ⚠ ACTION NEEDED — vLLM PR #41834 (SM12x DSV4F) conflict resolution landed TODAY; merge window now open 24-48h. Gemma4 structured output partially unblocked: PR #39138 fix re-implemented as #45553, now MERGED.
+
+**Date:** 2026-07-17 UTC (second run; Entry 112 ran earlier today)
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+---
+
+#### Check 1 — Arena (Firestore REST field-mask + pagination)
+
+- Access: Firestore aggregation query confirms **159 total docs**. Field-mask GET pagination returned only **90 docs** across 3 pages (30+30+30), all ≤ May 16, 2026 — the Jun–Jul 2026 entries (pages 4+) return empty with no next-page token. The **69 post-May docs** (including Stojanovic 80.27 FP8 and Poveda 118.91 NVFP4) are in the restricted newer range; direct GET by guessed IDs returns HTTP 404. Access has degraded further since Entry 112 (~130 accessible) and Entry 111 (159 via pageSize=30). **Stored high-water-marks remain valid; do not overwrite on restricted-access runs.**
+- Top FP8/vLLM/single-node (accessible): **77.88 tok/s** (Szymon Walczak, `Qwen/Qwen3.6-35B-A3B-FP8`, May 14) — stored baseline 80.27; −2.97%. Action trigger NOT FIRED (threshold 88.3).
+- Top NVFP4/vLLM/single-node (accessible): **77.07 tok/s** (Niklas Frick, `RedHatAI/Qwen3.6-35B-A3B-NVFP4`, May 6) — Poveda 118.91 is in the inaccessible newer range.
+- Top overall 35B-class/single-node (accessible): **PrismaQuant 95.11 tok/s** (Sean Williams, `rdtand/Qwen3.6-35B-A3B-PrismaQuant-4.75bit-vllm`, Apr 28) — already tracked in baseline.
+- New: `vLLM-Ray` runtime label sighted (multi-node only, not relevant). SGLang FP8 single-node performance notably weak (13–19 tok/s, well below vLLM FP8).
+- **NO ACTION** (trigger not fired; stored baselines unaffected by restricted access).
+
+#### Check 2 — vLLM Releases
+
+- Latest release: **v0.25.1** (2026-07-14) — no new release since Entry 112. Re-confirmed.
+- **⚠ NEW HIGH: PR #41834 (SM12x DSV4F) — conflict resolution landed TODAY (2026-07-17).** Active upstream sync merged 195 commits from main; 11 conflicts resolved; Python compilation verified clean. Branch now 195 commits ahead of main. Active GB10 community validation ongoing (RTX PRO 6000, DGX Spark GB10 benchmarks being posted). Stable preview tag: `sm120-pr-41834-stable-preview-20260713`. **Merge to main plausible within 24-48h.**
+- **⚠ NEW MEDIUM: Gemma4 PR #39138 CLOSED — fix re-implemented as PR #45553, NOW MERGED.** The original PR's target files no longer exist after upstream reasoning-parser refactor; the author re-submitted canonically as #45553 which has merged to main. This removes the `enable_thinking=false` + structured output Gemma4 blocker. **Only PR #40099 (repetition detection) now remains for Gemma4 structured output eval gate.**
+- PR #40099: OPEN, last activity Jul 8 — still required.
+- Issue #41063 (DeepGEMM SM12x): OPEN/stale (no change since Apr 27).
+- Classification: **HIGH** (PR #41834 merge imminent; #45553 partially clears Gemma4 gate).
+
+#### Check 3 — spark-vllm-docker
+
+- No new builds since Entry 112. Current stable remains `prebuilt-vllm-current` = `0.23.1rc1.dev1207+g475c9dcf1.d20260716` (Jul 16), FlashInfer `0.6.15-81632eee-d20260716`.
+- PR #319 (DSV4F-DSpark + SM120 topk fix): OPEN, no new activity.
+- PR #279 (DFlash + FP8 KV): OPEN/stalled.
+- **NO ACTION** (second check same day; no builds pushed in intervening hours).
+
+#### Check 4 — Qwen Models / A3B-Class
+
+- Qwen3.7 open weights: **still not released** — closed-frontier determination unchanged. No activity on official Qwen org HF.
+- Three NVIDIA Nemotron-3-Nano A3B-class variants confirmed (30B/3B active, hybrid Mamba-2 architecture) — all **BLOCKED on SM121** via vLLM #37431 (same block as Nemotron-Cascade-2). Adds `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8` and `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16/NVFP4` to rejected hybrid-Mamba list.
+- **`deepseek-ai/DeepSeek-V4-Flash-DSpark`** now an official HF model (FP8+FP4-MoE mixed quant, DSpark block-wise spec-decode). At TP=2 dual-Spark: ~60–67 tok/s. Single-Spark: not viable (insufficient KV budget at practical throughput). `nvidia/DeepSeek-V4-Flash-NVFP4` also exists but hits v0.19.1 NVFP4 schema gap (Entry 094). Informational only.
+- **NO ACTION** (no new single-Spark viable model; Qwen3.7 open-weights watch unchanged).
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json 403 — WebSearch fallback)
+
+- 719.json returned 403; reporting via WebSearch snippets only.
+- **Firmware hold: NVIDIA has NOT pulled or patched broken EC `0x03000508`** — still publishing it as current firmware via /t/376890. No fix for fan curve regression (case 260716-000029). Rollback to EC `0x02004e18` via `fwupdmgr downgrade` + reboot remains the only remedy. **Production (running prior firmware) unaffected — hold maintained.**
+- /t/376981 (July 2026 software update stalls) — Dashboard update hanging for a subset of users; independent of firmware regression; no NVIDIA resolution.
+- /t/377079 — Cluster Assistant German-locale locale bug; not relevant to single-Spark.
+- /t/376979 — MiniMax-M3-NVFP4 on 4× GB10, 1M context, ~31 tok/s (multi-node); INFO only.
+- **NVFP4 on GB10 — community progress (INFO):** Forum confirms `nvidia/Qwen3.6-27B-NVFP4` running on plain `vllm/vllm-openai:v0.24.0-aarch64` with `--quantization modelopt` (28–33 tok/s single-session). AEON-7 builds run Qwen3.6-35B-A3B heretic-NVFP4 at ~740 tok/s agg c=64. vLLM issue #44081 confirms the old `lm_head.input_scale` error (different from our `w2_input_scale`) in v0.22.0 — confirming the fix landed between v0.22 and v0.24. Corroborates Arm-D eval gate at v0.24.0+/dev1207+.
+- /t/367082 (NVFP4 broken on GB10): still no NVIDIA fix; community workaround (AEON-7 / v0.24.0 aarch64) is the path.
+- **WORTH WATCHING** (firmware hold unchanged; NVFP4 community confirmation on 0.24.0 strengthens Arm-D case).
+
+---
+
+#### Cross-Correlated Findings
+
+1. **PR #41834 merge window now open (Check 2 + Check 3 + prior Check 5 from Entry 112):** PR #41834 had conflict resolution work land today (Check 2); svd PR #319 (DSpark recipe, Check 3) and entrpi DSpark engine (/t/376884, Entry 112 Check 5) remain the companion signals. Three-source convergence continues. When #41834 merges, it is **immediate eval priority** (same window as Arm C+D). Monitor daily — merge may happen any day now.
+
+2. **Gemma4 structured output gate partially cleared (Check 2 cross-corroborated by vLLM main):** PR #39138's fix is now in vLLM main via #45553 (merged). The Recon Triggers row required BOTH #39138 AND #40099. Only #40099 (repetition detection) now remains. Update trigger row to reflect this. If #40099 merges, Gemma4 structured output becomes actionable (pending Gemma4 throughput ≥ production FP8 threshold).
+
+3. **NVFP4 on SM121 — community path at v0.24.0+ confirmed (Checks 4+5):** Official `deepseek-ai/DeepSeek-V4-Flash-DSpark` HF model (Check 4) uses FP4-MoE mixed quant and requires TP=2. Forum (Check 5) confirms plain `vllm-openai:v0.24.0-aarch64` runs Qwen3.6-27B-NVFP4 — schematic path is open for the 35B variant on dev1207+ (the schema fix was not in v0.22.0). Consistent with Arm-D gate (Entry 112, Check 3).
+
+4. **Arena access continues to degrade (Check 1 + methodology note):** 90 accessible vs ~130 in Entry 112 vs 159 actual. The post-May Firestore docs appear to be accumulating behind a harder access restriction. Stored high-water marks (80.27 FP8, 118.91 NVFP4) remain valid; do not overwrite. `pageSize` GET now also limited to pre-May docs — no simple bypass exists. This is a chronic data-access issue for the Arena check; flag for investigation (try session-authenticated fetch path in a manual recon).
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (single-node) | NOT FIRED — accessible top 77.88 (stored baseline 80.27); Jun-Jul docs inaccessible |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | **FIRED — PR #41834 conflict resolution today; merge window open 24-48h** |
+| vLLM Gemma4 PRs #39138 AND #40099 merged | PARTIAL FIRE — #39138 resolved via #45553 (MERGED); #40099 still OPEN |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 open/stale |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | CLOSED — unchanged |
+| Power-instability / firmware cluster | Hold MAINTAINED — NVIDIA still publishing broken EC 0x03000508 |
+
+---
+
+#### Overall: ACTION NEEDED
+
+Primary: **vLLM PR #41834 (SM12x DSV4F) conflict resolution landed today** — branch is merge-ready, active GB10 community validation underway; when merged this opens a native SM121 kernel path for DeepSeek-V4-Flash and the full SM12x dispatch via DeepGEMM. This is the immediate monitor item — check daily. Secondary: **Gemma4 structured output partially unblocked** (PR #45553 merged, removing the `enable_thinking=false` + structured output bug; only PR #40099 remains). Tertiary: NVFP4 community path confirmed on v0.24.0 aarch64 (reinforces Arm-D eval readiness). Firmware hold unchanged.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — MONITOR DAILY] Watch PR #41834 for merge.** Conflict resolution landed today; branch validated on DGX Spark GB10; merge to vLLM main is plausible any day now. When it lands: open the Arm C/D eval window immediately (use eugr dev1207+ or v0.25.x build that includes the PR). This is the highest-value near-term infrastructure change for SM121.
+
+2. **[PRIORITY 2 — UPDATE TRIGGER] Gemma4 gate: update recon triggers table.** PR #39138 is resolved (→ #45553, merged). Remove #39138 from the gate; now only PR #40099 (repetition detection) is required before scheduling the Gemma4 structured output experiment. If #40099 merges, the next step is verifying Gemma4 FP8 throughput ≥ production threshold.
+
+3. **[PRIORITY 3 — CARRY-FORWARD] NVFP4 Arm-D eval:** Community confirms v0.24.0 aarch64 runs Qwen3.6 NVFP4. The Arm-D eval gate (v0.25.1+/dev1207+, TP=1 recipe, 10-shot "!!!!" probe) remains the right plan — do not adopt from leaderboard data (Arena top accessible NVFP4 is 77.07 ≈ FP8 at 77.88).
+
+4. **[PRIORITY 4 — HOLD] Firmware: do NOT apply July EC firmware.** NVIDIA still publishing broken EC `0x03000508` without a fix. Production is on the prior firmware and unaffected. Hold until NVIDIA ships a patched 0.4+ EC.
+
+5. **[NOTE] Arena access degradation:** Only 90 of 159 docs accessible this run (vs ~130 Entry 112); post-May docs appear to be behind an App Check-equivalent gate. Stored baselines (80.27/118.91) are valid high-water marks but not live-verified. Consider a manual browser-authenticated fetch in the next deep-dive session to re-anchor.

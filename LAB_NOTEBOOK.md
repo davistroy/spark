@@ -8267,3 +8267,105 @@ Two primary actions: (1) July OTA is blocked by /t/376431 USB-C PD regression �
 5. **[NOTE] Arena Firestore access method update.** GET with `pageSize` param is the confirmed working path (159 docs, fully paginated). POST structured query returns empty body. Future recon runs should use the GET + pagination approach directly.
 
 6. **[CARRY-FORWARD]** MTP=3 + TRITON_ATTN drafter variant in eval matrix. NVFP4 checkpoint: `nvidia/Qwen3.6-35B-A3B-NVFP4`; env var `VLLM_MXFP4_BACKEND=marlin`. Fan headless-mode check at next maintenance window. Qwen3-Coder-30B-A3B-FP8 MTP architecture pre-screen required (`config.json` for hybrid GDN). eugr current stable: dev1144.
+
+---
+
+## Entry 112 - DGX Spark Recon (2026-07-17)
+
+### ⚠ ACTION NEEDED — July EC/UEFI firmware breaks the GB10 fan curve (NVIDIA-acknowledged, no fix): reaffirms firmware HOLD and **countermands Entry 111's "apply EC 0x03000508" note** — that exact EC bump is the culprit.
+
+**Date:** 2026-07-17 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+---
+
+#### Check 1 — Arena (Firestore REST field-mask + per-doc GET; ~130 docs, 54 single-node)
+
+- Access: Firestore `benchmarks` collection world-readable (key optional/quota-only). Site + Wayback 403 to WebFetch; full collection >10 MB (each doc's `tests` array ~1 MB), so used **field masks** (roster pass without `tests`, then per-doc GETs). Filtered `clusterSize=1`, test `tg128 (c1)`.
+- Top FP8/vLLM/single-node: **77.88 tok/s** (`Qwen/Qwen3.6-35B-A3B-FP8`, Szymon Walczak) — vs stored baseline 80.27 = **−3.0%**. Well under the 88.3 action trigger. **Trigger NOT FIRED.**
+- Top NVFP4/vLLM (portable): **77.07** (`RedHatAI/Qwen3.6-35B-A3B-NVFP4`, Niklas Frick) — vs stored 118.91 = **−35.2%**. NVFP4-portable-vLLM advantage has **evaporated on the current board** (77.07 ≈ FP8's 77.88).
+- Top overall serious model: Atlas `Qwen3.6-35B-A3B-NVFP4` (Raphael Amorim) **217.37** (−0.7% vs 218.85, flat). Tiny `LiquidAI/LFM2.5-350M` at 222.77 tops the raw chart — excluded (not a 35B-class contender).
+- ⚠ **Data-hygiene flag:** the two stored baseline record-holders (**Stojanovic** FP8 80.27, **Poveda** NVFP4 118.91) are **absent from this run's dataset** (direct name search: not found). This run enumerated ~130 docs vs Entry 111's 159 (via `pageSize` pagination) — so this is **either genuine churn OR an access-methodology/pagination difference**. Do NOT overwrite the stored high-water-marks on one divergent run; re-verify next recon with the `pageSize` GET path. Either way, nothing live exceeds 88.3.
+- New runtime label observed: `vLLM-Ray` (multi-node Ray tooling — not single-node relevant). Atlas unchanged (~3× prod on NVFP4, closed/non-portable).
+- **NO ACTION** (no live entry beats the trigger; NVFP4-portable win unconfirmed on current data — consistent with the deferred v0.23.x Arm C/D eval, not the leaderboard).
+
+#### Check 2 — vLLM Releases
+
+- **No new release since v0.25.1** (2026-07-14 08:51 UTC) — re-confirmed. v0.25.1 remains latest.
+- **PR #48330 (NVFP4 "!!!!" corruption fix) = MERGED, shipped in v0.25.1.** Release note: "Guard mixed-dtype allreduce RMSNorm quant fusions (#48330)" — the exact NVFP4 correctness guard. **v0.25.1 is now the floor to target for any NVFP4 eval** (quality gate met at the release level, Entry 109 gate cleared).
+- PR #41834 "SM12x DSV4F": still **OPEN**, HIGH monitor continues (not confirmed by number in release notes; related DSV4F MLA support is #46807 in v0.25.0).
+- Gemma4 #39138 + #40099: both still **OPEN**, no change. DeepGEMM SM121 (#41063): OPEN/stale.
+- Classification: **NO ACTION** (no new release; PR #41834 remains the key monitor item).
+
+#### Check 3 — spark-vllm-docker
+
+- **NEW BUILD since baseline: `prebuilt-vllm-current` = 0.23.1rc1.dev1207+g475c9dcf1.d20260716 (Jul 16)** — supersedes dev1144 (Jul 15). Top repo commit `562ed29 "Flashinfer regression fix"` drove a companion **FlashInfer rebuild: 0.6.15-81632eee-d20260716** (hash 517cca9c → 81632eee; version line unchanged). Build-infra/FlashInfer-fix rebuild, same vLLM 0.23.1rc1 line — no vLLM code change. Cadence intact: dev1043→…→dev1144(15)→**dev1207(16)**.
+- **#48330 confirmed PRESENT in dev1207** (build d20260716 post-dates the Jul 12 upstream merge; also already in dev1144). eugr now ships `qwen3.6-35b-a3b-nvfp4.yaml` + `-no-mtp.yaml` against the current prebuilt (Marlin MoE + FlashInfer + FP8 KV + MTP=3, `VLLM_MARLIN_USE_ATOMIC_ADD=1`) → implies the old v0.19.1 `qwen3_5.py:407` `w2_input_scale` KeyError schema gap is **resolved on the 0.23.x line**. ⚠ Caveat: the shipped NVFP4 recipe is **TP=2 / gpu-mem 0.4 (dual-Spark)** — verify the single-node (TP=1, `-no-mtp` or adapted) form before any GPU-down eval.
+- PR #319 (DeepSeek-V4-Flash-DSpark + SM120 topk fix): **OPEN**, not merged (DSpark = cluster; SM120 topk 256→128 fix is SM121-adjacent). PR #279 (DFlash + FP8 KV): still **OPEN/stalled** (last update Jun 12). No Qwen3-Coder-30B-A3B recipe yet (only older coder-next).
+- **WORTH WATCHING** (routine daily rebuild = no action by itself; but NVFP4-on-0.23.x is now materially de-risked for the deferred Arm C/D eval).
+
+#### Check 4 — Qwen Models / New A3B-Class
+
+- **Qwen3.7 open weights: STILL NOT released — CLOSED-FRONTIER determination stands.** Official `Qwen` HF org still tops out at Qwen3.6; no `Qwen3.7-*`/`Qwen4` repo. API-only (Qwen3.7-Max ~May 19, Qwen3.7-Plus ~Jun 1). No name-squats this pass. Reopen only on direct `@QwenLM` announcement or official Qwen-org HF model card.
+- **No new single-Spark-viable A3B-class comparator since ~Jul 14.** Only new open-weights release in the window is **Inkling** (Thinking Machines Lab, Jul 15) — MoE **975B total / 41B active**, omni-modal — **NOT single-Spark-viable** (A41B, ~975B weights ≫ 121 GB even at FP8). Landscape note only.
+- All other candidates already tracked/pre-July (Qwen3-Coder-30B-A3B-FP8, Laguna-XS.2, Ornith-1.0, North Mini Code). `nvidia/Nemotron-Cascade-2-30B-A3B` remains **rejected** (Entry 102: hybrid Mamba, HARD-BLOCKED on SM121 via vLLM #37431).
+- **NO ACTION** (production unchanged; Arm C comparator set unchanged).
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json 200 — no fallback needed)
+
+- ⚠ **NEW / HEADLINE — July EC/UEFI firmware breaks the GB10 fan curve (thermal-throttle / possible hard-freeze under sustained inference).** /t/377044 (Giunta Francesco, Jul 16): after the July EC/UEFI update, sustained inference hits GPU 85–89 °C, ACPI zones 96–97 °C, PROCHOT/tviol=1, clocks sag, fans stay inaudible (`Fan N/A`). **NVIDIA moderator Neill Lewis ACKNOWLEDGED, tracking internally, no fix yet** (case 260716-000029); rollback confirmed to fix. /t/377069 (Veelacleave, Jul 16): the `0x03`-branch EC firmware "completely breaks the fan curve" (EC isolates fan control from the OS — no software override). **Workaround: `sudo fwupdmgr get-devices` → `sudo fwupdmgr downgrade <EC_DEVICE_ID>` → select `0x02004e18` → reboot.** Post-downgrade: idle ~32 °C, 35–37 °C at 120–125 W / 95 % GPU. **Do NOT run blanket firmware updates afterward — they re-flash the broken EC until NVIDIA ships a patched 0.4+ build.** /t/376890 (Elsaco, Jul 15): the triggering update = EC `0x03000302→0x03000508`, UEFI `0x0200980f→0x02009b0b`, billed "performance and stability," now on LVFS.
+- **DSpark for DeepSeek-V4-Flash on 1× Spark — /t/376884 (entrpi, Jul 15–17): ~27–35 tok/s decode.** CUDA fork of antirez/ds4 targeting sm_120/121; DSV4F 2-bit experts (81 GiB); "D2R" prefill kernels (~800 tok/s prefill @12k vs 305 upstream); "yield-quench" spec controller that disables spec-decode when draft acceptance <~56 %. Notable SM121 kernel technique — worth reading even though different model family. INFO.
+- **MTP+prefix-caching quality-bug reports — /t/377030 (JW2026, Jul 16–17):** Yen flags vLLM + llama.cpp MTP-with-prefix-caching bugs as a quality-degradation source; one tester saw Qwen3.6-27B ~2 % quality hit for ~40 % speed with MTP. **Spot-check flag against our MTP=2 config** (our prod prefix-caching state is ambiguous — Entry 064 rolled back an APC enable; verify whether APC is active before treating as applicable). INFO/low.
+- **NVFP4 on GB10 broken — /t/367082 (open since Apr 19, active to Jul 17): still NO NVIDIA response** after 47+ posts; no merged fix. Bears on held NVFP4 item (Entry 094) — no current-build shortcut has appeared from the hardware side.
+- New INFO/low-relevance model chatter: GLM 5.2 on 1× Spark (/t/376996), Kimi K3 / GB10 cluster ceiling (/t/377091). /t/376981 (Dashboard OTA stalls) — UI issue only, CLI `apt` workaround; SKIP.
+- **Held-item status:** /t/376431 (USB-C PD reboot — Entry 111's hold reason) **SOFTENED** — NVIDIA (Aniculescu) responded, self-resolved as intermittent, not reproducing (no new activity since Jul 10). 721 MHz SM-clock cap (/t/376039): NVIDIA mod (Aakankshas) responded — power-drain-cycle workaround; some units may need RMA (PSU safety-mode theory). Freeze cluster: new addition **/t/376882** (Heathen0711 — 5 host lockups in 2 days, multi-node TP=2 Step-3.7-Flash-NVFP4, zero forensic trace, suspected thermal → RMA) — plausibly the same fan-curve regression manifesting as hard freeze.
+- **ACTION** (acknowledged firmware fan-curve regression directly threatens sustained-inference thermals; reaffirms + re-roots the firmware HOLD).
+
+---
+
+#### Cross-Correlated Findings
+
+1. **Firmware fan-curve regression (Check 5 /t/377044 + /t/377069 + /t/376890) DIRECTLY COUNTERMANDS Entry 111's EC-apply note.** Entry 111 flagged EC `0x03000302 → 0x03000508` + NIC hot-plug as "the only components worth applying." That EC `0x03000508` bump is **exactly the firmware NVIDIA now acknowledges breaks the GB10 fan curve.** Corrected guidance: do NOT apply the July EC firmware; if applied, roll EC back to `0x02004e18` via `fwupdmgr downgrade` and suppress blanket fw updates until a patched 0.4+ EC ships. Net: the firmware/OTA **HOLD is reaffirmed with a stronger, NVIDIA-acknowledged root cause** — even as Entry 111's original hold reason (/t/376431 USB-C PD reboot) softened.
+
+2. **SM12x DeepSeek-V4-Flash momentum — three-source convergence.** vLLM PR #41834 (Check 2, OPEN) + svd PR #319 (Check 3, OPEN) + entrpi's 1×-Spark DSpark engine at 27–35 tok/s (Check 5 /t/376884) all target DSV4F on sm_120/121 within days of each other. Still pre-merge on the vLLM path; HIGH monitor continues. When #41834 lands it is an immediate eval candidate (same build window as Arm C/D).
+
+3. **NVFP4 Arm-D gate: build blockers CLEARING but live-perf evidence WEAKENING — reinforces "eval, don't trust the leaderboard."** Clearing: #48330 shipped in v0.25.1 (Check 2) and is present in dev1207 (Check 3); eugr ships Qwen3.6 NVFP4 recipes on the current 0.23.x build → schema gap + corruption gate both addressed. Weakening: Arena top NVFP4-portable-vLLM collapsed to 77.07 (≈ FP8, Check 1) and forum /t/367082 "NVFP4 broken on GB10" still has no NVIDIA fix (Check 5). The prior 118.91 figure is unreproduced in current data. → Run the **gated sandbox eval** (TP=1 recipe form, v0.25.1+ floor) rather than adopting on leaderboard numbers.
+
+4. **Qwen3.7 closed-frontier holds (Check 4) + forum quiet on Qwen (Check 5)** — nothing reopens it; Arm C comparator set unchanged.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (single-node) | NOT FIRED — live top 77.88 (−3% vs stored 80.27); baseline holders churned/absent this run |
+| vLLM Gemma4 PRs #39138 + #40099 merged | NOT FIRED — both OPEN |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 open/stale |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | INFO — PR #41834 (SM12x DSV4F) still OPEN; HIGH monitor continues (now 3-source: +svd #319 +entrpi DSpark) |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | CLOSED — unchanged, closed-frontier holds |
+| Power-instability / firmware cluster | **ACTION — NEW acknowledged EC/UEFI fan-curve regression (/t/377044+/t/377069); countermands Entry 111 EC-apply; roll back EC to 0x02004e18 if applied** |
+
+---
+
+#### Overall: ACTION NEEDED
+
+Primary: the July EC/UEFI firmware (EC `0x03000508`) breaks the GB10 fan curve and causes severe thermal throttling / possible hard freezes under sustained inference — **NVIDIA-acknowledged, no fix.** This reaffirms the firmware/OTA HOLD and **countermands Entry 111's recommendation to apply that EC bump.** Production (running the prior firmware) is unaffected and must stay that way. Secondary: NVFP4 Arm-D build blockers are clearing (dev1207 + v0.25.1 #48330) even as live NVFP4 leaderboard perf weakens — reinforcing a gated sandbox eval over leaderboard trust; SM12x DSV4F momentum now 3-source; MTP+prefix-caching quality-bug worth a spot-check.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — ACTION] HOLD all July firmware/OTA; do NOT apply EC `0x03000302→0x03000508`.** This is the exact EC firmware NVIDIA acknowledges (case 260716-000029) breaks the GB10 fan curve → 85–97 °C + throttling under sustained inference. **Countermands Entry 111 Priority 1's "the EC firmware + NIC hot-plug are worth applying" note.** Our production box runs the prior firmware and is unaffected — keep it. If any Spark in the fleet has already taken the July firmware, roll EC back via `sudo fwupdmgr get-devices` → `sudo fwupdmgr downgrade <EC_DEVICE_ID>` → select `0x02004e18` → reboot (physical-console reboot pre-flight applies), then suppress blanket `fwupdmgr update` until NVIDIA ships a patched 0.4+ EC. Monitor /t/377044 for the fix.
+
+2. **[PRIORITY 2] NVFP4 Arm-D build blockers clearing — target v0.25.1+ / dev1207+ for the gated eval, but do NOT trust leaderboard numbers.** #48330 (NVFP4 corruption guard) is in v0.25.1 and present in dev1207; eugr ships Qwen3.6 NVFP4 recipes on the current build (schema gap resolved on 0.23.x). BUT Arena NVFP4-portable-vLLM collapsed to ~77 tok/s (≈ FP8) and forum /t/367082 remains unfixed — the 118.91 win is unreproduced. Run the **gated sandbox eval** using the **single-node (TP=1) NVFP4 recipe form** (the shipped `qwen3.6-35b-a3b-nvfp4.yaml` is TP=2/dual-Spark — adapt or use `-no-mtp`), with the 10-shot "!!!!" quality probe, before any adoption decision. Production untouched.
+
+3. **[PRIORITY 3] PR #41834 (SM12x DSV4F): keep on HIGH daily monitor — now 3-source.** vLLM #41834 (OPEN) + svd #319 (OPEN) + entrpi 1×-Spark DSpark engine (/t/376884, 27–35 tok/s, notable sm_121 "D2R"/"yield-quench" kernels). On merge → immediate eval, same build window as Arm C/D.
+
+4. **[PRIORITY 4] Spot-check MTP + prefix-caching quality (/t/377030).** Reported vLLM MTP-with-prefix-caching quality-degradation bug. **First verify whether APC is actually active in our prod config** (Entry 064 rolled back an APC enable — state ambiguous); if APC is on with MTP=2, run a short quality spot-check against a no-APC control. Low urgency.
+
+5. **[NOTE] Arena access divergence — re-verify next run with the `pageSize` GET path.** This run (field-mask + per-doc GET) returned ~130 docs / 54 single-node and did not find the stored baseline holders (Stojanovic 80.27, Poveda 118.91); Entry 111's `pageSize` pagination returned 159. Treat 80.27/118.91 as stored high-water-marks, not live targets, until the next run reconciles the doc-count gap. Do not overwrite Arena baseline values on this single divergent run.
+
+6. **[CARRY-FORWARD]** eugr current stable now **dev1207** (was dev1144). MTP=3 + TRITON_ATTN drafter variant in eval matrix; NVFP4 checkpoint `nvidia/Qwen3.6-35B-A3B-NVFP4`, `VLLM_MXFP4_BACKEND=marlin`. Qwen3-Coder-30B-A3B-FP8 `config.json` hybrid-GDN pre-screen still required (no eugr recipe yet). Arm C comparator set unchanged (Qwen3-Coder-30B-A3B-FP8, Laguna-XS.2-FP8, North Mini Code 1.0 FP8). /t/376431 (USB-C PD reboot) softened → downgrade its Watch-Item urgency. Fan headless-mode check at next maintenance window (now doubly relevant given the fan-curve regression).

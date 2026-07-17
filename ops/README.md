@@ -3,7 +3,9 @@
 These run **from an SSH-capable host** (this VM, `obvm`) and reach the Spark over SSH
 (`claude@spark.k4jda.net`, key `~/.ssh/id_claude_code`). They **read** the box; none
 modify it. Each is **quiet on healthy** and, on anomaly, prints + logs + exits non-zero
-(so a `MAILTO` cron mails it) + POSTs to `$SPARK_ALERT_WEBHOOK` if set.
+(so a `MAILTO` cron mails it) + pushes to Pushover (creds resolve from Bitwarden at
+runtime — `PUSHOVER_APP_TOKEN` / `PUSHOVER_USER_KEY`). If no channel resolves, notify()
+records a `NO CHANNEL DELIVERED` line rather than failing silently.
 
 | Script | Cadence | Goal | Disruptive | Checks |
 |--------|---------|------|------------|--------|
@@ -21,7 +23,7 @@ crontab -l                   # verify
 **Alerts:** delivery is **Pushover**. `ops/_common.sh notify()` resolves the app token + user key from **Bitwarden Secrets Manager** at runtime (items `PUSHOVER_APP_TOKEN` / `PUSHOVER_USER_KEY`, BWS access token from `~/.config/claude-env.sh`) — **no secrets on disk, nothing committed** (satisfies the "tokens in Bitwarden, never in .env" rule). Anomalies POST to Pushover (severity → priority: CRIT=1/WARN=0/INFO=−1) and also append to `~/spark-ops-logs/<routine>.log`; a failed POST is logged as `ALERT-DELIVERY-FAILED`. Optional overrides (local cache to drop the runtime Bitwarden dependency, a generic webhook, or `MAILTO`): see `ops/spark-ops.env.example`.
 
 ## Config (env overrides)
-`SPARK_SSH_KEY`, `SPARK_HOST`, `SPARK_ALERT_WEBHOOK`, `SPARK_OPS_LOG_DIR`,
+`SPARK_SSH_KEY`, `SPARK_HOST`, `SPARK_PUSHOVER_TOKEN`, `SPARK_PUSHOVER_USER`, `SPARK_OPS_LOG_DIR`,
 `SPARK_EXPECTED_ED25519_FP` (security), `SPARK_SMOKE_TOKS_WARN`, `SPARK_ALLOW_PORTS`.
 
 ## Not cron-managed (continuous observability)

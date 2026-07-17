@@ -17,8 +17,8 @@ modify it. Each is **quiet on healthy** and, on anomaly, prints + logs + exits n
 ops/install-cron.sh          # append the spark-ops block (idempotent)
 crontab -l                   # verify
 ```
-> **Status: installed and running on `ubuntu-vm` (crontab active; logs accruing in `~/spark-ops-logs/`).** healthcheck (daily) + smoke + security (weekly) tested green; audit cron enabled (commit `9be3a77`). **Alert channel WIRED 2026-07-17** (Entry 112 follow-up) — ntfy webhook, delivery verified (HTTP 200).
-**Alerts:** the webhook lives in **`~/.spark-ops.env`** (gitignored — the repo is public), which `ops/_common.sh` sources at runtime; copy `ops/spark-ops.env.example` to set it up. Anomalies POST to that `SPARK_ALERT_WEBHOOK` (ntfy/Slack/Discord) and also append to `~/spark-ops-logs/<routine>.log`. Optional email: set `MAILTO=` in `ops/spark-ops.cron` (needs a mailer). To rotate the ntfy topic, edit `~/.spark-ops.env` and re-subscribe.
+> **Status: installed and running on `ubuntu-vm` (crontab active; logs accruing in `~/spark-ops-logs/`).** healthcheck (daily) + smoke + security (weekly) tested green; audit cron enabled (commit `9be3a77`). **Alert channel WIRED 2026-07-17** (Entry 112 follow-up) — Pushover, delivery verified (`status:1`).
+**Alerts:** delivery is **Pushover**. `ops/_common.sh notify()` resolves the app token + user key from **Bitwarden Secrets Manager** at runtime (items `PUSHOVER_APP_TOKEN` / `PUSHOVER_USER_KEY`, BWS access token from `~/.config/claude-env.sh`) — **no secrets on disk, nothing committed** (satisfies the "tokens in Bitwarden, never in .env" rule). Anomalies POST to Pushover (severity → priority: CRIT=1/WARN=0/INFO=−1) and also append to `~/spark-ops-logs/<routine>.log`; a failed POST is logged as `ALERT-DELIVERY-FAILED`. Optional overrides (local cache to drop the runtime Bitwarden dependency, a generic webhook, or `MAILTO`): see `ops/spark-ops.env.example`.
 
 ## Config (env overrides)
 `SPARK_SSH_KEY`, `SPARK_HOST`, `SPARK_ALERT_WEBHOOK`, `SPARK_OPS_LOG_DIR`,

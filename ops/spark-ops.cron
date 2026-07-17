@@ -1,9 +1,11 @@
 # Spark ops routines (run from this VM; reach the Spark over SSH).
 # Install (append-only):  ops/install-cron.sh
 # Alerts: each script exits nonzero + prints on anomaly. Delivery:
-#   - WEBHOOK (primary): set SPARK_ALERT_WEBHOOK in ~/.spark-ops.env (gitignored) —
-#     ops/_common.sh sources it automatically, so it need NOT be set here. See
-#     ops/spark-ops.env.example. (Wired 2026-07-17, Entry 112 follow-up.)
+#   - PUSHOVER (primary, wired 2026-07-17): ops/_common.sh resolves the Pushover
+#     app token + user key from Bitwarden at runtime (items PUSHOVER_APP_TOKEN /
+#     PUSHOVER_USER_KEY, BWS token from ~/.config/claude-env.sh). No secrets on
+#     disk, nothing to set here. Delivery failures are logged as ALERT-DELIVERY-
+#     FAILED in ~/spark-ops-logs/<routine>.log. Overrides: ops/spark-ops.env.example.
 #   - MAILTO (optional): requires a working mailer (msmtp/sendmail) on this host.
 MAILTO=""
 # Times below are UTC, pinned by CRON_TZ. Plain cron interprets them in the

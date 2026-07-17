@@ -1,10 +1,11 @@
 # Spark ops routines (run from this VM; reach the Spark over SSH).
 # Install (append-only):  ops/install-cron.sh
-# Alerts: each script exits nonzero + prints on anomaly. Delivery options:
-#   - set MAILTO below (requires a working mailer, e.g. msmtp/sendmail), and/or
-#   - export SPARK_ALERT_WEBHOOK=<ntfy/Slack/Discord URL> in the cron environment.
+# Alerts: each script exits nonzero + prints on anomaly. Delivery:
+#   - WEBHOOK (primary): set SPARK_ALERT_WEBHOOK in ~/.spark-ops.env (gitignored) —
+#     ops/_common.sh sources it automatically, so it need NOT be set here. See
+#     ops/spark-ops.env.example. (Wired 2026-07-17, Entry 112 follow-up.)
+#   - MAILTO (optional): requires a working mailer (msmtp/sendmail) on this host.
 MAILTO=""
-# SPARK_ALERT_WEBHOOK=https://ntfy.sh/your-spark-topic
 # Times below are UTC, pinned by CRON_TZ. Plain cron interprets them in the
 # system timezone (America/New_York on this VM), which fired these 4 h late;
 # CRON_TZ makes the documented UTC schedule authoritative (fixed 2026-07-16).

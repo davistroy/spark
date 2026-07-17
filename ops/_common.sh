@@ -2,6 +2,14 @@
 # _common.sh — shared helpers for Spark ops routines (sourced, not executed).
 # Runs ON an SSH-capable host (this VM / obvm). Reaches the Spark over SSH.
 
+# Optional local, gitignored config (alert endpoint / overrides). Kept out of the
+# public repo. Use `:=` form inside these files (e.g. `: "${SPARK_ALERT_WEBHOOK:=URL}"`)
+# so a value already exported in the environment still wins. See ops/spark-ops.env.example.
+for _envf in "$HOME/.spark-ops.env" "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/spark-ops.env"; do
+  [ -r "$_envf" ] && . "$_envf"
+done
+unset _envf
+
 SPARK_SSH_KEY="${SPARK_SSH_KEY:-$HOME/.ssh/id_claude_code}"
 SPARK_HOST="${SPARK_HOST:-claude@spark.k4jda.net}"
 SPARK_OPS_LOG_DIR="${SPARK_OPS_LOG_DIR:-$HOME/spark-ops-logs}"

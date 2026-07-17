@@ -11,3 +11,15 @@ __pycache__/
 *.egg-info/
 .venv/
 .implement-plan-state.json
+
+# macOS metadata cruft
+.DS_Store
+._*
+
+# Local secrets / endpoints — never commit (repo is public).
+# The real ops alert webhook lives in $HOME/.spark-ops.env (or ops/spark-ops.env),
+# sourced by ops/_common.sh at runtime. Commit only ops/spark-ops.env.example.
+.env
+.env.*
+!.env.example
+ops/spark-ops.env

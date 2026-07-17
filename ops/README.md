@@ -17,10 +17,8 @@ modify it. Each is **quiet on healthy** and, on anomaly, prints + logs + exits n
 ops/install-cron.sh          # append the spark-ops block (idempotent)
 crontab -l                   # verify
 ```
-> **Status: installed on `obvm` 2026-06-30.** healthcheck (daily) + smoke + security (weekly) active and tested green; audit cron enabled (commit `9be3a77`). Alert channel not yet wired — see below.
-**Alerts:** set `MAILTO=` in `ops/spark-ops.cron` (needs a mailer) and/or
-`export SPARK_ALERT_WEBHOOK=https://ntfy.sh/<topic>` so anomalies are pushed.
-Logs accrue in `~/spark-ops-logs/<routine>.log`.
+> **Status: installed and running on `ubuntu-vm` (crontab active; logs accruing in `~/spark-ops-logs/`).** healthcheck (daily) + smoke + security (weekly) tested green; audit cron enabled (commit `9be3a77`). **Alert channel WIRED 2026-07-17** (Entry 112 follow-up) — ntfy webhook, delivery verified (HTTP 200).
+**Alerts:** the webhook lives in **`~/.spark-ops.env`** (gitignored — the repo is public), which `ops/_common.sh` sources at runtime; copy `ops/spark-ops.env.example` to set it up. Anomalies POST to that `SPARK_ALERT_WEBHOOK` (ntfy/Slack/Discord) and also append to `~/spark-ops-logs/<routine>.log`. Optional email: set `MAILTO=` in `ops/spark-ops.cron` (needs a mailer). To rotate the ntfy topic, edit `~/.spark-ops.env` and re-subscribe.
 
 ## Config (env overrides)
 `SPARK_SSH_KEY`, `SPARK_HOST`, `SPARK_ALERT_WEBHOOK`, `SPARK_OPS_LOG_DIR`,

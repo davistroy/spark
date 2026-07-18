@@ -8470,3 +8470,103 @@ Primary: **vLLM PR #41834 (SM12x DSV4F) conflict resolution landed today** — b
 4. **[PRIORITY 4 — HOLD] Firmware: do NOT apply July EC firmware.** NVIDIA still publishing broken EC `0x03000508` without a fix. Production is on the prior firmware and unaffected. Hold until NVIDIA ships a patched 0.4+ EC.
 
 5. **[NOTE] Arena access degradation:** Only 90 of 159 docs accessible this run (vs ~130 Entry 112); post-May docs appear to be behind an App Check-equivalent gate. Stored baselines (80.27/118.91) are valid high-water marks but not live-verified. Consider a manual browser-authenticated fetch in the next deep-dive session to re-anchor.
+
+---
+
+## Entry 114 - DGX Spark Recon (2026-07-18)
+
+### WORTH WATCHING — PR #43477 (SM12x alt path) MERGED to vLLM main; PR #41834 still OPEN (merge slipped); EC firmware hold confirmed with new thermal reports; NVFP4 c=1 +78% community-validated across two independent sources.
+
+**Date:** 2026-07-18 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+---
+
+#### Check 1 — Arena (Firestore REST pagination)
+
+- Access: **150 docs fetched** across 5 pages (pageSize=30) — improved from 90 in Entry 113; ~9 remaining beyond page 5. June–July entries now reachable.
+- Top FP8/vLLM/single-node: **80.27 tok/s** (Stojanovic, `Qwen3.6-35B-A3B-FP8-DFLASH-FlashQLA`, vllm-node-tf5, 2026-05-20) — stored baseline confirmed, **0.0% change.** Action trigger NOT FIRED (threshold 88.3). No new entries above baseline since May 20.
+- Top NVFP4/vLLM/single-node: **118.91 tok/s** (Luis Poveda, June 30) — stored baseline confirmed. Most recent Poveda run (July 3): 109.29 tok/s (slightly off peak, same recipe). No other community member above 80 tok/s on NVFP4 vLLM.
+- Interesting: `rdtand/Qwen3.6-35B-A3B-PrismaQuant-4.75bit` (Sean Williams, vLLM): **95.11 tok/s** — above the FP8 vLLM ceiling; different quantization scheme not currently in the eval pipeline.
+- Top overall single-node (35B-class): 218.85 tok/s (NVFP4 on Atlas, Rajendra Rawat) — baseline confirmed.
+- **NO ACTION** (no trigger fired; stored baselines valid).
+
+#### Check 2 — vLLM Releases
+
+- Latest release: **v0.25.1** (2026-07-14) — no new release. Baseline unchanged.
+- **PR #41834 (SM12x DSV4F): STILL OPEN** — merge prediction from Entry 113 (24-48h) did NOT materialize. Branch remains 195 commits ahead of main; no new merge activity detected. This is the "stock-deps path" requiring only released FlashInfer/DeepGEMM wheels.
+- **NEW: PR #43477 (SM12x alt path): CONFIRMED MERGED to vLLM main** — "[New Model][Nvidia] Add SM12x support for DeepSeek V4 Flash with essential fixes" via a separate path. **Critical caveat:** requires *unreleased* FlashInfer and DeepGEMM dependency branches — not yet usable in production. This is the non-production-deps path; PR #41834 remains the production-relevant merge.
+- PR #40099 (Gemma4 repetition detection): OPEN, last activity Jul 8 — still OPEN, no change.
+- Issue #41063 (DeepGEMM SM12.x): OPEN/stale, no change.
+- Classification: **LOW/NO CHANGE** (notable secondary: #43477 merged to main but blocked by unreleased deps).
+
+#### Check 3 — spark-vllm-docker
+
+- **NEW BUILD: `0.23.1rc1.dev1237+g03e891c1a.d20260717`** (July 17, `prebuilt-vllm-current`) — +30 upstream vLLM commits vs dev1207 (July 16). FlashInfer companion rebuilt: `0.6.15-30458200-d20260717` (same base version 0.6.15, new build hash). No new repo commits — build triggered by vLLM upstream progression. The +30 commits likely include PR #43477 (merged to vLLM main same window), but functional SM12x support still requires unreleased FlashInfer/DeepGEMM deps.
+- PR #319 (DSV4F-DSpark + SM120 topk fix): OPEN, last updated July 15, no new activity.
+- PR #279 (DFlash + FP8 KV Cache): OPEN/stalled, 42 days no activity.
+- **Arm C+D eval target updated: use `prebuilt-vllm-current` = `dev1237` at eval window open** (supersedes dev1207).
+- Classification: **WORTH WATCHING** (new build with possible SM12x code but deps not yet released).
+
+#### Check 4 — Qwen / A3B-Class Models
+
+- Qwen3.7 open weights: **still closed-frontier — day 60+** post-API launch (May 19). Multiple sources now characterize Alibaba as shifting to closed flagships. Reopen criteria unchanged: direct @QwenLM announcement or official HF model card only.
+- Qwen4: confirmed SEO/speculation noise — zero Qwen4 repos on official HF org.
+- No new Qwen org model uploads in the past 7 days.
+- **NEW WATCH: `CohereLabs/North-Mini-Code-1.0` + `-fp8` (June 11, 2026)** — 30B total / 3.3B active (8-of-128 experts), hybrid SWA+global attention (interleaved 3:1), 256K context, Apache 2.0. FP8 pre-quant available on HF. SM121 compat unvalidated (hybrid SWA attention has different kernel requirements vs standard full-attention). Requires `melody` library for accurate response parsing. Not an eval candidate yet — categorize as watch list pending SM121 community reports.
+- Rejected (not re-investigated): Soofi S 30B-A3B (hybrid Mamba, SM121-blocked).
+- Classification: **NO CHANGE** (no drop-in successor appeared; North Mini Code 1.0 added to watch list).
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json 403 — WebSearch fallback)
+
+- **EC firmware 0x03000508 hold CONFIRMED — no NVIDIA fix issued.** July 2026 software release (/t/376736) IS the source of the broken EC; it ships 0x03000508 fleet-wide. New community thermal throttling reports: /t/377044 "DGX Spark / GB10 thermal throttling after EC/UEFI updates" (Jul 16-17: ACPI zones 96-97°C, fans silent after applying July OTA) and /t/377069 "Thermal Throttling / Fan Curve Fix via EC Firmware Rollback" (Jul 16: community rollback guide to EC `0x02004e18`). Production box on prior firmware — unaffected. **Hold maintained.**
+- **AEON-7 container now on vLLM 0.25.1** (tag `2026-07-16-v0.25.1`, `:latest`). Published NVFP4+DFlash benchmarks for `Qwen3.6-35B-A3B-heretic-NVFP4` + DFlash n=11: c=1 **117.6 tok/s** (math; +78.5% vs prod 65.9), c=8 **415.6 tok/s** (math; +2.1% vs prod 406.9), c=16 **558.6 tok/s** (math; **−23.5%** vs prod 730.5). Confirms NVFP4+DFlash is a single-stream latency optimizer — same shape as DFlash-alone rejection (Entry 080). NVFP4 without DFlash at higher concurrency still unquantified by AEON-7.
+- July 2026 DGX Dashboard release (/t/376736) contents: Ubuntu 6.14 HWE kernel, driver 570 EOL, ConnectX-7 NIC hot-plug (−18W idle / −32%), UEFI WiFi+BT disable option, OOM handling improvements. Our kernel (6.17.0-1021) already past HWE target — no update content applies. Do NOT apply.
+- eugr/spark-vllm-docker operational updates (early July): earlyoom monitoring added, shifted to prebuilt runner images (pulls `eugr/spark-vllm:latest`), default multi-node backend changed from Ray to PyTorch distributed.
+- GPU clock 721 MHz pin (/t/376039): no NVIDIA response; not manifesting on production.
+- Classification: **WORTH WATCHING** (firmware hold confirmed; NVFP4+DFlash community benchmarks solidify the eval shape; no new hardware-level breakthroughs).
+
+---
+
+#### Cross-Correlated Findings
+
+1. **PR #43477 (MERGED) + dev1237 (+30 commits, July 17) — SM12x code is in vLLM main and likely in the new build, but unreleased deps make it non-functional today (Check 2 + Check 3).** This is a two-source signal: Check 2 confirms #43477 merged to main; Check 3 shows a new build appeared the same day with +30 commits. The SM12x kernel path exists in the codebase now. The gating item is FlashInfer/DeepGEMM dep releases (tracked via #41834, which is still the production-relevant path).
+
+2. **NVFP4 c=1 +78% confirmed across two independent sources (Check 1 + Check 5).** Arena: Poveda 118.91 tok/s (June 30). Forum/AEON-7: 117.6 tok/s c=1 math (vLLM 0.25.1). Both corroborate the +78% single-stream gain. Both also confirm the c=8/c=16 regression when DFlash is included — NVFP4 alone at c=8+ remains uncharacterized.
+
+3. **EC firmware hold reinforced across three forum sources (Check 5).** /t/376736 (July release = the EC regression), /t/377044 (new thermal throttling reports), /t/377069 (community rollback guide). NVIDIA case 260716-000029 still open, no patched EC version published. Hold is correct.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (single-node) | NOT FIRED — top confirmed 80.27; no new entries above baseline |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | **PARTIAL — PR #43477 MERGED to vLLM main (SM12x alt path); PR #41834 still OPEN (stock-deps path)** |
+| vLLM Gemma4 PRs #39138 AND #40099 merged | PARTIAL — #45553 (≡#39138) MERGED; #40099 still OPEN |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 open/stale |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | CLOSED — day 60+, unchanged |
+| Power-instability / firmware cluster | Hold MAINTAINED — NVIDIA still publishing broken EC; new community throttling reports 2026-07-16 |
+
+---
+
+#### Overall: WORTH WATCHING
+
+No ACTION NEEDED trigger fired: Arena FP8 ceiling unchanged, PR #41834 still OPEN, no new model release. However, significant secondary developments: **PR #43477 merged to vLLM main** (SM12x alt path in codebase; stock-deps path #41834 still pending); **NVFP4 c=1 +78% gain fully community-confirmed** across Arena and AEON-7; **EC firmware hold reinforced** with new fleet-wide thermal throttling reports. Monitor PR #41834 daily — merge could happen any day.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — MONITOR DAILY] PR #41834 still OPEN — keep daily watch.** Merge slipped from Entry 113's 24-48h prediction. PR #43477 (alt-path, merged) may accelerate pressure to close #41834 (stock-deps). When #41834 merges: immediate eval window with `dev1237`+ and PR #319 merged or cherry-picked.
+
+2. **[PRIORITY 2 — NOTE] PR #43477 MERGED to vLLM main — track dependency releases.** SM12x kernel code is now in main. The blocker is unreleased FlashInfer and DeepGEMM dep branches. Watch for those releases — when deps land, dev1237+ becomes the SM12x-capable build even before #41834 closes.
+
+3. **[PRIORITY 3 — CARRY-FORWARD] NVFP4 Arm-D eval plan unchanged.** Use `dev1237` (latest `prebuilt-vllm-current`) at eval window open. Run NVFP4 without DFlash at c=1/c=8/c=16 to characterize the pure-weight-bandwidth gain separately from DFlash's single-stream optimizer effect. Gate: TP=1 recipe, 10-shot "!!!!" probe, ≥+5% c=8 threshold.
+
+4. **[PRIORITY 4 — HOLD] Do NOT apply July 2026 DGX Dashboard update.** EC 0x03000508 breaks the GB10 fan curve (NVIDIA-acknowledged, no fix). New thermal throttling reports filed July 16-17 from users who applied the update. Production box unaffected — hold until NVIDIA ships a patched EC version.
+
+5. **[NEW WATCH] North Mini Code 1.0 (Cohere, `CohereLabs/North-Mini-Code-1.0-fp8`).** 30B/3.3B active, FP8 available, Apache 2.0. Add to watch list — evaluate for SM121 community reports before scheduling an eval. Hybrid SWA attention kernel compat on SM121 is the key unknown.

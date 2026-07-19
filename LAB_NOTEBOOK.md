@@ -8570,3 +8570,97 @@ No ACTION NEEDED trigger fired: Arena FP8 ceiling unchanged, PR #41834 still OPE
 4. **[PRIORITY 4 — HOLD] Do NOT apply July 2026 DGX Dashboard update.** EC 0x03000508 breaks the GB10 fan curve (NVIDIA-acknowledged, no fix). New thermal throttling reports filed July 16-17 from users who applied the update. Production box unaffected — hold until NVIDIA ships a patched EC version.
 
 5. **[NEW WATCH] North Mini Code 1.0 (Cohere, `CohereLabs/North-Mini-Code-1.0-fp8`).** 30B/3.3B active, FP8 available, Apache 2.0. Add to watch list — evaluate for SM121 community reports before scheduling an eval. Hybrid SWA attention kernel compat on SM121 is the key unknown.
+
+---
+
+## Entry 115 - DGX Spark Recon (2026-07-19)
+**Date:** 2026-07-19
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Check 1 — Arena (Firestore REST)
+
+- **161 total benchmark docs** (up 2 from ~159 on 2026-07-16); 90 single-node tg128 c=1 entries.
+- **Top FP8 Qwen3.6-35B-A3B vLLM single-node: 80.27 tok/s** — Stojanovic (eugr DFlash-n8 recipe, container `vllm-node-tf5`, 2026-05-20). **UNCHANGED from baseline.**
+- 4 new entries since 2026-07-10: Gemma-4-26B-A4B-NVFP4 (29.96, Walczak, Jul 15); DeepSeek-V4-Flash 180B/162B (~18 tok/s, Jassal, Jul 12); AEON-7 Qwen3.6-27B multimodal NVFP4 (24.23, Jul 10). None affect Qwen3.6-35B-A3B rankings.
+- Atlas FP8 entry (172.03, Walczak, 2026-05-24) predates this check window — already known since Entry 094+; not new.
+- Top NVFP4 vLLM entry: 118.91 tok/s (Poveda, `nvidia/Qwen3.6-35B-A3B-NVFP4`, 2026-06-30) — unchanged.
+- **Classification: NO CHANGE** — FP8 vLLM ceiling unchanged; no new entries above baseline.
+
+#### Check 2 — vLLM Releases
+
+- **No new release.** Latest remains v0.25.1 (2026-07-14). Re-confirmed 2026-07-19.
+- **PR #41834 (SM12x DSV4F stock-deps path): OPEN; merge conflicts present; author stated 2026-07-19 "I don't think this one can be merged… I'm using it, and I shall keep maintaining it if there is still an audience."** Fundamental status change: demote from "imminent" to "will not upstream." Stable preview tag `sm120-pr-41834-stable-preview-20260711` is the operational path for DSV4F if desired; do not wait for main-branch merge.
+- PR #43477 (SM12x alt path): MERGED (confirmed, no change since 2026-07-17).
+- PR #40099 (Gemma4 repetition fix): OPEN; last activity 2026-07-08; unchanged.
+- Issue #41063 (DeepGEMM SM12x gaps): OPEN, stale ~83 days; unchanged.
+- **Classification: WORTH WATCHING** — no new release; PR #41834 significantly de-escalated.
+
+#### Check 3 — spark-vllm-docker
+
+- **BLOCKED** — `eugr/spark-vllm-docker` is outside this session's allowed GitHub scope; MCP and WebFetch both return 403. Cannot determine new builds since 2026-07-17 (dev1237).
+- Last known stable: `0.23.1rc1.dev1237+g03e891c1a.d20260717`, FlashInfer `0.6.15-30458200-d20260717`.
+- **Classification: UNABLE TO CHECK** — recommend authorizing `eugr/spark-vllm-docker` in session to unblock future recons.
+
+#### Check 4 — Qwen / New Model Landscape
+
+- **No new Qwen inference LLM since 2026-07-18.** July Qwen releases are Wan 2.7 (video), Qwen-Image (DiT), Qwen3Guard (safety), qwen-mt-turbo (translation) — none LLM-relevant.
+- **Qwen3.7 open weights: still confirmed closed-frontier.** No change since Entry 111 closure 2026-07-16.
+- **NEW: `poolside/Laguna-XS-2.1`** (released 2026-07-02) — 33B/~3B active, SWE-bench Multilingual 63.1% (+5.4 pts vs XS.2), 256K ctx, 256 experts, OpenMDW-1.1 license. `Laguna-XS-2.1-FP8` exists. Blocker: FP8 KV cache requires vLLM ≥0.22.0 (vllm#42650); needs Arm C eval window same as NVFP4. BF16 variant theoretically loadable on current build. SM121 community validation unconfirmed.
+- North Mini Code 1.0: no SM121 community validation reports found.
+- `InternScience/Agents-A1` (June 26, 35B/3B active, Apache 2.0): no FP8, no SM121 validation — low priority.
+- **Classification: WORTH WATCHING** — Laguna-XS-2.1 new model; add to Arm C eval slate.
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json 403 — WebSearch fallback)
+
+- **PR #41834 author public statement (2026-07-19): "I don't think this one can be merged."** Per vLLM PR thread. Corroborates Check 2 finding. Demote from Priority 1 daily monitor; treat stable preview tag as the operational path.
+- **EC firmware 0x03000508 fan curve regression: still unresolved.** NVIDIA case 260716-000029 OPEN; no patched EC issued. Community rollback guide /t/377069 still current. Production box unaffected — hold maintained.
+- July 2026 OTA (/t/376736) still rolling out; some users reporting update issues /t/376981. Our kernel (6.17.0-1021) already past the OTA's HWE target — no content applies.
+- NVFP4 on v0.25.x SM121 community builds confirmed available: AEON-7 `aeon-vllm-ultimate:2026-07-16-v0.25.1`; `r0b0tlab/vllm-v0250-cu130-sm121` (v0.25.0). NVFP4 KeyError (Entry 094) is v0.19.x-specific; resolved in v0.25.x. Official eugr eval path still preferred.
+- MiniMax M3 NVFP4 on 4× DGX Spark at 1M ctx (/t/376979): multi-node only, not single-Spark relevant.
+- GPU SM clock 721 MHz pin (/t/376039): no NVIDIA response; not manifesting on production.
+- **Classification: WORTH WATCHING** (PR #41834 de-escalated; EC firmware hold unchanged; NVFP4 community eval path confirmed available).
+
+---
+
+#### Cross-Correlated Findings
+
+1. **PR #41834 "will not upstream" — confirmed across two checks (Check 2 + Check 5).** vLLM check confirmed OPEN with unresolved merge conflicts; forum check adds author's own July 19 statement ruling out upstream merge. Two-source signal: downgrade PR #41834 monitoring from "daily/imminent" to "inactive/use preview tag directly." DSV4F on single Spark remains feasible via `sm120-pr-41834-stable-preview-20260711` if desired, but is a build-it-yourself path.
+
+2. **NVFP4 v0.25.x community availability confirmed across two checks (Check 4 + Check 5).** Forum confirms AEON-7 v0.25.1 and r0b0tlab v0.25.0 SM121 builds exist and NVFP4 loads successfully. Arena shows Poveda 118.91 tok/s (Jun 30) as top vLLM NVFP4 entry with no higher competitor. NVFP4 eval is feasible now on community builds; official eugr path (dev1237+) remains the preferred eval channel.
+
+3. **Arena stable + no new vLLM release = landscape unchanged for production config.** Checks 1 and 2 both confirm no movement: FP8 vLLM ceiling 80.27 unchanged, v0.25.1 still latest. Production config remains competitive.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (single-node) | NOT FIRED — top confirmed 80.27 (unchanged) |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | PARTIAL (no change) — #43477 MERGED (alt-path); #41834 WON'T UPSTREAM (author confirmed) |
+| vLLM Gemma4 PRs #39138 AND #40099 merged | PARTIAL — #45553 (≡#39138) MERGED; #40099 OPEN (unchanged) |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 open/stale ~83d |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED |
+| Qwen3.7 (27B or 35B) open weights | CLOSED — unchanged |
+| Power-instability / firmware cluster | Hold MAINTAINED — EC firmware unresolved; production box unaffected |
+
+---
+
+#### Overall: WORTH WATCHING
+
+No ACTION NEEDED trigger fired. Arena FP8 ceiling unchanged, no new vLLM release, no new major model. Key update this cycle: **PR #41834 author confirmed it will not upstream** (downgrade from "Priority 1 daily monitor" to "use stable preview tag if desired"). NVFP4 eval on v0.25.x community builds is now confirmed feasible. Laguna-XS-2.1 is a new model worth adding to the Arm C eval slate.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — UPDATED] PR #41834 status change: WILL NOT UPSTREAM.** Author confirmed July 19. Stop daily monitoring of PR merge status. If DSV4F single-Spark eval is desired, use `sm120-pr-41834-stable-preview-20260711` directly as a build source — the code is production-quality (GSM8K 0.96) and will be community-maintained. For SM12x dispatch improvements in the official stack, the path is now PR #43477 (merged) + FlashInfer/DeepGEMM dep releases.
+
+2. **[PRIORITY 2 — CARRY-FORWARD] NVFP4 Arm-D eval plan: use eugr `prebuilt-vllm-current` (dev1237+) when Arm C eval window opens.** Community builds (AEON-7, r0b0tlab) confirm v0.25.x resolves the NVFP4 KeyError. Run official `nvidia/Qwen3.6-35B-A3B-NVFP4` (TP=1, `-no-mtp` recipe form) without DFlash. Gate: ≥+5% c8 vs production. Also add `poolside/Laguna-XS-2.1-FP8` to the same eval slate (needs vLLM ≥0.22.0).
+
+3. **[PRIORITY 3 — HOLD] Do NOT apply July 2026 DGX Dashboard update.** EC 0x03000508 fan curve regression unresolved (case 260716-000029 open). Community update issues reported /t/376981. Our kernel (6.17.0-1021) already past OTA target — zero benefit. Hold until NVIDIA issues patched EC.
+
+4. **[NOTE] spark-vllm-docker check BLOCKED in this session.** The `eugr/spark-vllm-docker` repo is outside the session's allowed GitHub scope. Authorize it (add via session settings) to re-enable Check 3 in future recon runs. Last known build: dev1237 (2026-07-17).
+
+5. **[NEW WATCH] `poolside/Laguna-XS-2.1` — add to Arm C eval slate.** July 2, 2026 release. FP8 variant exists; needs vLLM ≥0.22.0 (same window as NVFP4 Arm D). SWE-bench Multilingual 63.1% (+5.4 pts vs XS.2). SM121 community validation pending — check forum /t/368845 before allocating a down-window.

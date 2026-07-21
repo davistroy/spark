@@ -8755,3 +8755,98 @@ No ACTION NEEDED trigger fired. Performance landscape unchanged: Arena FP8 vLLM 
 4. **[WATCH] Qwen3.8 — monitor for open-weights announcement.** Announced 2026-07-19, API-only, 2.4T total params with architecture undisclosed. Open weights "promised soon." Not Spark-relevant until open weights appear AND active-parameter count is confirmed in the 3-5B range (like Qwen3.6's 3.4B active). No action until official HuggingFace release.
 
 5. **[WATCH] Gemma4 structured output gate: PR #40099 only remaining.** #45553 (≡#39138) shipped in v0.25.1. #40099 (repetition-detection fix) is the sole remaining gate before the Gemma4 structured output experiment (Entry 061). Last activity Jul 8; no update this cycle. Monitor weekly.
+
+---
+
+## Entry 117 - DGX Spark Recon (2026-07-21)
+**Date:** 2026-07-21
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+#### Check 1 — Arena (Firestore REST)
+
+- **162 total benchmark docs** — UNCHANGED from Entry 116 (2026-07-20). No new submissions.
+- **Top FP8 Qwen3.6-35B-A3B vLLM single-node: 80.27 tok/s** — Stojanovic (eugr DFlash-n8 recipe, vllm-node-tf5, 2026-05-20). **UNCHANGED.**
+- 88.3 tok/s ACTION threshold: **NOT BREACHED.**
+- Top NVFP4 vLLM single-node: 118.91 tok/s (Poveda, `nvidia/Qwen3.6-35B-A3B-NVFP4`, 2026-06-30) — unchanged.
+- Top overall (all runtimes): 218.85 tok/s (Rajendra Rawat, Atlas, NVFP4, 2026-05-23) — unchanged.
+- Most recent Arena entry: 2026-07-19 (Gemma-4-26B-A4B-NVFP4, 41.95 tok/s, Walczak — different model, irrelevant to baseline).
+- **Classification: NO CHANGE**
+
+#### Check 2 — vLLM Releases
+
+- **No new release.** Latest remains v0.25.1 (2026-07-14). Re-confirmed 2026-07-21.
+- PR #40099 (Gemma4 repetition fix): **OPEN**, last activity 2026-07-08 — stalled; reproducibility disputed by maintainer.
+- Issue #41063 (DeepGEMM SM12x): **OPEN**, stale ~12 weeks (last activity 2026-04-27). New: Issue #47436 (block-scaled FP8 compressed-tensors crash on SM120) surfaced — SM12x DeepGEMM gaps still generating new breakage reports.
+- PR #37754 (FlashInfer+MTP SM121 crash): **OPEN**, stale ~4 months — production unaffected (FLASH_ATTN attention backend).
+- **Classification: NO NEW RELEASE**
+
+#### Check 3 — spark-vllm-docker
+
+- **NEW BUILD 2026-07-20:** `0.23.1rc1.dev1302+ge765bbc97.d20260720` — 29 upstream vLLM commits ahead of dev1273 (July 19). FlashInfer companion: `0.6.15-c83607a9-d20260720` (same 0.6.15 version, fresh build from different upstream hash).
+- No recipe or Dockerfile changes — same `562ed29` commit ("Flashinfer regression fix") as July 19 build. FlashInfer PR #3738 patch (NVFP4 autotune/workspace allocation fix for SM100+ MoE) already included. NOTE: this is NOT the weight-schema loader gap (Entry 094 `w2_input_scale` KeyError) — that blocker persists.
+- PR #319 (DSV4F-DSpark + SM120 topk fix): **OPEN**, no activity since 2026-07-15.
+- PR #279 (DFlash+FP8 KV): **OPEN**, stalled since 2026-06-06.
+- **Classification: WORTH WATCHING.** dev1302 is a low-risk drop-in from dev1273 (no recipe/Dockerfile changes). Use as Arm C/D eval baseline.
+
+#### Check 4 — Qwen / New Model Landscape
+
+- **Qwen3.7 27B/35B open weights: still NOT released** — now 8-9 weeks post-API-launch (May 19), double the historical Qwen lag pattern. No HF model cards. Community hypothesis: possible permanent closed-frontier, similar to Qwen2.5-Max.
+- **Qwen3.8: announced 2026-07-19 (X, "Qwen3.8-Max-Preview"), API-only, 2.4T total params** — open weights "coming soon" with no date. At 2.4T total params, even if open weights release, NVFP4/MXFP4 will be the only Spark path — same v0.23.x+ build gate as Entry 094. Not actionable.
+- `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8` — DGX Spark compatible per NVIDIA, but −41 pts SWE-bench vs Qwen3.6 (32 vs 73.4). Not a production replacement; note only if multimodal use case arises.
+- Kimi K3 (Moonshot AI, July 16): 2.8T total / ~50B active — single-node infeasible.
+- **Classification: NO ACTION** (no actionable open-weight model for single-node Spark)
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json 403 — WebSearch fallback)
+
+- **EC firmware 0x03000508 fan curve regression: ESCALATED.** NVIDIA case 260716-000029 still OPEN; no patched EC found as of 2026-07-21.
+- **NEW: /t/377365 "PowerStress reproducibly hard-powers-off the box — acpitz 88→97.8°C in 5s"** (post-2026-07-20): unit found powered down 4× in 5 days. partnerdiag PowerStress reproduces cleanly. acpitz climbs 88→97.8°C in 5 seconds under GPU stress → EC emergency shutdown → OS journal stops mid-line, no vmcore, no Xid. Confirms thermal pathway: EC 0x03000508 → fans don't ramp → acpitz hits ~97.8°C limit → hard power-off during active inference workloads. **Production unit's EC version should be verified as 0x03000302.**
+- Power instability cluster: 12+ tracked threads (confirmed thermal pathway is the unifying root cause for the majority).
+- /t/376981 (Dashboard stuck on July update install): INFO — not relevant to our apt/docker workflow.
+- FLUX.2 NVFP4 via torchao on SM121: 3× speedup for image diffusion (/t/376106, INFO) — confirms SM121 NVFP4 hardware path works via torchao; not the vLLM LLM path.
+- No new SM121 vLLM performance update, no new driver release, no new eugr commits after July 20.
+- **Classification: WORTH WATCHING** (fan curve regression escalation; EC patch status unchanged)
+
+---
+
+#### Cross-Correlated Findings
+
+1. **EC fan curve regression now operationally confirmed as hard inference shutdowns (Check 3 + Check 5).** Forum /t/377365 demonstrates the complete thermal pathway: EC 0x03000508 → fans don't ramp → acpitz 97.8°C → emergency power-off during GPU inference. eugr dev builds don't touch firmware. The OTA hold is independently motivated by both the absence of any EC patch (Check 5) and this new operational failure evidence. Any production unit running EC 0x03000508 is at risk of unexpected shutdown under sustained inference load.
+
+2. **Qwen3.7 open-weight gap + Arena stasis together signal current config stability (Check 1 + Check 4).** Arena FP8 vLLM top (80.27) frozen since May 20; Qwen3.7 is 8-9 weeks post-API with no open weights. Two independent signals that no drop-in successor is imminent. Production config remains the correct choice.
+
+3. **vLLM upgrade path crystallizing around dev1302 (Check 2 + Check 3).** v0.25.1 still the latest release; eugr dev1302 (July 20, +29 commits) is the new stable build. No recipe changes between dev1273 and dev1302 means it's a safe drop-in. Arm C/D eval window target updated to dev1302.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (single-node) | NOT FIRED — confirmed 80.27 (unchanged) |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | NOT FIRED — no new release |
+| vLLM Gemma4 PRs #45553 MERGED + #40099 merged | PARTIAL — #45553 in v0.25.1; #40099 OPEN (stalled, last activity Jul 8) |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 stale ~12 weeks; new #47436 also stalled |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED — stale ~4 months; prod unaffected |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 8-9 weeks post-API, possible permanent closed-frontier |
+| Power-instability / firmware cluster | ESCALATED — EC 0x03000508 now confirmed causing hard power-offs under GPU inference load (/t/377365); OTA hold maintained |
+
+---
+
+#### Overall: WORTH WATCHING
+
+No ACTION NEEDED trigger fired. Three developments this cycle: (1) **EC fan curve regression escalated** — /t/377365 confirms acpitz 97.8°C → hard power-off under GPU inference load (most significant finding); (2) **eugr dev1302** (July 20) is the new stable build target for Arm C/D eval; (3) **Qwen3.7 open weight gap widens** to 8-9 weeks post-API, raising the possibility of permanent closed-frontier for the 3.7 series.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — VERIFY] Confirm production unit EC firmware is NOT 0x03000508.** /t/377365 demonstrates EC 0x03000508 causes hard thermal shutdowns under sustained GPU inference (acpitz 97.8°C in 5s). Production unit should be on prior EC (0x03000302) per Entry 112 hold. If somehow the bad EC was applied, roll back via `fwupdmgr downgrade` to 0x03000302 (/t/377069) before the next inference run. Physical console access required (CLAUDE.md reboot pre-flight rule).
+
+2. **[PRIORITY 2 — BUILD UPDATE] Update Arm C/D eval target to eugr dev1302 (2026-07-20).** Supersedes dev1273 (July 19). 29 upstream vLLM commits, no recipe/Dockerfile changes — low-risk drop-in. When eval window opens, pull `prebuilt-vllm-current` (resolves to dev1302 or newer).
+
+3. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard update.** EC 0x03000508 fan curve regression now confirmed causing hard shutdowns under GPU inference load (/t/377365, /t/377044). No patched EC from NVIDIA as of 2026-07-21. Zero OTA benefit for our stack (kernel already past HWE 6.14). Hold until NVIDIA issues ≥0x03000509.
+
+4. **[WATCH] Qwen3.7 open weights — pattern-break now pronounced.** At 8-9 weeks post-API with no HF release (double historical lag), update working hypothesis to possible permanent closed-frontier. Continue monitoring; do not hold Arm C eval window open specifically waiting for Qwen3.7.
+
+5. **[WATCH] Gemma4 structured output gate: PR #40099 still pending.** Stalled since July 8. Sole remaining gate before Gemma4 structured output experiment (Entry 061). Monitor weekly.

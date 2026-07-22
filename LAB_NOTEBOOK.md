@@ -8850,3 +8850,107 @@ No ACTION NEEDED trigger fired. Three developments this cycle: (1) **EC fan curv
 4. **[WATCH] Qwen3.7 open weights — pattern-break now pronounced.** At 8-9 weeks post-API with no HF release (double historical lag), update working hypothesis to possible permanent closed-frontier. Continue monitoring; do not hold Arm C eval window open specifically waiting for Qwen3.7.
 
 5. **[WATCH] Gemma4 structured output gate: PR #40099 still pending.** Stalled since July 8. Sole remaining gate before Gemma4 structured output experiment (Entry 061). Monitor weekly.
+
+
+---
+
+## Entry 118 - DGX Spark Recon (2026-07-22)
+**Date:** 2026-07-22
+**Classification:** WORTH WATCHING
+**Note:** Prior session left a partial Qwen-only Entry 118 uncommitted; this full recon supersedes it.
+
+---
+
+#### Check 1 — Arena (Firestore REST benchmarks collection)
+
+- **Total docs: 162** (was 159 on 2026-07-16; +3 added Jul 17–19: `nvidia/Gemma-4-26B-A4B-NVFP4` 41.95 tok/s, `nvidia/DeepSeek-V4-Flash-NVFP4` 26.83, `deepseek-ai/DeepSeek-V4-Flash` 35.05). **0 new entries since 2026-07-21.**
+- **⚠ NEEDS VERIFICATION: Arena agent surfaced 100.23 tok/s** FP8 vLLM entry for `Qwen/Qwen3.6-35B-A3B-FP8` (cluster=1, tg128, doc id `sub1779297106805`, dated 2026-05-20). This was NOT captured in any of the 6 prior recon entries that all reported 80.27 tok/s as top FP8 vLLM. Most likely cause: prior agents used incomplete pagination (30 docs/page, not all 162); entry's cluster/metric fields may also differ. **If confirmed as a genuine tg128 c=1 result, fires the >10% jump trigger (+24.9% vs baseline 80.27).** Do not update baseline tracking value until field details verified.
+- Top FP8 vLLM Qwen3.6 as previously tracked: **80.27 tok/s** (Stojanovic, DFlash-n8, May 20) — still present.
+- Top NVFP4 vLLM Qwen3.6 (c=1): **118.91 tok/s** (Poveda, Jun 30) — unchanged.
+- Top overall 35B-class: **218.85 tok/s** Atlas NVFP4 (RedHatAI/Qwen3.6-35B-A3B-NVFP4, May 23) — unchanged.
+- No Qwen3.7 entries. No new runtimes (vLLM 146, SGLang 11, Atlas 4, vLLM-Ray 1).
+- **Classification: WORTH WATCHING** (unverified 100.23 entry; no confirmed change vs prior baseline)
+
+#### Check 2 — vLLM Releases
+
+- **No new release.** v0.25.1 (2026-07-14) remains latest; no v0.26.x.
+- v0.25.0 SM120 changes (DeepGEMM SM120 support #47304, cooperative top-K skip #47164): do not name SM121/GB10; don't apply to current production container.
+- **PR #40099** (Gemma4 repetition detection, structured output gate): **OPEN**, stalled since July 8. Sole gate before Gemma4 structured output experiment.
+- **PR #39949** (spec-decode hybrid-attention support): **MERGED May 13, 2026** — CLAUDE.md reference is stale; update pending.
+- **PR #41834** (SM12x DSV4F, won't upstream): OPEN, last commit July 21, confirmed author won't merge.
+- **Issue #41063** (DeepGEMM SM12.x kernel gaps): OPEN, stale 12+ weeks.
+- **Issue #43906** (MXFP8 MoE falls back to MARLIN on SM121): OPEN — `is_device_capability_family(100)` gates TRT-LLM MXFP8 MoE kernels to SM100 only; SM121 gets Marlin W8A16 fallback. Not a current production blocker but gates any future MXFP8 model eval on Spark.
+- **Issue #45317** (DSA sparse-MLA models fail attention backend selection on SM121): OPEN — consistent with GLM/Nemotron-Cascade blocks; adds "DSA/sparse-MLA" as named category.
+- **Classification: NO ACTION** (no new release, no SM121 fixes)
+
+#### Check 3 — eugr/spark-vllm-docker
+
+- **NEW STABLE BUILD: `0.23.1rc1.dev1353+g81f51a780.d20260721`** (`prebuilt-vllm-current`, July 21) — supersedes dev1302 (+51 upstream vLLM commits). **Arm C/D NVFP4 eval target updated from dev1302 to dev1353.**
+- **NEW FlashInfer wheel: `0.6.15-41c07b77-d20260721`** (same 0.6.15 version, refreshed build, same-day as vLLM).
+- Key build changes: PR #47618 baked into upstream commit (removed from `VLLM_PRESET_PRS`; `47392` remains); **DeepGEMM pinned to avoid performance/correctness regression** — note when pulling dev1353.
+- PR #319 (DSV4F-DSpark + SM120 topk fix): OPEN, no activity since Jul 15.
+- PR #279 (DFlash + FP8 KV): OPEN, ~7 weeks stale — effectively abandoned.
+- **NEW PR #323** (bilikaz, Jul 21): `poolside/Laguna-S-2.1-NVFP4` recipe — W4A4 NVFP4 via **FlashInfer-Cutlass FP4 path (not modelopt loader)** on TP=1 single Spark, ~40–50 tok/s. Unmerged but demonstrates FP4 path works on TP=1 on dev1353; different code path from the `qwen3_5.py:407` KeyError that blocked NVFP4 on v0.19.x (Entry 094).
+- **Classification: WORTH WATCHING** (dev1353 is the new NVFP4 eval target; PR #323 confirms FlashInfer-Cutlass FP4 path active on TP=1)
+
+#### Check 4 — Qwen / HuggingFace Models
+
+- **Qwen3.7 open weights: NOT RELEASED.** 9+ weeks post-API launch (May 20–21); no `Qwen/Qwen3.7-*` repo on official HF org. Working hypothesis upgraded from "possible" to **probable permanent closed-frontier** (double historical lag + Qwen3.8 announced with same "coming soon" phrasing). Do NOT hold Arm C/D eval open for Qwen3.7.
+- **Qwen3.8: API-only.** Announced Jul 19 as "Qwen3.8-Max-Preview"; no HF model card; 2.4T total params, multimodal MoE, active params undisclosed. Reopen only on official HF card.
+- No new official Qwen org open-weight models since Entry 117.
+- **Poolside Laguna XS 2.1** (Jul 2): 33B/3B active, hybrid SWA attention (10 global + 30 SWA layers, sigmoid gating), Apache 2.0, coding-specialist (SWE-bench Verified 70.9%). SM121 compatibility UNVALIDATED — hybrid attention in same risk class as Ornith/Coder-Next. Not a production candidate until SM121 community confirmation.
+- **Kimi K3** (Moonshot AI, open weights promised Jul 27): 2.8T total / ~50B active — NOT VIABLE for single Spark.
+- **InternScience Agent 35B**: fine-tune of Qwen3.5-35B-A3B (pure MoE, SM121-safe), low priority for general LLM use.
+- **Classification: NO ACTION**
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json + 721.json: 403; WebSearch fallback)
+
+- **EC 0x03000508 fan curve regression: NO PATCH ISSUED.** NVIDIA case 260716-000029 still OPEN. Issue now in external tech media: "Your DGX Spark Is Cooking Itself" — Wild Pines AI. No thread newer than /t/377365 (Jul 20) found; no new activity since Entry 117.
+- Full July 2026 OTA component versions confirmed: GPU Driver **580.159.03** (matches production — no driver action needed), CUDA 13.0.2, Canonical kernel 6.17, **EC 3.5.8 = 0x03000508** (the regression EC), UEFI 1.110.13, USB PD 0.5.22.
+- **GPU SM clock 721 MHz bug (/t/376039, /t/376239):** USB-C PD controller root cause now suspected (community repo `Sggin1/DGX-SPARK GX10_PD_Throttle_Fix.md`); 611/721 MHz is a hardcoded P-state fallback when PD controller loses state. Physical full-power-disconnect workaround confirmed; no NVIDIA response.
+- No new SM121 vLLM performance numbers. No new driver/firmware release beyond the broken July OTA.
+- **Classification: WORTH WATCHING** (EC patch still absent; external media escalation; no new urgency for production unit on 0x03000302)
+
+---
+
+#### Cross-Correlated Findings
+
+1. **SVD dev1353 + PR #323 FlashInfer-Cutlass FP4 path = NVFP4 eval has a working TP=1 code-path precedent (Check 3 × Check 3).** `poolside/Laguna-S-2.1-NVFP4` recipe in PR #323 uses FlashInfer-Cutlass FP4 kernels — NOT the modelopt weight-schema loader that caused the Entry 094 `qwen3_5.py:407` KeyError. This suggests `nvidia/Qwen3.6-35B-A3B-NVFP4` on dev1353 has a realistic path even if the modelopt loader issue persists, provided the FP4 kernel path is exercised. Eval target confirmed: `prebuilt-vllm-current` = dev1353.
+
+2. **Qwen3.7/3.8 closures (Check 4) + no Arena Qwen3.7 entries (Check 1) = open-weight frontier stalling at Qwen3.6.** Zero Qwen3.7 Arena submissions despite 9 weeks of API availability; official HF org shows no new open-weight models. Two independent signals confirm no drop-in successor in sight. Arm C/D NVFP4 eval on Qwen3.6 should proceed without waiting.
+
+3. **EC firmware hold: external media escalation (Check 5) + no new patch (Check 5) = hold posture unchanged.** "Your DGX Spark Is Cooking Itself" broadens community awareness but changes nothing for our production unit on 0x03000302. Hold in place; monitor for NVIDIA ≥0x03000509.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | **⚠ UNVERIFIED** — Arena agent found 100.23 tok/s (sub1779297106805, May 20) not captured in prior recons; prior baseline 80.27 remains tracked until field details confirmed |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | NOT FIRED — no new release |
+| vLLM Gemma4 PRs: #45553 MERGED + #40099 merged | PARTIAL — #45553 in v0.25.1; #40099 OPEN/stalled (last activity Jul 8) |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 stale; v0.25.0 SM120 changes don't apply to prod container |
+| vLLM #37754 FlashInfer+MTP fix | NOT FIRED — stale; prod unaffected (FLASH_ATTN backend) |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 9+ weeks post-API, probable permanent closed-frontier |
+| Power-instability / firmware cluster | ESCALATED (external media; EC patch still absent; no new threads since Jul 21) |
+
+---
+
+#### Overall: WORTH WATCHING
+
+No hard ACTION NEEDED trigger confirmed. Key developments: (1) **eugr dev1353** (Jul 21, +51 commits) is the new Arm C/D NVFP4 eval target; PR #323 confirms FlashInfer-Cutlass FP4 path works TP=1 on this build; (2) **Arena 100.23 tok/s FP8 entry** surfaced via full pagination — unverified, but if real fires the >10% trigger and warrants config investigation; (3) **Qwen open-weight frontier probable stall at Qwen3.6** (9+ weeks Qwen3.7 gap + Qwen3.8 "coming soon"); (4) **EC fan curve hold maintained** with external media coverage escalating.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — BUILD UPDATE] Update Arm C/D NVFP4 eval target to dev1353** (2026-07-21, `prebuilt-vllm-current`). Supersedes dev1302. When eval window opens, pull `prebuilt-vllm-current` (dev1353 or newer); use TP=1 `-no-mtp` recipe for single-Spark. Note: DeepGEMM pinned in this build — eval under that constraint.
+
+2. **[PRIORITY 2 — VERIFY] Check Arena 100.23 tok/s FP8 entry details** (doc `sub1779297106805`, 2026-05-20). Confirm cluster=1, metric tg128 c=1, model is `Qwen/Qwen3.6-35B-A3B-FP8` on vLLM. If confirmed, investigate config difference vs production (likely DFlash or FlashInfer-Cutlass path). Would update arena_top_fp8_qwen35_tok_s to 100.23.
+
+3. **[PRIORITY 3 — CLAUDE.md] PR #39949** (spec-decode hybrid-attention) merged May 13, 2026 — remove "pending PR" language from CLAUDE.md. Issue #43906 (MXFP8 MoE→MARLIN on SM121) worth adding as named gate for future MXFP8 model evals.
+
+4. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard update.** EC 0x03000508 fan curve regression unpatched; external media coverage growing. No OTA benefit for production stack (kernel already past HWE 6.14, driver matches). Hold until NVIDIA issues EC ≥0x03000509.
+
+5. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7.** 9+ weeks post-API with probable permanent closed-frontier. Qwen3.6-FP8 is the correct open-weight eval target. Qwen3.8 reopen only on official HF model card with architecture specs.

@@ -8954,3 +8954,91 @@ No hard ACTION NEEDED trigger confirmed. Key developments: (1) **eugr dev1353** 
 4. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard update.** EC 0x03000508 fan curve regression unpatched; external media coverage growing. No OTA benefit for production stack (kernel already past HWE 6.14, driver matches). Hold until NVIDIA issues EC ≥0x03000509.
 
 5. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7.** 9+ weeks post-API with probable permanent closed-frontier. Qwen3.6-FP8 is the correct open-weight eval target. Qwen3.8 reopen only on official HF model card with architecture specs.
+
+---
+
+## Entry 119 - DGX Spark Recon (2026-07-23)
+
+#### Check 1 — Arena (Firestore REST)
+
+- **Firestore access: restricted** — cloud-env returning only 2 oldest gpt-oss-120b docs (Feb 2026); consistent with prior cloud-env limitation across multiple entries. Full 159-doc dataset inaccessible via pageSize=100 in this environment.
+- WebSearch fallback: sparkarena X post claims Qwen3.6-35B-A3B-FP8 on vLLM achieved **130 tok/s at c=10** (128-token reply, 100K context). This is a c=10 aggregate metric — not the tg128 c=1 baseline metric tracked here.
+- Unverified 100.23 tok/s FP8 c=1 entry (doc `sub1779297106805`, surfaced Entry 118 via pagination) remains unconfirmed. Prior baseline **80.27 vLLM c=1 stands**.
+- No new c=1 FP8 Qwen3.6 vLLM entry confirmed above 80.27. Atlas overall top unchanged.
+- **Classification: DATA LIMITED** (Firestore restricted; no trigger confirmed or denied)
+
+#### Check 2 — vLLM Releases
+
+- **Latest release: v0.25.1** (2026-07-14) — re-confirmed no newer release since Entry 118.
+- **PR #40099** (Gemma4 repetition detection, Gemma4 structured output gate): **OPEN**, stalled since July 8 — unchanged. Last commit was a logic-error fix; no merge since.
+- **PR #41834** (SM12x DSV4F, won't upstream): unchanged — use `sm120-pr-41834-stable-preview-20260711` directly.
+- **Issue #41063** (DeepGEMM SM12.x): OPEN/stale ~13 weeks.
+- No SM121/Blackwell/GB10/sm_12 action triggers in v0.25.1 notes.
+- **Classification: NO ACTION**
+
+#### Check 3 — eugr/spark-vllm-docker
+
+- **NEW BUILD: `0.23.1rc1.dev1389+ge27eb0051.d20260722`** (`prebuilt-vllm-current`, published July 22, 19:08 UTC) — supersedes dev1353 (Entry 118). **This was published AFTER Entry 118 ran on July 22.**
+- Key commit: `4851a09` "Fix regression in vLLM" (July 22). Regression was introduced by `9667dda` "Removed PR 46718" (dev1353, July 21). dev1389 reverses the regression.
+- Prior build changes (DeepGEMM pinned, PR #47618 baked) carry forward.
+- FlashInfer version presumed unchanged (0.6.15-d20260721; not independently confirmed for dev1389).
+- PR #319 (DSV4F+SM120 topk fix): OPEN, no new activity.
+- **Arm C/D NVFP4 eval target updated from dev1353 → dev1389.** Before pulling, note: verify nature of "PR 46718" that was removed then its regression was fixed — check whether the fix restores the PR behavior or works around it.
+- **Classification: WORTH WATCHING** (new stable build with regression fix; eval target updated)
+
+#### Check 4 — Qwen / HuggingFace Models
+
+- **Qwen3.7 open weights: NOT RELEASED.** 10 weeks post-API launch (May 20). "Probable permanent closed-frontier" confirmed; no new signals.
+- **Qwen3.8: API-only.** Announced 2026-07-19 as "Qwen3.8-Max-Preview" at WAIC Shanghai; 2.4T total params, multimodal MoE, active params undisclosed. No HF model card. "Open weights coming soon" — same phrasing as Qwen3.7, treat with skepticism.
+- No new official Qwen open-weight models since Entry 118.
+- No new 30–40B MoE competitor models with SM121 community validation.
+- **Classification: NO ACTION**
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json: 403; WebSearch fallback)
+
+- **No new threads identified since July 22.** WebSearch returned same threads tracked in Entry 118 (/t/377365, Jul 20 = newest known thread).
+- /t/376890 "New firmware available" (previously inaccessible at 403): per search-result snippets, this refers to the July OTA EC upgrade **0x03000302 → 0x03000508** — the broken EC, NOT a new patch. Not a new announcement.
+- **EC 0x03000508 fan curve regression: STILL UNRESOLVED** (case 260716-000029 open). No patched EC issued by NVIDIA.
+- No new driver/firmware release beyond the July OTA (which remains on hold for production).
+- **Classification: WORTH WATCHING** (EC patch still absent; no new urgency for production unit on 0x03000302)
+
+---
+
+#### Cross-Correlated Findings
+
+1. **SVD dev1389 regression fix (Check 3) + vLLM v0.25.1 unchanged (Check 2):** The regression was in eugr's recipe/patching layer (PR #46718 removal), not upstream vLLM. Arm C/D NVFP4 eval target updates to dev1389. Confirm PR #46718 behavior before eval.
+2. **Qwen3.7 still closed (Check 4) + no new Arena Qwen3.7 entries (Check 1):** Dual confirmation of open-weight frontier stall at Qwen3.6. Arm C/D eval on Qwen3.6-FP8 is the correct next target — do not hold.
+3. **EC patch absent (Check 5) + no new forum threads (Check 5):** Hold posture unchanged. External media coverage (Entry 118: "Your DGX Spark Is Cooking Itself") hasn't produced NVIDIA response yet.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | DATA LIMITED — 100.23 entry (Entry 118) remains unverified; Firestore restricted this run; 130 tok/s X post is c=10, not c=1 |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | NOT FIRED — v0.25.1 confirmed latest, no new release |
+| vLLM Gemma4 #40099 merged | NOT FIRED — OPEN, stalled since Jul 8 |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 stale |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 10 weeks post-API, probable permanent closed-frontier |
+| Power-instability / firmware cluster | STABLE — no new threads since Jul 22; EC patch still absent |
+
+---
+
+#### Overall: WORTH WATCHING
+
+Quiet day with one notable update: **eugr dev1389** (Jul 22, published after Entry 118 ran) fixes a regression introduced by dev1353's PR #46718 removal — this is now the Arm C/D NVFP4 eval target. All other signals unchanged: no new vLLM release, no Qwen open weights, no EC patch, Arena data inaccessible.
+
+---
+
+#### Recommendations
+
+1. **[PRIORITY 1 — BUILD UPDATE] Update Arm C/D NVFP4 eval target to dev1389** (2026-07-22, `prebuilt-vllm-current`). Supersedes dev1353. Before eval window, investigate what PR #46718 does — dev1353 removed it (introduced regression), dev1389 fixed the regression (may or may not restore PR behavior). Use TP=1 `-no-mtp` recipe for single-Spark NVFP4 eval.
+
+2. **[CARRY-FORWARD — VERIFY] Arena 100.23 tok/s FP8 entry** (doc `sub1779297106805`, May 20). Firestore inaccessible in cloud env. Recommend user manually check spark-arena.com leaderboard for Qwen3.6-35B-A3B-FP8 c=1 tg128 top entry — if above 80.27, fires the ACTION trigger and warrants config investigation.
+
+3. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched; /t/376890 is the broken OTA, not a fix. Hold until EC ≥0x03000509 from NVIDIA.
+
+4. **[CARRY-FORWARD] Gemma4 gate: PR #40099 open/stalled since July 8.** No timeline. Monitor; no action until merged.
+
+5. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7.** 10 weeks post-API, probable permanent closed-frontier. Qwen3.8 "soon" phrasing — treat as Qwen3.7 precedent until HF model card appears.

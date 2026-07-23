@@ -8506,3 +8506,18 @@ N/A — no state changes made (read-only diagnosis only).
 - No remediation applied or authorized. If/when repopulation is desired, that is the existing **CS-R (restore runtime)** work item in kb-pipeline — not an ops incident.
 - Minor observed-only note (NOT acted on): swap at 13/15Gi is worth watching per SWAP_RELIEF_PLAN.md, but load is nil and all services healthy — no action.
 - Neo4j node/edge counts (171K/338K) are ~8-9% below the qi6 historical baseline (186K/371K); benign given intervening re-runs, flagged for awareness only.
+
+### Addendum (2026-07-23) — Embedding dimension de-risk for CS-R R3/R4
+Coordinator flagged a potential retrieval-breaking mismatch: kb-pipeline `SolverConfig` defaults `embedding_dim=1024` while Qwen3-Embedding-4B native dim is 2560. Live read-only probe (localhost):
+- **:8001 `qwen3-embedding-4b` → served_dim = 2560** (full native hidden_size; matches Qwen3-Embedding-4B).
+- **:8004 `bge-m3` → served_dim = 1024.**
+- **No Matryoshka / output-dim truncation configured** on :8001 — startup `PoolerConfig(..., dimensions=None, ...)`, `runner=pooling`, `max_model_len=8192`, `enforce_eager`. `dimensions=None` = untruncated native output.
+- **Conclusion:** the repo's `embedding_dim=1024` default is the **bge-m3** dimension, NOT qwen3-embedding-4b's. If CS-R reloads ChromaDB against :8001 (2560-dim) while retrieval config stays at 1024, retrieval breaks. **Before CS-R R3/R4, either set `embedding_dim=2560` to match :8001, or point embedding at :8004 bge-m3 (1024).** Reported to coordinator; no config change made here (read-only).
+- (Incidental: qwen3-embed logs show a transient KV-cache ValueError at 06-15 boot; container subsequently came up healthy and is serving 2560-dim vectors now — not an open issue.)
+
+Exact requests run (localhost on box):
+```
+curl -s http://localhost:8001/v1/embeddings -H 'Content-Type: application/json' -d '{"model":"qwen3-embedding-4b","input":"dimension test"}'  → len(embedding)=2560
+curl -s http://localhost:8004/v1/embeddings -H 'Content-Type: application/json' -d '{"model":"bge-m3","input":"dimension test"}'              → len(embedding)=1024
+docker logs qwen3-embed | grep PoolerConfig  → dimensions=None (no truncation)
+```

@@ -8470,3 +8470,39 @@ Primary: **vLLM PR #41834 (SM12x DSV4F) conflict resolution landed today** — b
 4. **[PRIORITY 4 — HOLD] Firmware: do NOT apply July EC firmware.** NVIDIA still publishing broken EC `0x03000508` without a fix. Production is on the prior firmware and unaffected. Hold until NVIDIA ships a patched 0.4+ EC.
 
 5. **[NOTE] Arena access degradation:** Only 90 of 159 docs accessible this run (vs ~130 Entry 112); post-May docs appear to be behind an App Check-equivalent gate. Stored baselines (80.27/118.91) are valid high-water marks but not live-verified. Consider a manual browser-authenticated fetch in the next deep-dive session to re-anchor.
+
+## Entry 114 — Live runtime verification: "migration-state" assumption audit (2026-07-23)
+
+**Date:** 2026-07-23 UTC
+**Operator:** Claude Code (SRE Operator — kb-pipeline dispatch)
+**Status:** AUDIT — no changes made
+**Trigger:** kb-pipeline case-first-substrate work has been operating on an INHERITED (never live-verified) 2026-07-23 migration note claiming the Spark runtime is DOWN — specifically (1) ChromaDB EMPTY, (2) vLLM `cfa-pipeline` container gone, (3) served model changed to `spark-llm` / Qwen3.6-35B-A3B-FP8 / 131K. Owner surprised; requested actual-state verification. Read-only only; no restart/deploy/reconfig authorized.
+
+### Objective
+Confirm or refute each of the three migration-note claims against live state, and produce a full service-by-service health snapshot vs the canonical `/home/claude/docker-compose.yml` topology.
+
+### Observations (all read-only)
+- **Host:** up 38 days (booted 2026-06-15), load 0.06/0.12/0.12, kernel 6.17.0-1021-nvidia aarch64. No recent reboot — the "migration" was a service/config change, not a host event.
+- **Containers:** all 8 compose services (`qwen35`, `qwen3-embed`, `gliner`, `bge-m3`, `ce-service`, `chromadb`, `neo4j`, `node-exporter`) + `alloy` running; the 6 app services report `(healthy)`. Compose stack `claude` = running(8). RUNTIME IS UP.
+- **LLM :8000** → served id `spark-llm`, root `Qwen/Qwen3.6-35B-A3B-FP8`, `max_model_len` 131072. **This matches the canonical compose (updated 2026-04-30, "Production config: cu132+MTP, Qwen3.6-35B-A3B") — it is the INTENDED config, not a regression.**
+- **Embed :8001** → `qwen3-embedding-4b` (root Qwen3-Embedding-4B, 8192). As expected.
+- **GLiNER :8002** → `{status:ok, model:urchade/gliner_large-v2.1, device:cuda}`.
+- **ChromaDB :8003** → v2 heartbeat OK; `default_tenant/default_database` collections = `[]` (ZERO). Volume `chromadb-data` = only `chroma.sqlite3` @ 167,936 bytes (mtime Mar 24), no segment/UUID dirs; container-internal `/chroma/chroma` = 172K. **EMPTY confirmed — kb_atoms / kb_atoms_qi6 / kb_resolutions all absent; no case_resolutions/case_episodes/playbooks present either.**
+- **Neo4j :7687** → 171,019 nodes / 338,705 relationships / **GOVERNS = 180,966**; labels include Atom/Policy/Procedure/FormalizedRule/Flow + entity types. `/data` = 1018M. **Phase-C graph INTACT** (vs historical qi6 baseline 186,523/371,439 — ~8% fewer nodes / ~9% fewer edges, same order of magnitude; populated and healthy, NOT wiped).
+- **GPU:** NVIDIA GB10, driver 580.159.03, CUDA 13.0, 41C, 0% util idle, 11W. 5 resident compute procs — dominant `VLLM::EngineCore` 75,983 MiB (= spark-llm) + 13,176/1,681 MiB EngineCores + gliner python 1,989 MiB + python 21,092 MiB. vLLM IS GPU-resident. (`Memory-Usage: Not Supported` is normal for GB10 unified memory.)
+- **Host mem:** 119/121Gi RAM used, swap 13/15Gi used — high but expected on GB10 unified-memory arch under a full multi-model stack (see SWAP_RELIEF_PLAN.md); load avg 0.06 → not an incident.
+- **Disk:** root `/` (nvme0n1p2, 3.6T) 42% used, 2.0T free. Healthy.
+
+### Verdict on the three claims
+1. **ChromaDB EMPTY — CONFIRMED (true).** 0 collections; 164KB fresh sqlite. CS-R restore-runtime still required before pipeline work touching the vector store.
+2. **`cfa-pipeline` container gone — CONFIRMED (true), but intentional.** The canonical compose defines `qwen35` as its replacement; not a lost/crashed container.
+3. **Served model = `spark-llm` (Qwen3.6-35B-A3B-FP8, 131K) — CONFIRMED (true), and canonical.** This is the documented production config, not drift.
+**Net: the inherited migration note is ACCURATE. Runtime is UP and healthy; only ChromaDB is empty (a known pre-condition for CS-R), and that is the sole gap vs a fully-populated substrate.**
+
+### Rollback Plan
+N/A — no state changes made (read-only diagnosis only).
+
+### Follow-ups
+- No remediation applied or authorized. If/when repopulation is desired, that is the existing **CS-R (restore runtime)** work item in kb-pipeline — not an ops incident.
+- Minor observed-only note (NOT acted on): swap at 13/15Gi is worth watching per SWAP_RELIEF_PLAN.md, but load is nil and all services healthy — no action.
+- Neo4j node/edge counts (171K/338K) are ~8-9% below the qi6 historical baseline (186K/371K); benign given intervening re-runs, flagged for awareness only.

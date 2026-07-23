@@ -9042,3 +9042,42 @@ Quiet day with one notable update: **eugr dev1389** (Jul 22, published after Ent
 4. **[CARRY-FORWARD] Gemma4 gate: PR #40099 open/stalled since July 8.** No timeline. Monitor; no action until merged.
 
 5. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7.** 10 weeks post-API, probable permanent closed-frontier. Qwen3.8 "soon" phrasing — treat as Qwen3.7 precedent until HF model card appears.
+
+---
+
+## Entry 120 - Laguna-S-2.1-NVFP4 vs Qwen3.6 assessment (2026-07-23)
+
+**Trigger:** User asked whether to test `poolside/Laguna-S-2.1-NVFP4` (the big sibling of the Laguna-XS line already tracked in Entries 115/251) against production Qwen3.6-35B-A3B-FP8. This is the flagship Laguna S, distinct from the XS-2.1 coding-specialist already on the Arm C slate.
+
+#### Model facts (poolside/Laguna-S-2.1-NVFP4)
+
+- **Architecture:** 117.6B total / **8B active** MoE. 256 routed experts (top-10 per token) + 1 shared, 48 layers. Distinctive attention: 1 global layer per 3 sliding-window (512-tok) layers; GQA 8 KV heads; sigmoid gating (not softmax top-k). 1M-token context claimed; 256K practical serving.
+- **Domain:** agentic **coding specialist**. Terminal-Bench 2.1 **70.2%** (11th on Poolside's leaderboard, above open models several × its size). Released ~2026-07-21. License OpenMDW-family (same house as XS-2.1).
+- **Quant/footprint:** NVFP4 weights **~71 GB**; FP8 KV cache. With paired DFlash drafter `poolside/Laguna-S-2.1-DFlash-NVFP4` → **~107 GB total** on a single Spark (displaces the entire 3-model prod stack).
+
+#### SM121 serving stack (all three corroborate — this model is unusually well-documented on GB10)
+
+- Official **vLLM recipe** (recipes.vllm.ai/poolside/Laguna-S-2.1), a dedicated DGX Spark repo (**MiaAI-Lab/Laguna-S-2.1-DGX-Spark-RTX-6000-PRO**), and an active NVIDIA forum bench thread (**/t/377663**, "Laguna S 2.1 Config & Benchmarks", 39+ replies).
+- **Requires vLLM 0.25.1** (`vllm/vllm-openai:v0.25.1`), **TP=1**, `--attention-backend FLASHINFER`, `--dtype bfloat16`, FP8 KV auto-selected, `--gpu-memory-utilization 0.85`, `--max-model-len 262144`, **`--max-num-seqs 4` (hard requirement — DFlash crashes at default 256)**, `--max-num-batched-tokens 8192`, `--speculative-config '{"model":"poolside/Laguna-S-2.1-DFlash-NVFP4","num_speculative_tokens":7,"method":"dflash"}'`. Caveat: do NOT add `--linear-backend flashinfer_b12x` (incompatible w/ 0.25.1); ~15 min first-start JIT+CUDA-graph. KV capacity ~926,683 tokens, ~3.54× max concurrency @262K.
+
+#### Performance on GB10 (NVIDIA forum ground truth, not vendor claims)
+
+| Metric | Qwen3.6-35B-A3B-FP8 (prod, cu132+MTP2, v0.19.1) | Laguna-S-2.1-NVFP4 (vLLM 0.25.1) |
+|---|---|---|
+| Active params | 3B | **8B** (~2.7× memory traffic/token) |
+| c1 decode | **65.9–73.1 tok/s** | **13–14 tok/s** no-spec; 15 prose / **22–24 code** w/ DFlash |
+| c8 aggregate | **406.9 tok/s** | n/a — `--max-num-seqs 4` ceiling |
+| c16 aggregate | **730.5 tok/s** | not viable |
+| Quality | SWE-bench Verified 73.4 (general) | Terminal-Bench 2.1 70.2 (coding specialist) |
+
+- Decode is **memory-bandwidth bound**: forum reports "13–14 tok/s on every engine tried on GB10" without spec; typical runs 10–15 tok/s; one DFlash n=7 config hit ~65 tok/s (outlier).
+- **DFlash acceptance is poor on GB10** (same failure mode as Entry 080's DFlash rejection for Qwen): recipe's 15 spec tokens → 0–15% acceptance, mostly 2–3%; tokens 6–15 accept at 0%; described "abysmal ~8%". If acceptance collapses, model reverts to 13–14 tok/s.
+
+#### Verdict: DO NOT adopt as a Qwen replacement; conditional sandbox eval only
+
+- **Fails the standing ≥+5% c8 adoption gate categorically.** ~3–5× slower single-stream and structurally unfit for the concurrent shared endpoint (4-seq ceiling vs prod ~86× max concurrency). Evicts embed + GLiNER from memory.
+- **Not a like-for-like comparator** — it's a coding specialist, not a general-LLM successor. Complements Qwen for a solo interactive-coding workload at best.
+- **Conditional sandbox test only if ALL hold:** (1) a real dedicated single-user agentic-coding workload where 22–24 tok/s is acceptable and the quality jump matters; (2) already opening the vLLM 0.25.1 / Arm C build window (dev1389 target, Entry 119) — do not stand up 0.25.1 just for this; (3) **pre-verify DFlash acceptance on our box first** — if it lands at forum-reported 2–8%, abort (drops to 13–14 tok/s, no case).
+- **Distinct from XS-2.1 (Entry 115):** XS-2.1 is 33B/3B-active FP8, a plausible Qwen-class speed comparator; Laguna-**S** is 118B/8B-active NVFP4, a quality-over-speed play that cannot match Qwen throughput on GB10. Keep S on the watch list, prioritize XS-2.1 for the actual Arm C eval.
+
+**Classification: WATCH — no action unless a solo agentic-coding workload materializes + Arm C window opens.**

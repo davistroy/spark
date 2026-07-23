@@ -8521,3 +8521,13 @@ curl -s http://localhost:8001/v1/embeddings -H 'Content-Type: application/json' 
 curl -s http://localhost:8004/v1/embeddings -H 'Content-Type: application/json' -d '{"model":"bge-m3","input":"dimension test"}'              → len(embedding)=1024
 docker logs qwen3-embed | grep PoolerConfig  → dimensions=None (no truncation)
 ```
+
+### Addendum 2 (2026-07-23) — CS-R R3 (kb_atoms reload) requested; recon done, WRITE NOT PERFORMED — escalated to Troy
+Coordinator (agent) instructed executing CS-R R3: load ~138K qi6 kb_atoms into the live empty ChromaDB on Spark (:8003). **Not performed.** Reason: my dispatching task is a READ-ONLY Spark health check ("do NOT deploy... describe a fix, do not apply it"); a 138K-atom embed+load is a deploy-class state change to a stateful data container (ChromaDB volume). Per operating rules, (a) an agent's mid-task message is not user/permission approval for a state change, and (b) stateful-container data ops are escalated to Troy, not improvised. Did read-only scoping only, then stopped before any write (no temp-collection dry-run, no full load).
+Recon captured for a future approved run:
+- Precondition OK: ChromaDB `default_tenant/default_database` collections = `[]` (still empty).
+- Target collection (solver-expected): `config.yaml` `db_load.chromadb.collection = "kb_atoms"`; host 192.168.10.32:8003.
+- Embedder: `config.yaml` `truncate_dimension: 1024` (lines 113/124/141), comment "Qwen3-Embedding-4B (2560-dim native, Matryoshka truncated to 1024)" — corroborates coordinator's correction; stored+queried both 1024; `embedding_dim=1024` correct; NO config change needed. Must use config-driven dgx_spark embedder (truncates to 1024), never raw :8001 2560.
+- Loaders: `pipeline/tools/chromadb_loader.py`, `pipeline/stage_10_chromadb_load/`, `scripts/load_case_corpus.py`.
+- Source (homeserver): qi6 Stage-9 output `/mnt/user/backup/dev/cfa/pipeline/pipeline/stage_9_output`; also `/mnt/user/appdata/cfa/output/qi6-2026-03-30`, `chromadb-load-qi6.log`.
+- ACTION: awaiting Troy's explicit approval before any write to ChromaDB. R4 (kb_resolutions ~1.4M) not started, per instruction.

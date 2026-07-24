@@ -9042,3 +9042,86 @@ Quiet day with one notable update: **eugr dev1389** (Jul 22, published after Ent
 4. **[CARRY-FORWARD] Gemma4 gate: PR #40099 open/stalled since July 8.** No timeline. Monitor; no action until merged.
 
 5. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7.** 10 weeks post-API, probable permanent closed-frontier. Qwen3.8 "soon" phrasing — treat as Qwen3.7 precedent until HF model card appears.
+
+---
+
+## Entry 120 - DGX Spark Recon (2026-07-24)
+
+_Automated daily recon. Checks: Arena leaderboard, vLLM releases, spark-vllm-docker, Qwen/HF models, NVIDIA forum._
+
+#### Check 1 — Arena (Firestore REST + WebSearch)
+
+- Firestore REST (`benchmarks?pageSize=50`): returned gpt-oss-120b entries (alphabetically first doc IDs in page 1 of ~159 docs) — Qwen3.6 FP8 entries not in first 50; `orderBy=tok_s+desc` query returned `{}` (Firestore REST requires composite index for arbitrary sort; not available on public endpoint). spark-arena.com leaderboard: 403 (App-Check-gated, remote env).
+- sparkarena @X post (surfaced via search): Qwen3.6-35B-A3B-FP8 at **130 tok/s** on vLLM — but at **c=10 with 100k prior-context tokens**, not c=1 tg128. Does NOT trigger the c=1 ACTION alert (baseline 80.27).
+- No new evidence of a c=1 tg128 FP8 vLLM Qwen3.6 entry above 80.27 baseline from any search.
+- The unverified 100.23 entry (doc `sub1779297106805`, May 20, surfaced Entry 118) remains unverifiable from cloud env.
+- **Classification: DATA LIMITED / NO ACTION** — Arena inaccessible from cloud env; no new c=1 record discovered.
+
+#### Check 2 — vLLM Releases
+
+- **v0.25.1 (2026-07-14) confirmed as latest** — no new release as of 2026-07-24 (re-confirmed via WebSearch + PyPI reference).
+- PR #40099 (Gemma4 repetition detection auto-enable): **OPEN**, last updated 2026-07-08T01:11:28Z — stalled for 16 days, no new activity. Confirmed via GitHub MCP PR search.
+- PR #41063 (DeepGEMM SM12.x): presumed OPEN/stale per Entry 119; not independently re-fetched today (GitHub MCP scoped to davistroy/spark only).
+- NVIDIA vLLM Release Notes PDF (v26.06, July 2026): 403 — content unavailable.
+- **Classification: NO ACTION** — no new release; Gemma4 gate still only PR #40099 (16 days stalled).
+
+#### Check 3 — eugr/spark-vllm-docker
+
+- **dev1389 (`0.23.1rc1.dev1389+ge27eb0051.d20260722`) confirmed as `prebuilt-vllm-current`** — no newer release published between July 22–24 (WebSearch confirmed release tag URL unchanged).
+- All dev1389 build context from Entry 119 carries forward unchanged.
+- **Classification: NO ACTION** — Arm C/D eval target unchanged.
+
+#### Check 4 — Qwen / HuggingFace Models
+
+- **Qwen3.7 (27B/35B) open weights: STILL NOT RELEASED.** 11 weeks post-API launch (May 20). No HF repo under official Qwen org confirmed by multiple search sources. Probable permanent closed-frontier.
+- **Qwen3.8-Max-Preview: API-only** (announced 2026-07-19). No HF model card confirmed; open weights "coming soon" with no date. 2.4T total params, active-parameter count undisclosed. Treat with Qwen3.7 skepticism.
+- No new official Qwen open-weight models in A3B class; no new 30–40B MoE competitor models with SM121 community validation.
+- **Classification: NO ACTION**
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json: 403; WebSearch fallback)
+
+- No new threads identified since July 22 (Entry 119). WebSearch returned same threads as prior entry (/t/377365 Jul 20 = newest confirmed; /t/376736, /t/376981, /t/377044, /t/377069 all previously tracked).
+- **EC 0x03000508 fan curve regression: STILL UNRESOLVED** (case 260716-000029 OPEN; no patched EC issued by NVIDIA). Production hold unchanged.
+- No new driver/firmware release.
+- **Classification: WORTH WATCHING** (EC patch absent; no new escalation; production unit on 0x03000302 unaffected)
+
+---
+
+#### Cross-Correlated Findings
+
+1. **No new vLLM release (Check 2) + no new eugr build (Check 3):** Arm C/D NVFP4 eval target stays at dev1389 (July 22). Consistent; no decision needed.
+2. **Qwen3.7/3.8 still closed (Check 4) + no new Arena c=1 FP8 entries discoverable (Check 1):** Open-weight frontier stall at 11 weeks; Arm C/D eval on Qwen3.6-FP8 remains the correct target — do not hold.
+3. **EC regression unresolved (Check 5) + no NVIDIA software announcements in other checks:** OTA hold posture unchanged; no new urgency.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.3 tok/s (10% above 80.27) | DATA LIMITED — leaderboard 403 in cloud env; X post 130 tok/s is c=10 not c=1; 100.23 unverified entry unresolvable |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | NOT FIRED — v0.25.1 confirmed latest, no new release |
+| vLLM Gemma4 #40099 merged | NOT FIRED — OPEN, stalled 16 days since Jul 8 (confirmed via GitHub PR search) |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 stale |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — 11 weeks post-API, probable permanent closed-frontier |
+| Power-instability / firmware cluster | STABLE — no new threads since Jul 22; EC patch absent; no new escalation |
+
+---
+
+#### Overall: NO ACTION
+
+Quietest recon since the Entry 100 range. No new vLLM release, no new eugr build, no new Qwen open-weight models, no new forum threads, no EC patch. PR #40099 (Gemma4 gate) confirmed still open/stalled at 16 days via direct GitHub search. All carry-forward items unchanged from Entry 119.
+
+---
+
+#### Recommendations
+
+1. **[CARRY-FORWARD — VERIFY] Arena 100.23 tok/s FP8 entry** (doc `sub1779297106805`, May 20). Firestore inaccessible from cloud env. User should manually check spark-arena.com leaderboard for Qwen3.6-35B-A3B-FP8 c=1 tg128 top entry — if above 80.27, fires ACTION trigger and warrants config investigation.
+
+2. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched (case 260716-000029 OPEN). Hold until EC ≥0x03000509 from NVIDIA.
+
+3. **[CARRY-FORWARD] Arm C/D NVFP4 eval target: dev1389** (2026-07-22, `prebuilt-vllm-current`) — unchanged. Use TP=1 `-no-mtp` recipe for single-Spark NVFP4 eval.
+
+4. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 16 days** (last activity July 8, confirmed via GitHub PR search). No action until merged.
+
+5. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7 or Qwen3.8.** Both API-only; Qwen3.8 "coming soon" with no date — same pattern as Qwen3.7 (now 11 weeks without open weights).

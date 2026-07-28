@@ -9408,3 +9408,95 @@ Three substantive changes from Entry 122: (1) **new eugr dev1511 build** (July 2
 7. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 19 days** (last activity July 8). No action until merged.
 
 8. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7 or Qwen3.8.** Both API-only; 10-week Qwen3.7 precedent makes "coming soon" unreliable. Proceed with Qwen3.6-FP8 eval on dev1511.
+
+---
+
+## Entry 124 - DGX Spark Recon (2026-07-28)
+
+**Production config:** `Qwen/Qwen3.6-35B-A3B-FP8` (native pre-quant FP8) on `vllm-cu132-test:latest` (v0.19.1rc1.dev219+cu132), MTP=2, FLASH_ATTN attention backend, FlashInfer MoE only.
+
+#### Check 1 — Arena (Firestore REST)
+
+- **DATA LIMITED** — Firestore REST (`/documents/benchmarks?pageSize=30`) first page returns only one doc: `openai/gpt-oss-120b` MXFP4 on vLLM (Raphael Amorim), 58.82 tok/s single-node, 75.96 tok/s dual-node. No Qwen3.6-35B-A3B entries in first page.
+- @sparkarena X post references "130 tok/s at c=10 with 100k context" for Qwen3.6-35B-A3B-FP8 on vLLM — this is NOT the c=1 tg128 tracking metric (concurrency 10 ≠ baseline comparison point).
+- No new Qwen3.6-35B FP8 vLLM c=1 tg128 entry above the 80.27 baseline (Stojanovic, DFlash-n8 recipe, Entry 123) found via web search.
+- Baseline **80.27 tok/s FP8 vLLM** (Entry 123) stands; full leaderboard sweep blocked by Firestore truncation.
+- **Classification: DATA LIMITED** — no change from Entry 123; user should manually verify spark-arena.com/leaderboard.
+
+#### Check 2 — vLLM Releases
+
+- **v0.26.0 still latest** (released July 25, 2026). No v0.26.1 or v0.27.0 found in releases page or web search.
+- **PR #40099** (Gemma4 repetition detection / auto-enable fix): **OPEN**, last activity **July 8, 2026** (now 20 days stalled). NOT in v0.26.0. Gate remains blocked.
+- **Issue #41063** (DeepGEMM SM12.x support): **OPEN**, stale — no activity since April 27, 2026. No change.
+- v0.26.0 SM-specific notes: "skip cooperative top-K on **SM120**" (NOT SM121) and NVFP4 swizzled-scale zero-init recovery for Blackwell datacenter — no SM121/GB10-specific changes confirmed. FlashInfer 0.6.14 dependency.
+- PR #46276 (NVFP4 MoE weight loading, from Entry 123) remains the key schema-unblock to verify at Arm C build upgrade time.
+- **Classification: NO ACTION** — v0.26.0 already tracked in Entry 123; no new release.
+
+#### Check 3 — eugr/spark-vllm-docker
+
+- **`prebuilt-vllm-current` = `0.23.1rc1.dev1511+g684872090.d20260726`** (July 26, 11:45 UTC) — same as Entry 123. No new commits or releases since July 26.
+- AEON-7 `vllm-ultimate-dgx-spark` latest tag: **`2026-07-16-v0.25.1`** — no change since Entry 123. MRv2 spec-decode lm_head sharing fix is the latest patch.
+- PRs #279 (DFlash+FP8 KV), #319 (DSV4F+SM120), #323 (Laguna-S-2.1-NVFP4): no new activity found.
+- **Arm C/D eval target unchanged: `prebuilt-vllm-current` = dev1511.**
+- **Classification: NO ACTION** — same state as Entry 123.
+
+#### Check 4 — Qwen / HuggingFace Models
+
+- **Qwen3.7 (27B/35B) open weights: STILL NOT RELEASED.** 10+ weeks post-API (May 20, 2026). An article ("Qwen's Closed-Flagship Pivot: The Open-Weight Retreat") now explicitly documents the split: 3.5+3.6 are open-weight workhorses, 3.7 Max is closed-weight API-only. Confirmed CLOSED-FRONTIER.
+- **Qwen3.8-Max-Preview**: API-only, 2.4T total params, "open weights coming soon" — no change from Entry 123.
+- **No new official Qwen org 35B A3B-class models** found on HuggingFace.
+- **Classification: NO ACTION** — no change from Entry 123.
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json: 403; WebSearch fallback)
+
+- **EC 0x03000508 fan curve regression: STILL UNRESOLVED.** Case 260716-000029 OPEN. No patched EC from NVIDIA. Production hold unchanged.
+- No new forum threads identified beyond what Entry 123 tracked (/t/378167 July 26 fp8 KV+DFlash; /t/378028 July 23 thermal overheating).
+- **NEW (publication date unconfirmed): ai-muninn "[Hands-On] Making NVFP4 17% Faster on GB10 with a Triton FP8 Bypass"** — appeared in today's search (not in prior entries). Technique: custom Triton kernel dequants NVFP4→FP8 on-the-fly, then runs FP8 tensor cores. Result: **47.6 tok/s** (+17% vs 40.8 NVFP4-Marlin-fallback). Still **below native FP8 53.8 tok/s** (ai-muninn baseline) and well below our production **66.9 tok/s**. Informational — confirms no NVFP4 path on SM121 currently exceeds FP8.
+- No new driver, firmware, or OTA update found.
+- **Classification: WORTH WATCHING** — EC patch absent, no new urgency. New ai-muninn NVFP4 bypass article is informational only.
+
+---
+
+#### Cross-Correlated Findings
+
+1. **ai-muninn NVFP4 Triton bypass (Check 5) + Arena DATA LIMITED (Check 1):** The Triton bypass achieves 47.6 tok/s — a third data point (alongside Marlin-fallback 40.8 and native FP8 53.8) confirming that all *currently reproducible* NVFP4 paths on SM121 underperform FP8. The 118.91 tok/s Poveda / 117.6 AEON-7 CUTLASS-FP4 native-path high-water marks remain unreproduced by the community at large. The critical question (does native CUTLASS FP4 GEMM activate on SM121?) is unanswered. No new Arena data to update the picture.
+
+2. **vLLM v0.26.0 stable (Check 2) + eugr dev1511 stable (Check 3):** The Arm C/D eval target is locked and stable. No new upstream vLLM release creates urgency to re-evaluate the target build.
+
+3. **Qwen3.7 CLOSED-FRONTIER confirmed (Check 4) + no new A3B performance thread (Check 5):** Production Qwen3.6-35B-A3B-FP8 has no identified successor. Arm C eval proceeds with Qwen3.6-Coder-30B / Laguna-XS-2.1 as comparators.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.30 tok/s (10% above 80.27) | DATA LIMITED — Firestore truncation; no c=1 result above threshold identified |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | NOT FIRED — v0.26.0 still latest; no SM121/GB10-specific changes |
+| vLLM NVFP4 MoE weight loading fix | CARRY-FORWARD — PR #46276 (in v0.26.0) to verify at Arm C upgrade time |
+| vLLM Gemma4 #40099 merged | NOT FIRED — OPEN, stalled 20 days (July 8 last activity) |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 stale since April 27 |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — confirmed CLOSED-FRONTIER; do not wait |
+| Power-instability / EC firmware cluster | WORTH WATCHING — EC patch absent; production hold maintained |
+
+---
+
+#### Overall: NO ACTION
+
+Quiet day. All five checks returned no new actionable data since Entry 123 (2026-07-27). vLLM v0.26.0 remains latest with no SM121-specific changes. eugr dev1511 remains the Arm C/D eval target. No new official Qwen models. Forum EC regression unpatched. The only new content is an ai-muninn article describing a Triton NVFP4→FP8 bypass technique (47.6 tok/s) — confirming FP8 is still the optimal path on SM121 via all reproducible routes. Arena baseline 80.27 tok/s FP8 vLLM holds.
+
+---
+
+#### Recommendations
+
+1. **[CARRY-FORWARD] Arm C/D eval target: `prebuilt-vllm-current` = dev1511** (2026-07-26). No change.
+
+2. **[CARRY-FORWARD — VERIFY] Arena 80.27 tok/s FP8 baseline.** Firestore truncation prevents full sweep. User: manually check spark-arena.com/leaderboard for any new Qwen3.6-35B-A3B-FP8 c=1 tg128 vLLM entry above 80.27 when convenient.
+
+3. **[INFORMATIONAL] ai-muninn Triton NVFP4 bypass:** 47.6 tok/s is still slower than FP8 53.8 tok/s (ai-muninn baseline) and our production 66.9 tok/s. Read for kernel technique context, not as a production path. Confirms FP8 is correct current choice.
+
+4. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched (case 260716-000029 OPEN). Hold until NVIDIA ships EC ≥0x03000509.
+
+5. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 20 days** (last activity July 8). No action until merged.
+
+6. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7 or Qwen3.8.** Both API-only; closed-frontier status now formally documented by community analysis.

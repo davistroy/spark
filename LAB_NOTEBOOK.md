@@ -9390,3 +9390,78 @@ Only routine change vs Entry 122: **new eugr nightly wheel dev1511** (Jul 26, no
 4. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan-curve unpatched (case 260716-000029 OPEN). Hold until NVIDIA ships a patched EC.
 5. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~18 days** (last activity July 8; not in v0.26.0). No action until merged.
 6. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7 or Qwen3.8.** Both API-only; proceed with Qwen3.6-FP8 eval on dev1511.
+
+---
+
+## Entry 124 - DGX Spark Recon (2026-07-29)
+
+_Recon re-run (user "run now"). **DATE CORRECTION:** today is 2026-07-29 — Entry 122 (07-26) was 3 days prior, not "earlier today," and Entry 123 (same session, minutes before this one) was mislabeled 2026-07-26 and its agents returned stale 07-26-current data. This pass surfaced the true current (07-28) state, including a major eugr build jump the prior pass missed. RECON — no changes to the Spark system._
+
+#### Check 1 — Arena (Firestore REST)
+
+- **Doc count 177 → 181** (+4 new docs, dated 07-28). Entry 123 undercounted at 177 (stale pull).
+- **FP8-vLLM c1 tg128: NO CHANGE** — leader still 80.27 (Stojanovic Qwen3.6-35B-A3B-FP8, 05-20); next 77.88. Nothing new above 80.27; nothing near the 88.30 ACTION threshold. No new FP8 Qwen3.6 single-node submissions.
+- **NVFP4-vLLM: NO new Qwen3.6-35B datapoint newer than 98.43 (07-25).** The two newest NVFP4 single-node entries (07-28) are *different, weaker* models: Qwen3.6-**27B**-NVFP4 c1=31.82; `poolside/Laguna-S-2.1-NVFP4`+DFlash-n7 c1=37.53 (scales to c10=193.66). Top NVFP4 Qwen3.6-35B c1 unchanged at 118.91 (one-off). Overall top 218.85 (Atlas); absolute top FP8 172.03 (Atlas) — unchanged.
+- New docs (none actionable, none FP8-Qwen3.6, none cross 88.30): `poolside/Laguna-S-2.1-NVFP4` (DFlash n7), `bleysg/Qwen3.5-122B-A10B-int4-fp8-hybrid` (AutoRound, context-sweep only), `aidendle94/GLM-5.2-MXFP4-Experts-GPTQ` (cluster4 multi-node, B12X_MLA_SPARSE), `Qwen3.6-27B-NVFP4`.
+- **Classification: NO ACTION** — FP8-vLLM lane still flat since 05-20.
+
+#### Check 2 — vLLM Releases
+
+- **NO CHANGE.** v0.26.0 (07-25) still latest; no v0.26.1/v0.27.x on the upstream release page. PR #40099 (Gemma4 gate) still OPEN, last activity July 8. Issues #43906/#45317 unchanged (no newer release could carry a fix). No SM121/GB10 arch-guard.
+
+#### Check 3 — eugr/spark-vllm-docker
+
+- **⚠ MAJOR CHANGE — base-version jump 0.23.1rc1 → 0.26.1rc1.** `prebuilt-vllm-current` = **`0.26.1rc1.dev30+g5773c4e60.d20260728`** (Jul 28 11:46 UTC, commit `81a33f3`, changelog "New stable build"). Was `0.23.1rc1.dev1511+g684872090.d20260726`. **The community SM121-patched build has closed its ~3-major lag to upstream 0.26.x** — this is the build track the Arm C/D NVFP4 eval was gated on (NVFP4 weight-schema gap was coupled to ≥0.23.x; 0.26.x adds NVFP4/MXFP4 online MoE quant). Note the base is now 0.26.1rc1 = AHEAD of upstream's tagged v0.26.0 (rc of the next point release).
+- **`prebuilt-flashinfer-current`** = **`0.6.15-2deed6c1-d20260728`** (Jul 28 11:41 UTC). FlashInfer stayed 0.6.15, new commit hash.
+- New repo commit Jul 28: "added image version checks in the cluster" (`verify_cluster_image_consistency()` + `tests/test_launch_cluster_image_sync.sh`; cluster tooling only, no recipe change).
+- PRs: #279 (DFlash+FP8 KV) still OPEN, no activity since Jun 6; #323 (Laguna NVFP4) OPEN, last update Jul 21.
+- **Classification: WORTH WATCHING (elevated)** — the 0.26.1rc1 jump is the first time the SM121 build reaches the NVFP4-capable upstream line. **⚠ Arm C/D eval target updated: `prebuilt-vllm-current` = 0.26.1rc1.dev30 (d20260728)** (supersedes dev1511). Before eval: re-verify the NVFP4 weight-schema gap (Entry 094 KeyError) is actually resolved on this build, and re-run the NVFP4 "!!!!" output-corruption probe (PR #48330 guard should be present in a 0.26.x base). Migration reminders still apply: `--moe-backend` rename, `--speculative-config` JSON form.
+
+#### Check 4 — Qwen / HuggingFace Models
+
+- **NO CHANGE.** No new official Qwen open-weight beyond Qwen3.6. Qwen3.7 / Qwen3.8-Max-Preview still API-only/closed (Qwen3.8 previewed Jul 19 at WAIC; no HF card, no date). **Kimi K3 confirmed dropped Jul 27** (2.8T, KDA hybrid + AttnRes, 1M ctx, ~1.4TB memory) — **still REJECTED** (footprint orders of magnitude beyond Spark's 121 GB). No new SM121-validated A3B competitor.
+
+#### Check 5 — NVIDIA DGX Spark Forum (719/721.json 403; WebSearch fallback)
+
+- **NEW /t/378436 "New single spark king? Macaron-V1-Tall"** (Projects subcategory, ~07-28) — a **50B composite on single GB10: Qwen3.6-35B-A3B base + four 3.7B Rank-64 LoRA specialists.** Model/project post, not hardware/firmware. Built on our exact production base model; "single spark king" perf claim unquantified in the recon. Flag as a future eval curiosity only — LoRA-specialist routing on top of Qwen3.6-35B-A3B; no throughput/quality numbers captured, no SM121 recipe detail. Not actionable now.
+- **EC 0x03000508 fan-curve regression: NO CHANGE** — still no patched EC from NVIDIA (case 260716-000029 OPEN); only the community rollback workaround (/t/377069). July OTA hold stands.
+- No new driver/firmware release.
+- **Classification: WORTH WATCHING.**
+
+---
+
+#### Cross-Correlated Findings
+
+1. **eugr 0.26.1rc1 build (Check 3) is the missing gate for the NVFP4 Arm D eval (Check 1 + Entry 094):** the SM121 build now sits on the NVFP4-capable 0.26.x line. But Arena NVFP4-vLLM perf is NOT improving in step — newest 07-28 NVFP4 entries are weaker/different models (27B 31.82, Laguna 37.53) and the 118.91 Qwen3.6-35B one-off is still unreproduced. So the *build* blocker is clearing while the *performance* case stays unproven — run the gated sandbox eval, do not adopt on leaderboard numbers.
+2. **Macaron-V1-Tall (Check 5) is built on the exact prod base (Qwen3.6-35B-A3B) (Check 4):** a LoRA-specialist composite claiming single-Spark leadership. Same base = plausible SM121 compatibility, but unquantified. Watch for numbers before any interest.
+3. **No FP8-vLLM Arena movement + no new open-weight Qwen:** production Qwen3.6-35B-A3B-FP8 + MTP=2 remains optimal; still zero adoption triggers.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM c1 tg128 > 88.30 | NOT FIRED — 80.27 holds |
+| vLLM SM121/GB10 arch-guard | NOT FIRED — v0.26.0 still latest upstream |
+| vLLM Gemma4 #40099 merged | NOT FIRED — OPEN, last activity July 8 |
+| DeepGEMM AND SM12x/GB10 | NOT FIRED |
+| Qwen3.7 (27B/35B) open weights | NOT FIRED — still closed |
+| eugr build reaches NVFP4-capable line (≥0.23.x → now 0.26.1rc1) | **NOTED — Arm C/D eval build gate cleared; perf case still unproven** |
+| Power-instability / firmware cluster | WORTH WATCHING — EC patch still absent |
+
+---
+
+#### Overall: WORTH WATCHING
+
+One material change vs the stale Entry 123 pass: **eugr `prebuilt-vllm-current` jumped 0.23.1rc1 → 0.26.1rc1.dev30 (Jul 28)** — the SM121-patched build now reaches the NVFP4-capable upstream 0.26.x line, clearing the long-standing Arm C/D build gate. Everything else steady: FP8-vLLM Arena 80.27 holds (181 docs), vLLM v0.26.0 latest with #40099 still stalled, no new open-weight Qwen (Kimi K3 rejected), EC fan-curve patch still absent. New forum model post /t/378436 (Macaron-V1-Tall) on the prod base — flag only. **No production action; the build jump warrants scheduling the gated NVFP4 sandbox eval when a window opens.**
+
+---
+
+#### Recommendations
+
+1. **[UPDATED — build gate cleared] Arm C/D / NVFP4 eval target: `prebuilt-vllm-current` = 0.26.1rc1.dev30+g5773c4e60.d20260728** (supersedes dev1511). This is the first SM121 build on the NVFP4-capable 0.26.x line. When an eval window opens: (a) re-verify Entry 094 NVFP4 weight-schema KeyError is resolved on this build; (b) run the NVFP4 "!!!!" output-corruption probe (PR #48330 guard); (c) single-node TP=1 recipe (`-no-mtp`/adapt the TP=2 dual-Spark recipe); (d) apply `--moe-backend` + `--speculative-config` JSON migrations. Do NOT adopt on leaderboard numbers — NVFP4-vLLM perf still unproven (118.91 one-off unreproduced; newest 07-28 entries weaker).
+2. **[WATCH] Macaron-V1-Tall (/t/378436)** — LoRA-specialist composite on Qwen3.6-35B-A3B, single-GB10, unquantified perf claim. Watch for throughput/quality numbers before any interest.
+3. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA** — EC 0x03000508 fan-curve unpatched (case OPEN).
+4. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN** (stalled since July 8). No action until merged.
+5. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7/3.8** (both API-only; Kimi K3 too large).

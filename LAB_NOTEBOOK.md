@@ -9500,3 +9500,122 @@ Quiet day. All five checks returned no new actionable data since Entry 123 (2026
 5. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 20 days** (last activity July 8). No action until merged.
 
 6. **[CARRY-FORWARD] Do not hold Arm C/D eval for Qwen3.7 or Qwen3.8.** Both API-only; closed-frontier status now formally documented by community analysis.
+
+
+---
+
+## Entry 125 - DGX Spark Recon (2026-07-29)
+**Date:** 2026-07-29 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made to Spark system
+
+---
+
+#### Check 1 — Arena Leaderboard
+**⚠ COLLECTION PRUNED** — Firestore `benchmarks` collection returned only 60 documents (was ~159 as of 2026-07-16 Entry 111). No 403 errors; pagination terminated cleanly at 60 docs. Collection appears to have been housekept.
+
+- **Prior 80.27 tok/s baseline entry (Stojanovic, eugr DFlash-n8): NOT FOUND** in any of the 60 retrieved documents. No creator named Stojanovic or eugr visible.
+- **Current top FP8 Qwen3.5/3.6 35B single-node vLLM c=1 tg128 (of accessible docs):**
+  1. **52.32 tok/s** — Artyom — `huihui-ai/Huihui-Qwen3.5-35B-A3B-abliterated` — on-the-fly FP8 (`--quantization fp8`), FlashInfer attn, fastsafetensors, prefix caching ON
+  2. 50.75 tok/s — sus — `Qwen/Qwen3.5-35B-A3B-FP8` — FP8 KV, FlashInfer attn, fastsafetensors
+  3. 50.38 tok/s — Artyom — `Jackrong/Qwen3.5-35B-A3B-Claude-4.6-Opus-Reasoning-Distilled` — on-the-fly FP8
+  4. 49.99 tok/s — Drew Botwinick — `Qwen/Qwen3.5-35B-A3B-FP8` — eugr container `2026032505` (old image)
+- **10% threshold (>88.30 tok/s) triggered? NO** — top is 52.32, well below threshold AND well below our production 66.9 tok/s
+- **Top overall single-node (non-trivial):** 73.33 tok/s — Bjarke Bolding — `Intel/Qwen3-Coder-Next-int4-AutoRound` (INT4 AutoRound, vLLM) — three independent submitters hit 69-73 tok/s with this recipe
+- **Atlas runtime: NOT SEEN** in any of 60 docs (was top overall at 218.85 prior to pruning). Atlas entries absent from current accessible set.
+- **New runtimes:** None — vLLM (~58/60 docs), SGLang (2 docs, 0.8B trivial entries)
+- **Classification: DATA LIMITED** — baseline entry gone from pruned collection; new apparent top is 52.32 but collection state unreliable. Manual leaderboard check recommended.
+
+---
+
+#### Check 2 — vLLM Releases
+- **Latest release:** v0.26.0 (2026-07-27) — **NO NEW RELEASE** since Entry 121 (2026-07-25)
+- **Classification: NO NEW RELEASE** (v0.26.0 confirmed same as last check)
+- PR **#40099** (Gemma4 repetition detection): **OPEN** — last activity 2026-07-08, stalled 21 days
+- Issue **#41063** (DeepGEMM SM12.x gaps): **OPEN** — no change since April 27
+- PR **#46276** (NVFP4 MoE weight loading): **MERGED** (in v0.25.0/v0.26.0) — **NOTE:** this is a peak *memory footprint* fix during weight loading (peak reduced 432 MiB → 72 MiB), NOT a schema fix for Entry 094's `KeyError: 'layers.0.mlp.experts.w2_input_scale'`. The KeyError is a missing tensor-type mapping in `qwen3_5.py` — unconfirmed whether #46276 covers it. Verify at eval time.
+
+---
+
+#### Check 3 — spark-vllm-docker
+**⚠ MAJOR VERSION JUMP** — `prebuilt-vllm-current` upgraded from v0.23.1rc1.**dev1511** (2026-07-26) to v0.26.1rc1.**dev30** (2026-07-28). This is a 3-minor-version jump in 2 days, tracking upstream v0.26.x immediately after v0.26.0 shipped on 2026-07-27.
+
+- **New prebuilt-vllm-current:** `0.26.1rc1.dev30+g5773c4e60.d20260728` (released 2026-07-28T11:46:46Z)
+- **FlashInfer:** `0.6.15-2deed6c1-d20260728` (same version 0.6.15, new build hash and date; prior `290c0918-d20260726`)
+- **Latest repo commit** (2026-07-28T21:18:53Z): "added image version checks in the cluster" — CI/tooling only (`.github/workflows/test-recipes.yml`, `README.md`, `launch-cluster.sh`)
+- **PR #279** (DFlash+FP8 KV): dormant ~7 weeks, no change (last: Jun 12)
+- **PR #325** (multi-model serving): ACTIVE (updated 2026-07-29T00:22:48Z) — adds declarative stacks manifest for per-recipe cluster placement; not a performance patch
+- **PR #319** (DSV4F+SM120 topk fix): no new activity since Jul 15
+- **PR #323** (Laguna-S-2.1-NVFP4 recipe): updated 2026-07-28 — reports ~40-50 tok/s with NVFP4+DFlash
+- **Arm C/D eval target update:** Was `dev1511` (v0.23.1rc1); now **`dev30` (v0.26.1rc1)** — significant upgrade
+- **Classification: WORTH WATCHING** — eval target updated; vLLM 0.26 brings NVFP4/MXFP4 online MoE quant, hybrid DFlash drafters, `kv_cache_dtype` config; review changelog before eval window opens
+
+---
+
+#### Check 4 — Qwen / New Models
+- **Qwen3.7 (27B/35B):** STILL CLOSED-FRONTIER — no HF repo, no change from Entry 118 (Jul 22 direct check)
+- **Qwen3.8-Max-Preview:** API-only, no HF model card as of 2026-07-29. Open weights were rumored "by July 27" but did not materialize. Still "coming soon." Check daily.
+- **Qwen4:** No release, no HF repo. Community tracking suggests September 2026 target.
+- **Other A3B-class:** Nothing new since Jul 28. Kimi K3 (Jul 26-27) is 2.8T total / 104B active — NOT A3B class, requires multi-node.
+- **Classification: NO ACTION**
+
+---
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json: 403; WebSearch fallback)
+- **EC 0x03000508 fan curve regression: STILL UNRESOLVED.** Case 260716-000029 OPEN. No EC ≥0x03000509 announced. Production hold unchanged.
+- **NEW: /t/378315** (~2026-07-27-28) — "Hard power-off under sustained GPU load at ~90W, persists after full platform firmware update" — unit on OTA2607 (EC 0x03000508) hard powers off at ~90W GPU draw; no kernel trace, no Xid, no crash capture; reproducible. **POTENTIALLY DISTINCT from fan curve regression** — fan curve failure manifests at 96-97°C ACPI zone; this may be OCP (overcurrent protection) triggering at 90W instead of 140W rated draw. New failure sub-class if confirmed. No NVIDIA response yet.
+- Previously tracked: /t/377044 (fleet-wide thermal throttling), /t/377069 (EC rollback guide), /t/378028 (overheating post-dashboard update) — no new activity on these
+- No new driver, firmware, or OTA announced
+- **Classification: WORTH WATCHING** — /t/378315 is a new failure mode worth monitoring; EC patch absent
+
+---
+
+#### Cross-Correlated Findings
+
+1. **svd v0.26.1rc1.dev30 (Check 3) + vLLM v0.26.0 stable (Check 2):** eugr adopted v0.26.x within 1-2 days of upstream release — extremely fast turnaround. Arm C/D eval target is now dev30 (v0.26.1rc1), which includes v0.26.0 features: NVFP4/MXFP4 online MoE quant, separate `kv_cache_dtype` config, hybrid SWA+full DFlash drafters, FlashInfer 0.6.14→0.6.15. This is the first dev build based on v0.26.x for Arm C eval.
+
+2. **PR #46276 (NVFP4 weight loading) in v0.26.0 (Check 2) + dev30 build (Check 3):** The NVFP4 weight loading memory fix is now in the eval target build. However, agent clarification indicates this is a *memory footprint* fix, not necessarily the schema fix for the Entry 094 KeyError. The NVFP4 unblock gate is not yet confirmed — requires hands-on verification at eval time.
+
+3. **Arena collection pruned to 60 docs (Check 1) + no Arena-corroborating evidence for 80.27 baseline (Checks 2-5):** The prior baseline entry's disappearance is unexplained — no forum discussion, no svd changes, no vLLM changes that would account for it. Likely a housekeeping deletion on the Arena side. The community benchmark at spark-bench-reproducers (NVFP4+DFlash+thinking ON = 102.05 tok/s, high variance std 48.74) is not an apples-to-apples FP8 comparison.
+
+4. **Forum /t/378315 90W power-off (Check 5) + no hardware or driver changes (Checks 2-3):** The OTA2607 EC change is the only new variable; this power-off sub-class may be EC-related. Production unit on prior EC is unaffected.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.30 tok/s (10% above 80.27) | NOT FIRED — top in accessible collection is 52.32; baseline entry gone from pruned set |
+| vLLM SM121/Blackwell/GB10/sm_12 arch-guard | NOT FIRED — v0.26.0 still latest; no SM121/GB10-specific changes |
+| vLLM NVFP4 MoE weight loading fix (PR #46276) | CLARIFIED — merged (v0.25.0+) but is memory footprint fix, NOT confirmed KeyError schema fix; verify at eval |
+| vLLM Gemma4 #40099 merged | NOT FIRED — OPEN, stalled 21 days (July 8 last activity) |
+| DeepGEMM AND (SM12x/GB10) | NOT FIRED — #41063 OPEN, stalled since April 27 |
+| Qwen3.7 (27B or 35B) open weights | NOT FIRED — CLOSED-FRONTIER confirmed |
+| Qwen3.8 open weights (watch daily) | NEAR-MISS — "by July 27" deadline passed without release; still imminent |
+| Power-instability / EC firmware cluster | WORTH WATCHING — /t/378315 is a new 90W power-off sub-class; EC patch absent |
+
+---
+
+#### Overall: WORTH WATCHING
+
+Three findings elevate today above NO ACTION:
+1. **Arena collection pruned** (~159→60 docs); the 80.27 tok/s vLLM FP8 baseline entry is not in the accessible set. Recommend manual spot-check of spark-arena.com.
+2. **eugr eval target jumped from v0.23.1rc1.dev1511 to v0.26.1rc1.dev30** — Arm C/D eval should now target dev30. This build incorporates vLLM 0.26 features including NVFP4/MXFP4 online MoE quant and updated FlashInfer 0.6.15.
+3. **Forum /t/378315** — new potential failure sub-class (90W OCP power-off on OTA2607) distinct from the known fan-curve thermal regression. Production is unaffected (prior EC), but watch for NVIDIA response.
+
+---
+
+#### Recommendations
+
+1. **[ACTION] Update Arm C/D eval target to dev30 (v0.26.1rc1, 2026-07-28).** Supersedes dev1511 (v0.23.1rc1). Key new capabilities in v0.26.x: NVFP4/MXFP4 online MoE quant, separate `kv_cache_dtype` config, hybrid SWA+full DFlash drafters, FlashInfer 0.6.15. Review v0.26.0 changelog before opening eval window — check for any regressions on SM121 FP8 attention backend.
+
+2. **[CLARIFY BEFORE EVAL] PR #46276 KeyError scope.** The NVFP4 unblock (Entry 094 `KeyError: 'layers.0.mlp.experts.w2_input_scale'`) is gated on whether #46276 or a companion PR patches the tensor-type mapping in `qwen3_5.py:407`. Confirm: does `nvidia/Qwen3.6-35B-A3B-NVFP4` load without KeyError on dev30? This should be the first probe at eval time (B1 test).
+
+3. **[WATCH DAILY] Qwen3.8 open weights.** Community "by July 27" deadline passed without release. Still "coming soon" per official messaging. When HF card appears: check active parameter count — if A3B class (~3B active), it's a potential production successor; if much larger, single-Spark irrelevant.
+
+4. **[MANUAL CHECK] Arena leaderboard state.** Firestore collection down to 60 docs; 80.27 baseline entry not in accessible set. User: browse spark-arena.com/leaderboard for current state of Qwen3.6-35B-A3B-FP8 tg128 c=1 vLLM single-node entries. If the leaderboard has been reset or restructured, the arena_top tracking values should be reset to reflect the new baseline.
+
+5. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched + new /t/378315 90W power-off report. Double hold until NVIDIA ships EC ≥0x03000509.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 21 days.** No action until merged.

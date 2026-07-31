@@ -9619,3 +9619,122 @@ Three findings elevate today above NO ACTION:
 5. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched + new /t/378315 90W power-off report. Double hold until NVIDIA ships EC ≥0x03000509.
 
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 21 days.** No action until merged.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 21 days.** No action until merged.
+
+---
+
+## Entry 126 - DGX Spark Recon (2026-07-31)
+**Date:** 2026-07-31 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made to Spark system
+
+> ⚠ **ACTION NEEDED — CRITICAL: Driver 580.173.02 apt breakage** — see Check 5 and Recommendation 1.
+
+---
+
+#### Check 1 — Arena Leaderboard
+- **Collection: NO CHANGE** — still 60 docs, newest entry date 2026-04-07 (collection remains frozen)
+- **Top FP8 Qwen3.5/3.6 single-node vLLM (tg128 c1):** 52.32 tok/s — Artyom — `huihui-ai/Huihui-Qwen3.5-35B-A3B-abliterated` (same as Entry 125)
+- **10% action threshold (>88.30 tok/s) triggered? NO** — visible top well below threshold; our prod 66.9 tok/s still exceeds visible top
+- **Stojanovic/80.27 entry:** Still absent. Poveda/118.91 NVFP4: still absent. Atlas entries: still absent.
+- **Top overall single-node:** 73.33 tok/s — Bjarke Bolding — `Intel/Qwen3-Coder-Next-int4-AutoRound` (unchanged)
+- **Classification: NO CHANGE**
+
+---
+
+#### Check 2 — vLLM Releases
+- **Latest release:** v0.26.0 (2026-07-27) — **NO NEW RELEASE** since Entry 121
+- **Classification: NO NEW RELEASE**
+- PR **#40099** (Gemma4 repetition fix): **OPEN**, stalled (last activity 2026-07-08, 23 days)
+- Issue **#41063** (DeepGEMM SM12.x): **OPEN**, no change since April 27
+- PR **#48330** (NVFP4 "!!!!" corruption guard): **CONFIRMED in v0.25.1+** (explicitly listed in v0.25.1 changelog)
+- No SM121/GB10-specific changes in v0.26.0; SM10x/SM110 Blackwell arm64 build (#48041) ≠ SM121
+
+---
+
+#### Check 3 — spark-vllm-docker
+- **New prebuilt-vllm-current: `0.26.1rc1.dev166+gb1a7b0271.d20260731`** (released 2026-07-31T03:33Z) — was dev30 (2026-07-28); +136 upstream commits in 3 days
+- **FlashInfer: `0.6.17-3b679769-d20260730`** — jumped from 0.6.15 (two minor versions)
+- **New commits since Jul 28** (7 commits): "switched qwen3-coder to instanttensor", "switched nemotron super to instanttensor", "switched to instanttensor" (3 Jul 31 commits — recipe migrations), "Inkling Small support", "Improvements to official-vllm mod", "Added -v volume mapping to launch scripts", "added pytorch expandable segments by default"
+- **Notable: InstantTensor migration** — three recipes switched to InstantTensor in one day; unknown whether performance-motivated or memory/stability fix
+- **PR #325** (multi-model serving): force-pushed 2026-07-31T01:19Z, added run-stack.sh/run-stack.py + 86-case test suite; maturing
+- **PR #279** (DFlash+FP8 KV): still dormant ~8 weeks. **PR #319** (DSV4F+SM120): no activity since Jul 15
+- **Arm C/D eval target:** dev30 → **dev166** (as of this entry; update eval plan to use dev166)
+- **Classification: WORTH WATCHING** — dev166 is a substantial build bump; InstantTensor migration is new; FlashInfer 0.6.17 may affect SM121 MoE throughput
+
+---
+
+#### Check 4 — Qwen / New Models
+- **Qwen3.8:** Still API-only (`Qwen3.8-Max-Preview`), no HuggingFace model card as of 2026-07-31. "Coming soon" with no date. Architecture is 2.4T total params — **NOT A3B-class**, multi-node only. No A3B sibling announced.
+- **Qwen3.7 (27B/35B):** Confirmed closed-frontier — still no HF repo (9+ weeks post-API)
+- **Qwen-AgentWorld-35B-A3B:** Hardware-compatible (A3B class, June 25 release) but specialty use case (language world model for agent simulation); not a production `spark-llm` replacement
+- **Kimi K3:** Released 2026-07-26, 2.8T total / 104B active — not single-Spark
+- **Other A3B-class (last 48h):** None found
+- **Classification: NO ACTION**
+
+---
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json: 403; WebSearch fallback)
+- **⚠ CRITICAL: NEW /t/378200** (~2026-07-26) — "DGX Spark: apt upgrade to driver 580.173.02 breaks GPU on OTA2607 (nvidia-smi 'No devices found')" — routine `apt upgrade` pulls driver 580.173.02 from ubuntu noble-updates/restricted (replaces OTA2607-paired 580.159.03); after reboot, GSP firmware fails Secure Boot and GPU becomes inaccessible (`nvidia-smi: No devices found`). Multiple units affected. No NVIDIA advisory. **Production risk: Spark is on 580.159.03 — must pin driver before next apt operation.**
+- **INFO: NEW /t/378167** (~2026-07-26) — "Qwen 122B vLLM v26 + fp8 KV + DFlash + int8 lm-head — 46+ tps, 1.37M Tokens, 5.24× Concurrency Single Spark" — 45.98 tok/s decode, 957 tok/s prefill, 1.37M token KV at 256K ctx on Qwen 122B using vLLM v26 main + patches. Informational — technique differs from our 35B workload (DFlash rejected for c8+ on 35B)
+- **INFO: NEW /t/378128** (~2026-07-24) — "FP4 not supported after DGX Spark recovery from USB" — user claims ~75 tok/s NVFP4 pre-recovery, Marlin fallback post-recovery (~40 tok/s). Suggests NVFP4 may work on specific firmware/build combinations. Consistent with NVFP4 eval being build-sensitive.
+- **EC 0x03000508 fan curve: STILL UNRESOLVED.** Case 260716-000029 OPEN. /t/378315 (90W power-off): no NVIDIA response. /t/377044 (thermal throttling): Customer Care escalation only, no engineering response. No OTA2608 announced.
+- **No new driver, firmware, or OTA release**
+- **Classification: ACTION NEEDED** — driver 580.173.02 is a new silent apt threat
+
+---
+
+#### Cross-Correlated Findings
+
+1. **Driver 580.173.02 breakage (Check 5) — standalone OS-level alert.** Not corroborated in vLLM (Check 2) or svd (Check 3) — those are software-stack signals. The apt breakage is a kernel/firmware-level risk independent of the ML stack. Production 580.159.03 is the correct pin target.
+
+2. **svd dev166 InstantTensor migration (Check 3) + no forum corroboration (Check 5):** Three Jul 31 recipe switches in one day signal a validated improvement, but no forum thread explains what changed. If InstantTensor applies to Qwen3.6-class models, it could affect production-relevant throughput. Investigate recipe diffs at eval time.
+
+3. **/t/378128 NVFP4 pre-recovery 75 tok/s (Check 5) + dev166 NVFP4 eval target (Check 3):** Thread is consistent with the known build-sensitivity of NVFP4 on SM121 (Entry 094). The 75 tok/s claim (if genuine) suggests native FP4 GEMM was active on a pre-recovery build — corroborates the B1 probe approach at eval. Not actionable before hands-on eval, but increases confidence that NVFP4 may become viable on dev166.
+
+4. **Arena collection frozen (Check 1) + no new submissions pressure (Checks 2-5):** Collection has been static for 116 days (last entry 2026-04-07). No community buzz about Arena activity in forum (Check 5). Arena tracking numbers remain unreliable; manual leaderboard check still recommended.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Forum: driver apt breakage → new production risk | **FIRED** — /t/378200, driver 580.173.02 breaks GPU post-reboot on OTA2607; pin required |
+| Arena FP8 Qwen3.6 vLLM >88.30 tok/s | NOT FIRED — collection frozen at 52.32 |
+| vLLM SM121/GB10/Blackwell/sm_12 arch-guard | NOT FIRED — v0.26.0 still latest, no SM121 changes |
+| vLLM Gemma4 PR #40099 merged | NOT FIRED — OPEN, 23 days stalled |
+| DeepGEMM AND SM12x/GB10 | NOT FIRED — #41063 OPEN |
+| Qwen3.7/Qwen3.8 open weights (A3B class) | NOT FIRED — Qwen3.7 closed-frontier; Qwen3.8 not A3B |
+| EC firmware patch / OTA2608 | NOT FIRED — no new EC, case 260716-000029 still OPEN |
+
+---
+
+#### Overall: ACTION NEEDED
+
+**Primary action:** Pin NVIDIA driver to 580.159.03 before next apt operation. Driver 580.173.02 in noble-updates/restricted will kill the GPU after reboot (GSP Secure Boot failure). This is a new, immediate production risk that was not present as of Entry 125.
+
+**Secondary:** Update Arm C/D eval target from dev30 to dev166 (v0.26.1rc1.dev166, 2026-07-31).
+
+---
+
+#### Recommendations
+
+1. **[ACTION — BEFORE NEXT APT] Pin driver 580.159.03** to prevent silent upgrade to 580.173.02:
+   ```bash
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 \
+     nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+   First verify what's staged: `apt list --upgradable 2>/dev/null | grep nvidia`. If 580.173.02 is already staged, do NOT reboot — reinstall 580.159.03 first. Same recovery path as the DKMS incident in CLAUDE.md.
+
+2. **[ACTION] Update Arm C/D eval target to dev166 (v0.26.1rc1.dev166, 2026-07-31).** Supersedes dev30 (2026-07-28). At eval open: (a) B1 probe — verify `nvidia/Qwen3.6-35B-A3B-NVFP4` loads without KeyError; (b) investigate InstantTensor recipe diffs for Qwen3.6-class impact.
+
+3. **[WATCH] InstantTensor migration in svd.** Three Jul 31 recipe switches with no forum explanation. Likely performance or memory improvement — check commit diffs for Qwen3.6 recipe changes before next eval.
+
+4. **[WATCH] /t/378128 NVFP4 pre-recovery 75 tok/s claim.** Monitor for follow-up posts clarifying which vLLM build/firmware was active. If native FP4 GEMM activation is reproducible, B1 probe on dev166 is the next step.
+
+5. **[CARRY-FORWARD — HOLD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched; /t/378315 90W power-off unresolved; no OTA2608. Triple hold.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, 23 days stalled.** No action until merged.
+

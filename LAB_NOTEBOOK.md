@@ -9738,3 +9738,108 @@ Three findings elevate today above NO ACTION:
 
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, 23 days stalled.** No action until merged.
 
+---
+
+## Entry 127 - DGX Spark Recon (2026-08-01)
+**Date:** 2026-08-01 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made to Spark system
+
+---
+
+#### Check 1 — Arena (Firestore benchmarks REST)
+- **Collection further pruned: ~60→2 accessible docs.** Only two documents returned (both `gpt-oss-120b`, Raphael Amorim, Feb 2026, MXFP4/vLLM; top 75.96 tok/s). Zero Qwen3.6-35B-A3B entries, zero Atlas entries in accessible set. Pagination returned no `nextPageToken`. Prior Entry 126 accessible set had 60 docs; now essentially empty.
+- Trigger `arena_top_fp8_qwen35_tok_s > baseline * 1.10` NOT FIRED — collection too sparse to evaluate; our production 66.9 tok/s still exceeds the visible 2-doc set.
+- **Arena tracking numbers remain unreliable; manual leaderboard check on spark-arena.com still recommended.**
+- **Classification: NO ACTION** (no actionable data; collection degradation is informational)
+
+---
+
+#### Check 2 — vLLM Releases
+- **v0.26.0 remains latest** (July 25, 2026) — no new release since Entry 126 (v0.27 not yet published as of Aug 1).
+- No SM121/GB10/sm_12/Blackwell/arch-guard changes identified in v0.26.0 changelog. No DeepGEMM SM12.x changes.
+- **PR #40099** (Gemma4 repetition-detection / auto-enable fix): **STILL OPEN** — stalled 24 days (last activity July 8; collaborator unable to reproduce; no maintainer approvals; no merge timeline). Gemma4 structured-output experiment remains gated.
+- **Issue #41063** (DeepGEMM SM12.x tracking): **STILL OPEN** — no update visible; companion PRs (#41062, #41028, #40923) status unclear, not in v0.26.0.
+- **Classification: NO ACTION**
+
+---
+
+#### Check 3 — eugr/spark-vllm-docker
+- **`prebuilt-vllm-current` remains `0.26.1rc1.dev166+gb1a7b0271.d20260731`** — UNCHANGED from Entry 126 (latest commit: Jul 31 "switched qwen3-coder to instanttensor"). No new commits or releases since July 31.
+- FlashInfer: **0.6.17** (unchanged). No new recipe changes (DFlash, NVFP4, multi-model).
+- **PR #325** (multi-model serving): last force-pushed July 31; no new activity.
+- **PR #279** (DFlash+FP8 KV): still dormant ~9 weeks.
+- **Arm C/D eval target: dev166 confirmed current stable** (no update needed).
+- **Classification: NO ACTION**
+
+---
+
+#### Check 4 — Qwen / New Models
+- **Qwen3.7 (27B/35B):** Confirmed closed-frontier — still no HF repo (10+ weeks post-API announcement at Apsara summit May 2026). No change from Entry 126.
+- **Qwen3.8-Max-Preview:** API-only (Alibaba Cloud Token Plan), 2.4T total params, no HF model card; "open weights coming soon" — no date. No change.
+- **No new A3B-class open-weight model identified** from Qwen org or other labs since Entry 126.
+- Qwen3.6-35B-A3B-FP8 remains the newest open-weight Spark-relevant general LLM (released April 2026).
+- **Classification: NO ACTION**
+
+---
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json: 403; WebSearch fallback)
+- **No new forum threads identified for Aug 1, 2026.** WebSearch returned threads up to July 31 at most — no content with `/t/3784xx` or later.
+- **⚠ CARRY-FORWARD ACTION: /t/378200 driver 580.173.02 breakage** (Entry 126) — still no NVIDIA advisory, no fix, no response. Routine `apt upgrade` on OTA2607 systems silently pulls 580.173.02 → GPU inaccessible after reboot (GSP Secure Boot failure). Production must remain pinned to 580.159.03 before any apt operation.
+- **EC 0x03000508 fan curve: STILL UNRESOLVED** (case 260716-000029 OPEN). No patched EC (OTA2608) announced.
+- **/t/378315** (90W hard power-off): no NVIDIA response.
+- No new driver, firmware, or OTA release.
+- **Classification: NO ACTION** (no new threads; carry-forward alerts from Entry 126 unchanged)
+
+---
+
+#### Cross-Correlated Findings
+
+1. **Entry 126 driver pin ACTION still outstanding (Checks 2, 3, 5):** No NVIDIA fix, advisory, or community workaround for 580.173.02 breakage found in any check. The risk is unchanged — next apt operation on production Spark must pin before running. This is the sole open action item from Entry 126.
+
+2. **Arena collection near-zero + no new community Arena submissions (Checks 1, 4):** Arena declined from 60→2 accessible docs. No new A3B-class competitors emerged to push a new benchmark submission. Consistent pattern: Arena has been effectively non-functional as a tracking signal since Entry 125 (Jul 29). Manual leaderboard verification remains the only reliable path.
+
+3. **vLLM + svd both static (Checks 2, 3):** No new vLLM release, no new svd build since July 31. Calm week. Dev166 is still the Arm C/D eval target; no urgency to update.
+
+4. **Qwen open-weight drought continues (Check 4):** 10+ weeks since last Qwen open-weight release (Qwen3.6, April 2026). Qwen3.7 and Qwen3.8 confirmed closed-frontier. Arm C+D eval comparator slate unchanged.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.30 tok/s | NOT FIRED — collection has 2 docs, no Qwen3.6 entries |
+| vLLM SM121/GB10/Blackwell/sm_12 arch-guard | NOT FIRED — v0.26.0 still latest, no SM121 changes |
+| vLLM new release >v0.26.0 | NOT FIRED — no new release |
+| vLLM Gemma4 PR #40099 merged | NOT FIRED — OPEN, 24 days stalled |
+| DeepGEMM AND SM12x/GB10 (issue #41063) | NOT FIRED — OPEN, no timeline |
+| Qwen3.7/Qwen3.8 open weights (A3B class) | NOT FIRED — closed-frontier, no HF release |
+| EC firmware patch / OTA2608 | NOT FIRED — no new EC, case 260716-000029 OPEN |
+| Forum: driver apt breakage → new production risk | CARRY-FORWARD from Entry 126 — /t/378200 unresolved |
+
+---
+
+#### Overall: WORTH WATCHING
+
+No new ACTION triggers fired. The Entry 126 ACTION (driver 580.173.02 apt pin) remains the only outstanding action item — still unresolved with no NVIDIA fix. All other tracking sources show a static week: no new vLLM release, no new svd build, no new Qwen open weights, Arena collection further degraded.
+
+---
+
+#### Recommendations
+
+1. **[CARRY-FORWARD ACTION — BEFORE NEXT APT] Pin driver 580.159.03** (from Entry 126):
+   ```bash
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 \
+     nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+   No NVIDIA resolution as of Aug 1. Risk is unchanged.
+
+2. **[CARRY-FORWARD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched; no OTA2608. Triple hold.
+
+3. **[CARRY-FORWARD] Arm C/D eval target: dev166 (v0.26.1rc1.dev166, 2026-07-31).** No new build this cycle. B1 probe (NVFP4 KeyError test) remains first eval task at next hands-on window.
+
+4. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, 24 days stalled.** No action until merged.
+
+5. **[WATCH] Arena Firestore collection near-zero (2 docs).** If the intended data loss is a platform reset, the prior baseline values (arena_top_fp8_qwen35_tok_s 80.27, etc.) are permanently invalidated. Consider Arena tracking deprecated until manually verified at spark-arena.com.
+

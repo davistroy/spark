@@ -9843,3 +9843,153 @@ No new ACTION triggers fired. The Entry 126 ACTION (driver 580.173.02 apt pin) r
 
 5. **[WATCH] Arena Firestore collection near-zero (2 docs).** If the intended data loss is a platform reset, the prior baseline values (arena_top_fp8_qwen35_tok_s 80.27, etc.) are permanently invalidated. Consider Arena tracking deprecated until manually verified at spark-arena.com.
 
+---
+
+
+## Entry 128 - DGX Spark Recon (2026-08-02)
+**Date:** 2026-08-02 UTC
+**Operator:** Claude Code (spark-recon skill — full 5-check run)
+**Status:** RECON — no changes made to Spark system
+
+---
+
+#### Check 1 — Arena (Firestore REST)
+
+**⚠ ARENA COLLECTION RECOVERED: 187 docs accessible** (vs 2 docs in Entry 127 on 2026-08-01; was 60 in Entries 125/126). Collection appears to have been repopulated. No error — clean pagination over 7 pages.
+
+**Top FP8 Qwen3.6-35B-A3B vLLM single-node entries (c=1, tg128):**
+
+| Sub ID | Runtime | tok/s c1 | Date | Config |
+|--------|---------|----------|------|--------|
+| sub1777562736675 | vLLM v0.20.0 cu130 | 60.7 | 2026-04-30 | DFlash n=15, flashinfer |
+| sub1778766978395 | vLLM (vllm-node) | 60.06 | 2026-05-14 | DFlash n=15, flash_attn, opt-level 3 |
+| sub1778790969973 | vLLM (vllm-node-tf5) | 77.88 | 2026-05-14 | DFlash n=15, flashinfer |
+| sub1779297106805 | vLLM (vllm-node-tf5) | **80.27** | 2026-05-20 | DFlash (templated), flash_attn, MARLIN_ATOMIC_ADD=1 |
+| sub1779640157109 | **Atlas** (avarok/atlas-gb10:latest) | **172.03** | 2026-05-24 | Atlas runtime (non-vLLM) |
+
+**Key conclusions:**
+- **Top vLLM FP8 entry: 80.27 tok/s (sub1779297106805, 2026-05-20)** — confirmed matching the prior tracked baseline. NOT exceeded by any new vLLM submission. No new FP8 vLLM entries since 2026-05-26.
+- **Atlas 172.03 tok/s** (avarok/atlas-gb10:latest, 2026-05-24): +114% vs production (66.9), +114% vs top vLLM (80.27). However the pp2048 score for this entry is anomalous (~150× higher than comparable vLLM entries), meaning aggregate/pp scores are not comparable across runtimes. The tg128 decode value (172.03) may be valid but requires independent validation. Atlas was already tracked as a watch item (Watch Items: `[NEW 2026-05-09]`); this entry is from May 2026, not new.
+- **NVFP4 top**: 105.13 tok/s (sub1782731055332, 2026-06-29, nvidia/Qwen3.6-35B-A3B-NVFP4, vLLM) — gated behind v0.23+ build (Entry 094).
+- **PrismaQuant 4.75-bit**: 95.11 tok/s (sub1777338597578, 2026-04-23).
+- Prior 218.85 Atlas entry (Rajendra Rawat, 2026-07-16) and 80.27 Stojanovic entry both absent from accessible set as of Entry 125/126 are now partially clarified: the 80.27 entry IS present (sub1779297106805); the July-era Atlas 218.85 remains not found, suggesting July-era entries are still absent from the recovered collection.
+- **No new competitor has beaten 80.27 tok/s on vLLM since May 2026.** Arena tracking RESTORED as a usable signal.
+- **Classification: WORTH WATCHING** (collection recovered; vLLM baseline confirmed; Atlas unverifiable but significant)
+
+---
+
+#### Check 2 — vLLM Releases
+
+- **Latest release: v0.26.0** (published 2026-07-25) — no new release since Entry 121. Confirmed via GitHub releases API.
+- **No SM121/SM120/GB10/sm_12-specific changes** in v0.26.0. Only Blackwell-adjacent item: arm64 Blackwell SM10x/SM110 image builds — SM110 ≠ SM121.
+- **v0.26.0 notable items** (context for Arm C eval): `nvfp4_per_token` online MoE quantization; FlashInfer 0.6.14 dependency; separate `kv_cache_dtype` config; hybrid SWA+full DFlash drafters.
+- **PR #40099** (Gemma4 repetition detection / auto-enable fix): **OPEN**, last activity July 8, 2026 (~25 days stalled as of today). Stalled 1 additional day vs Entry 127. Gate for Gemma4 structured output experiment remains blocked.
+- **Issue #41063** (DeepGEMM SM12.x kernel coverage): **OPEN**, effectively dormant (~3 months since last meaningful update April 27, 2026). No movement in v0.25.x or v0.26.0.
+- **Classification: NO ACTION**
+
+---
+
+#### Check 3 — eugr/spark-vllm-docker
+
+**NEW BUILD released today (2026-08-02, 01:27-01:32 UTC):**
+- `prebuilt-vllm-current`: **`0.26.1rc1.dev244+gd6a593feb.d20260801`** — was `dev166+gb1a7b0271.d20260731`
+- Delta: **+78 upstream vLLM commits** (dev166→dev244); base commit changed `b1a7b027`→`d6a593fe`
+- Trigger commit: `f7d6e3b` (Aug 1) — "Pinned apache-tvm-ffi to avoid regressions in the latest version" (authored by eugr)
+- FlashInfer: **0.6.17** (version unchanged; new build commit `d020372b`)
+- Released as: "New stable build"
+
+**PR status:**
+- **#325** (multi-model stacks): OPEN/unmerged; last force-pushed July 31; new issue #330 filed asking about multi-model serving
+- **#279** (DFlash+FP8 KV): dormant ~11 weeks (since June 12)
+- **#319** (DSV4F+SM120): no new activity
+- **#323** (Laguna-S-2.1-NVFP4): no new activity
+
+**Side note:** Issue #260 — Kimi-K2.6-NVFP4 init hang on DGX Spark (GPU spin-loop after model loading, all CUDA graph modes affected); informational (different model, not production-relevant).
+
+**⚠ Arm C/D eval target updated: dev244** (supersedes dev166; same eval entry point, new 78-commit baseline; apache-tvm-ffi pin is likely a stability improvement, not a breaking change). No recipe changes identified.
+- **Classification: WORTH WATCHING** (new stable build, Arm C/D target updated)
+
+---
+
+#### Check 4 — Qwen / New Models
+
+- **Qwen3.7 (27B/35B):** Confirmed closed-frontier. **102 days** since last Qwen open-weight release (Qwen3.6-27B, April 22, 2026). No HF model card exists. Permanent closed-frontier per direct HF check (Entry 118). Do NOT hold Arm C/D eval.
+- **Qwen3.8-Max-Preview:** Announced 2026-07-19 ("going open-weight soon" per official Qwen X/Twitter). 2.4T total params, sparse MoE; active-param count not disclosed. No HF model card as of Aug 2. Historical cadence (API→open-weight ~3 weeks from Qwen3.6) would suggest release ~Aug 9 ±week — **watch window open now.** At 2.4T total params, NVFP4/MXFP4 is the only viable Spark path. Arm C/D build gate applies.
+- **Qwen4:** No announcement, no release.
+- **Other labs (new ~30-40B MoE/~3B active):** No new models surfaced in this recon period.
+- **Classification: WORTH WATCHING** (Qwen3.8 open-weight release imminent per cadence)
+
+---
+
+#### Check 5 — NVIDIA DGX Spark Forum (719.json: 403; WebSearch fallback)
+
+**New thread since Entry 127 (Aug 1):**
+
+- **INFO: /t/378773** (~Aug 1-2, 2026) — "Performance Bottleneck on Grace-Blackwell (GB10) with vLLM: Emulation vs. Native aarch64 & CUDA 13 Library Pathing" — OP gets 3.7 tok/s on Qwen2.5-Coder-32B-Instruct. Root causes: (a) x86_64 PyTorch cu124 pip wheels used on ARM64; (b) vLLM precompiled CUDA 12 kernels fail on DGX Spark's CUDA 13 runtime; (c) `--enforce-eager` workaround costs additional 20-30%. **Production relevance: NONE** — onboarding failure, no regression, no action needed.
+
+**Open action items (carry-forward):**
+- **⚠ /t/378200 driver 580.173.02 breakage**: No NVIDIA response, no fix, no advisory as of Aug 2. `nvidia-spark-ota-check` flags 580.173.02 as "torn" when paired with OTA2607. Driver pin to 580.159.03 remains mandatory before any `apt` operation.
+- **EC 0x03000508 fan curve: STILL UNRESOLVED** (case 260716-000029 OPEN). No patched EC (OTA2608 not yet announced).
+- **/t/378315** (90W hard power-off under GPU load): no NVIDIA response.
+- **Previously untracked older thread surfaced: /t/373394** — "GPU fails to initialize, GSP_INIT_DONE timeout (Xid 119) and SEC2 secure-boot timeout, RmInitAdapter failed" (~June 2026). Overlaps symptomatically with /t/378200 GSP Secure Boot failure; may be ancestor or separate instance. Low urgency — production unit clean.
+
+**OTA2608 imminence signal:** NVIDIA's stated release cadence (February + August for first two years). DGX Spark User Guide re-dated July 31, 2026 — consistent with pre-release documentation prep. OTA2608 NOT yet announced as of Aug 2, but release window is open. When it drops: check (a) EC version — must not re-apply 0x03000508 without confirmed fan-curve fix; (b) driver version pairing — 580.173.02 Secure Boot GSP failure resolution; (c) kernel bump — SecureBoot prebuilt module verification per CLAUDE.md required before reboot.
+- **Classification: WORTH WATCHING**
+
+---
+
+#### Cross-Correlated Findings
+
+1. **Arena collection recovered (Check 1) cross-correlates with no new vLLM/svd submissions (Checks 2-3):** Collection went from 2→187 docs but contains entries only through ~June 2026. July-era entries still absent. Top vLLM FP8 remains 80.27 (May 2026), confirming the FP8 vLLM frontier is stagnant. Two independent sources (Arena + vLLM releases) confirm no new performance advance.
+
+2. **svd dev244 new build (Check 3) + Qwen3.8 imminent (Check 4):** The new stable build coincides with the Qwen3.8 open-weight watch window. If Qwen3.8 open weights drop around Aug 9, dev244 would be the relevant eval target. These are aligned timing-wise; no action today but both are on the same eval timeline.
+
+3. **Forum OTA2608 signal (Check 5) + driver pin action (Checks 4-5):** The OTA2608 release may resolve both the 580.173.02 driver apt issue and the EC fan-curve bug simultaneously. If it addresses both, it would clear two carry-forward actions. Watch forum category 722 for the announcement.
+
+4. **No new Arena submissions since May 2026 (Check 1) and no new vLLM release (Check 2):** The FP8/vLLM performance frontier on SM121 has been static for over 2 months. The community energy has shifted to NVFP4 + Atlas paths (both gated for production until Arm C/D upgrade). This pattern is stable and expected.
+
+---
+
+#### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 Qwen3.6 vLLM >88.30 tok/s (>10% above 80.27 baseline) | NOT FIRED — top vLLM entry confirmed 80.27 (unchanged, May 2026) |
+| Arena: Atlas/new runtime noted | INFO — Atlas 172.03 visible in recovered collection (from May 2026, pre-existing watch item) |
+| vLLM SM121/GB10/Blackwell/sm_12 arch-guard | NOT FIRED — v0.26.0 has no SM121 changes |
+| vLLM new release >v0.26.0 | NOT FIRED — v0.26.0 still latest |
+| vLLM Gemma4 PR #40099 merged | NOT FIRED — OPEN, ~25 days stalled |
+| DeepGEMM AND SM12x/GB10 (issue #41063) | NOT FIRED — OPEN, effectively dormant |
+| Qwen3.7/Qwen3.8 open weights (A3B class) | NOT FIRED — Qwen3.8 "soon" per Jul 19, no HF release yet |
+| EC firmware patch / OTA2608 | NOT FIRED — OTA2608 not yet announced; imminent per cadence |
+| Forum: driver apt breakage → production risk | CARRY-FORWARD — /t/378200 unresolved, no NVIDIA fix |
+| svd new build | INFO — dev244 released Aug 2 (+78 commits, TVM-FFI pin); Arm C/D eval target updated |
+
+---
+
+#### Overall: WORTH WATCHING
+
+No new ACTION triggers fired. Three parallel watch items are converging: (1) Qwen3.8 open-weight release window is open (announced "soon" July 19, ~Aug 9 per cadence); (2) OTA2608 is likely imminent per NVIDIA's August release schedule; (3) svd dev244 is the new eval baseline with 78 fresh commits. The Arena collection recovery (2→187 docs) is the notable positive signal — baseline confirmed at 80.27 tok/s vLLM FP8, and tracking is restored. The sole carry-forward ACTION (driver 580.159.03 pin before next apt) remains unresolved.
+
+---
+
+#### Recommendations
+
+1. **[CARRY-FORWARD ACTION — BEFORE NEXT APT] Pin driver 580.159.03** (from Entry 126/127):
+   ```bash
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 \
+     nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+   No NVIDIA resolution as of Aug 2. Risk unchanged.
+
+2. **[CARRY-FORWARD] Do NOT apply July 2026 DGX Dashboard OTA.** EC 0x03000508 fan curve unpatched; no OTA2608 yet. Triple hold in force.
+
+3. **[NEW WATCH — next 7 days] Qwen3.8 open-weight release window.** "Going open-weight soon" per official Qwen X/Twitter (Jul 19). Historical cadence suggests release ~Aug 9 ±1 week. If weights drop on official Qwen HF org: (a) confirm A3B active-param class; (b) check for FP8 variant; (c) check SM121 architecture compatibility (hybrid attention = blocked; standard MoE = viable).
+
+4. **[NEW WATCH — next 24-48h] Poll for OTA2608.** NVIDIA's February/August cadence + User Guide re-dated Jul 31 = release imminent. When announced: check (a) EC version (must NOT re-apply 0x03000508 without fan-curve fix); (b) driver pairing (must resolve 580.173.02 Secure Boot GSP failure); (c) kernel bump — SecureBoot prebuilt module verification per CLAUDE.md before reboot.
+
+5. **[UPDATED] Arm C/D eval target: dev244** (was dev166; new stable build Aug 2, +78 commits, apache-tvm-ffi regression pin). B1 probe (NVFP4 KeyError test on `nvidia/Qwen3.6-35B-A3B-NVFP4`) remains first eval task at next hands-on window.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, ~25 days stalled.** No action until merged.
+
+7. **[RESTORED] Arena tracking is usable again** (187 docs, confirmed 80.27 tok/s vLLM FP8 baseline). Resume routine Arena checks in subsequent recons.

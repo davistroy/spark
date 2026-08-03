@@ -9993,3 +9993,85 @@ No new ACTION triggers fired. Three parallel watch items are converging: (1) Qwe
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, ~25 days stalled.** No action until merged.
 
 7. **[RESTORED] Arena tracking is usable again** (187 docs, confirmed 80.27 tok/s vLLM FP8 baseline). Resume routine Arena checks in subsequent recons.
+
+## Entry 129 - DGX Spark Recon (2026-08-03)
+
+**Overall: WORTH WATCHING**
+
+### Check 1 — Arena Firestore
+
+Total docs: **188** (+1 from Entry 128). July gap **FULLY RESOLVED** — collection now covers 2026-02-09 through 2026-08-02 (47 previously-absent July+ entries now visible).
+
+Top vLLM FP8 Qwen3.6-35B-A3B single-node (tg128 c=1): **80.27 tok/s** (sub1779297106805, Stojanovic, 2026-05-20) — CONFIRMED UNCHANGED. No FP8 vLLM entry above 88.30 threshold. No new FP8 vLLM submissions since 2026-05-26. Frontier static.
+
+Top overall single-node: **218.85 tok/s** (sub1779495971526, Atlas, Rajendra Rawat, Qwen3.6-35B-A3B-NVFP4, **2026-05-23**) — **DATE CORRECTION: this is a May submission, NOT July-16 as prior entries recorded.** Prior tracking of "top visible = 172.03" was undercounting; this entry and sub1778912561290 (217.37 tok/s, Amorim, May-16) were already in the collection but previously unseen. Top vLLM NVFP4 single-node: **118.91 tok/s** (sub1782803609803, Poveda, 2026-06-30; Hon Lam 98.43 tg128 c1, 2026-07-25) — **now confirmed via automated Firestore check** (was manual-only capture in Entry 094). New runtime: **vLLM-Ray** (4 multi-node entries July-Aug 2026; not single-node relevant). New model: **DeepSeek-V4-Flash-0731** (Aug 2 submissions, multi-node, 43-47 tok/s 2-node).
+
+### Check 2 — vLLM Releases
+
+No new release; **v0.26.0 (2026-07-25) still latest**. PR #40099 (Gemma4 repetition fix): **OPEN, now ~26 days stalled** (last activity 2026-07-08; zero maintainer progress). Issue #41063 (DeepGEMM SM12.x): **OPEN, dormant ~3+ months**. No SM121/GB10-specific changes in v0.26.0 (Blackwell refs are SM10x/SM110, not SM121).
+
+### Check 3 — spark-vllm-docker + Qwen HuggingFace
+
+svd: **dev247** (v0.26.1rc1.dev247+ge92dc7a9c.d20260802, Aug 2 11:12Z; was dev244 from Entry 128). Delta: +3 upstream commits (DSV4 sequence parallelism, GPT-OSS constrained decoding, cache_salt support) — no SM121/GB10 changes. FlashInfer: **0.6.17 unchanged**. PRs: #279 (DFlash+FP8 KV) dormant ~13 weeks; #323 (Laguna NVFP4 recipe) minor compat activity Aug 3; #319 (DSV4F+SM120) minor bug report; #325 (multi-model) still open.
+
+**⚠ QWEN3.8 OPEN WEIGHTS CONFIRMED IMMINENT (~Aug 9):** Official Qwen X post (2026-08-02/03): "Next week, the open weights of Qwen3.8-Max will be released, and Qwen3.8-27B is also going open-weights." Two models:
+- **Qwen3.8-Max** (2.4T total / ~95B active, multimodal MoE): **NOT Spark-viable** at single-node — 95B active params overwhelms Spark's serving envelope.
+- **Qwen3.8-27B** (architecture unconfirmed, likely dense 27B per Qwen naming convention): **NOT an A3B-class successor** — probably dense 27B, lower throughput than current 3B-active MoE. SM121 compatibility TBD. FP8 variant expected (Qwen's standard pattern). No HF model cards on official Qwen org as of Aug 3.
+
+### Check 4 — NVIDIA Forum
+
+719.json: 403 (WebSearch fallback). No threads above /t/378773 indexed yet (normal 24-48h lag). **NEW: /t/378500** "DGX Spark not suitable for professional workloads due to thermal instability" — 2+ pages; thermal cluster escalation growing. OTA2608: **NOT announced** (NVIDIA August cadence + User Guide re-dated Jul 31 = still imminent). Driver /t/378200 (580.173.02 breakage): **STILL OPEN, no NVIDIA fix**. EC 0x03000508 fan curve: **STILL UNRESOLVED** (case 260716-000029 open). **INFO:** /t/375923 corroborates vLLM v0.24.0 + NVFP4 KV cache + DFlash confirmed working on 2×DGX Spark (community recipe posted). **Caution:** community reference notes "latest vLLM requires driver 595.58" for NVIDIA containers; needs investigation before Arm C eval (eugr community builds may use different CUDA path and may not be affected).
+
+---
+
+### Cross-Correlated Findings
+
+1. **Arena + vLLM (Checks 1+2):** FP8 vLLM top confirmed static at 80.27 (May 2026) with no new SM121-relevant vLLM release. Performance story fully shifted to NVFP4 (118.91 Poveda) and Atlas (218.85) — both require Arm C/D build upgrade. Two independent sources (Arena + vLLM releases) confirm no movement on the FP8 vLLM frontier.
+
+2. **Qwen3.8 + svd dev247 (Checks 3+3):** Open weights confirmed ~Aug 9; dev247 would be eval target. Key architectural constraint: neither Qwen3.8-Max (95B active) nor Qwen3.8-27B (likely dense) is an A3B (3B-active MoE) successor. Architecture confirmation on HF model card is required before eval planning.
+
+3. **Forum thermal + no OTA (Check 4):** /t/378500 growing escalation; EC 0x03000508 fan curve still unresolved; no OTA2608 announced. Thermal risk for sustained inference persists with no NVIDIA timeline. OTA hold remains fully justified.
+
+4. **Arena date correction vs prior tracking (Check 1):** "July-era Atlas 218.85 (Rajendra Rawat, 2026-07-16)" referenced in Entries 123-128 is actually **sub1779495971526 dated 2026-05-23** — a May submission misattributed to July. July gap now fully resolved (188 docs through Aug 2); no separate July-16 Rawat Atlas submission identified. Prior baseline top-overall of "172.03" was undercounting two higher May-2026 Atlas entries.
+
+---
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27 baseline) | NOT FIRED — 80.27 confirmed, no new submissions |
+| vLLM new release >v0.26.0 | NOT FIRED — v0.26.0 still latest |
+| vLLM SM121/GB10/Blackwell arch-guard | NOT FIRED — no SM121 changes in v0.26.0 |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled 26 days |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant 3+ months |
+| Qwen3.8 open weights on official HF org | NOT FIRED — announcement only; no HF card yet; imminent |
+| OTA2608 announced | NOT FIRED — imminent per NVIDIA cadence |
+| Arena: new runtime | INFO — vLLM-Ray (4 entries, multi-node only; not production-relevant) |
+| svd new build | INFO — dev247 (+3 upstream commits, no SM121 impact) |
+| Driver apt breakage (/t/378200) resolved | CARRY-FORWARD UNRESOLVED |
+
+---
+
+### Overall: WORTH WATCHING
+
+No action triggers fired. Three items converge in the next 7 days: (1) Qwen3.8 open weights ~Aug 9 (confirmed via official X post) — but neither model appears to be an A3B-class successor; architecture confirmation required on HF release before any eval planning; (2) OTA2608 remains imminent per NVIDIA's August cadence; (3) svd Arm C/D eval target updated to dev247. Arena tracking fully restored; FP8 vLLM baseline confirmed at 80.27 tok/s; top-overall corrected to 218.85 (May-23 Atlas NVFP4, Rawat).
+
+---
+
+### Recommendations
+
+1. **[CARRY-FORWARD — BEFORE NEXT APT] Pin driver 580.159.03** — /t/378200 unresolved, no NVIDIA fix:
+   ```
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+
+2. **[CARRY-FORWARD] Do NOT apply July 2026 OTA.** EC 0x03000508 fan curve unpatched. No OTA2608 yet. Triple hold maintained.
+
+3. **[WATCH — check daily from Aug 8] Qwen3.8-27B HF release.** If HF card appears on official Qwen org: confirm architecture (dense vs MoE, active params). Dense 27B = lower throughput than prod; only viable if quality premium justifies throughput tradeoff. A3B-class MoE = ACTION (unlikely per current info). Do NOT plan eval until architecture confirmed.
+
+4. **[WATCH — 24-48h] OTA2608 poll.** When announced: check (a) EC version — must fix fan curve, not re-apply 0x03000508; (b) driver version — must resolve 580.173.02 GSP Secure Boot failure; (c) kernel bump — SecureBoot prebuilt verification per CLAUDE.md before reboot.
+
+5. **[UPDATED] Arm C/D eval target: dev247** (was dev244, Entry 128). Before scheduling eval: investigate reported "driver 595.58 requirement" for vLLM v0.24.0+ NVIDIA containers — likely applies to official NVIDIA containers, not eugr community builds (which ran CUDA 13.2 on driver 580.x successfully), but verify before committing to the build plan.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 26 days.** No action until merged.

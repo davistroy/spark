@@ -10075,3 +10075,74 @@ No action triggers fired. Three items converge in the next 7 days: (1) Qwen3.8 o
 5. **[UPDATED] Arm C/D eval target: dev247** (was dev244, Entry 128). Before scheduling eval: investigate reported "driver 595.58 requirement" for vLLM v0.24.0+ NVIDIA containers — likely applies to official NVIDIA containers, not eugr community builds (which ran CUDA 13.2 on driver 580.x successfully), but verify before committing to the build plan.
 
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 26 days.** No action until merged.
+
+## Entry 130 - DGX Spark Recon (2026-08-04)
+
+**Overall: WORTH WATCHING**
+
+### Check 1 — Arena Firestore
+
+**Transient pruning event — 2 docs returned** (pageSize=30 and pageSize=50 both return only `sub1770622524960` (gpt-oss-120b, Feb 9) and `sub1770681883769` (gpt-oss-120b, Feb 10); no nextPageToken). pageSize=200 failed with content-limit overflow (>10 MB), confirming the full collection is intact server-side — only the paginated query is broken. This is the same pattern as the 2026-08-01 transient event (Entry 128) which recovered to 187 docs within 24h. No new FP8 Qwen3.6-35B-A3B vLLM submissions visible. **Baseline carried forward from Entry 129:** FP8 vLLM top = **80.27 tok/s** (sub1779297106805, Stojanovic, 2026-05-20); NVFP4 vLLM top = **118.91 tok/s** (Poveda, 2026-06-30); overall top = **218.85 tok/s** (Atlas NVFP4, Rawat, 2026-05-23). FP8 vLLM frontier static since May 2026.
+
+### Check 2 — vLLM Releases
+
+**v0.26.0 (2026-07-25) still latest** — confirmed via GitHub releases page. No new release in 24h since Entry 129. No SM121/GB10-specific changes in v0.26.0 (arm64 Blackwell refs = SM10x/SM110 only). PR #40099 (Gemma4 repetition detection): **OPEN, now ~27 days stalled** (last activity 2026-07-08; zero maintainer progress). Issue #41063 (DeepGEMM SM12.x): dormant 3+ months (carry forward).
+
+### Check 3 — spark-vllm-docker + Qwen HuggingFace
+
+**svd:** `prebuilt-vllm-current` = **dev247** (v0.26.1rc1.dev247+ge92dc7a9c.d20260802) — **unchanged** from Entry 129. FlashInfer 0.6.17 unchanged. No new build in 24h (confirmed via WebSearch).
+
+**Qwen3.8 open weights NOT yet on HuggingFace as of Aug 4.** HF search returns zero results for "Qwen3.8" on official Qwen org. Release window remains ~Aug 9 per official Aug 2/3 X post ("Next week, the open weights of Qwen3.8-Max will be released, and Qwen3.8-27B is also going open-weights"). **⚠ NEW ARCHITECTURE RISK FACTOR (Entry 130):** `Qwen/Qwen3.6-27B` — the analogous "27B" model in the prior generation — is a **dense 27B with Gated DeltaNet hybrid attention** (same mechanism as Qwen3-Coder-Next). If Qwen3.8-27B inherits this architecture: (a) **0% MTP acceptance** (same q_scale=1.0 fallback as Coder-Next, Entry 072); (b) **dense-27B bandwidth-limited throughput** (~7.8 tok/s on GB10 per SPARK_BASELINE). This makes Qwen3.8-27B unlikely to be a production successor even if quality improves. Qwen3.8-Max (2.4T total) remains outside Spark's serving envelope. No other new Qwen models on official org.
+
+### Check 4 — NVIDIA Forum
+
+719.json: 403 (WebSearch fallback). **OTA2608: NOT announced** — no August firmware thread found (July 2026 Release remains latest). EC 0x03000508 fan curve: **STILL UNRESOLVED** (case 260716-000029 open). Driver 580.173.02 breakage (/t/378200): **STILL OPEN**, no NVIDIA response. Thermal cluster /t/378500 ("DGX Spark not suitable for professional workloads due to thermal instability") continues growing. No new threads above /t/378773 indexed. **NEW (first sighted this recon): /t/377787** "New Inference Server for DGX Spark Cluster: running mid-large models with C4 >55-90 tok/s, unquantized and no speculative decoding" — thread content 403; thread# suggests late-July post; title implies novel approach for mid-size models; insufficient detail for action.
+
+---
+
+### Cross-Correlated Findings
+
+1. **Arena transient pruning + static FP8 frontier (Checks 1+2):** Second transient pruning episode within 4 days (Aug 1 and Aug 4; pattern emerging). pageSize=200 overflow confirms collection intact server-side. Baseline 80.27 tok/s FP8 vLLM (May 2026) and no new submissions expected — corroborated by Check 2 showing no vLLM updates that would change SM121 performance.
+
+2. **Qwen3.8-27B architecture risk (Check 3 cross-ref with Qwen3.6-27B precedent):** New risk factor identified: Gated DeltaNet hybrid attention in Qwen3.6-27B strongly predicts 0% MTP acceptance and dense-model throughput penalty for Qwen3.8-27B if architecture is inherited. This downgrade of the production impact assessment is based on one data point (Qwen3.6-27B) — confirm from HF model card before acting.
+
+3. **No OTA + ongoing thermal + unresolved driver breakage (Check 4):** All three blockers unchanged from Entry 129. EC fan curve unresolved; driver 580.173.02 in noble-updates/restricted; no OTA2608. Triple hold remains the correct posture.
+
+---
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27 baseline) | NOT FIRED — arena in transient pruning; baseline 80.27 carried forward |
+| vLLM new release >v0.26.0 | NOT FIRED — v0.26.0 still latest |
+| vLLM SM121/GB10/Blackwell arch-guard | NOT FIRED — no SM121 changes |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled 27 days |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant 3+ months |
+| Qwen3.8 open weights on official HF org | NOT FIRED — release ~Aug 9; weights not yet visible |
+| OTA2608 announced | NOT FIRED — no August firmware thread found |
+
+---
+
+### Overall: WORTH WATCHING
+
+No action triggers fired. Arena in a recurring transient pruning pattern (Aug 1 and Aug 4) that historically recovers within 24h; collection is intact. The most significant new finding is the Qwen3.8-27B architecture pre-analysis: Gated DeltaNet hybrid attention (from Qwen3.6-27B precedent) predicts 0% MTP acceptance and dense-27B throughput — substantially lowers expected production impact of the ~Aug 9 release. OTA2608 and EC fan curve patch still pending with no NVIDIA timeline. Triple hold maintained.
+
+---
+
+### Recommendations
+
+1. **[CARRY-FORWARD — BEFORE NEXT APT] Pin driver 580.159.03** (/t/378200 unresolved, no NVIDIA fix):
+   ```
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+
+2. **[CARRY-FORWARD] Do NOT apply July/August 2026 OTA.** EC 0x03000508 fan curve unpatched; no OTA2608 yet. Triple hold maintained.
+
+3. **[UPDATED — NEW RISK] Qwen3.8-27B HF release (~Aug 9): confirm Gated DeltaNet architecture.** When HF model card appears on official Qwen org: check `config.json` for hybrid attention fields. If Gated DeltaNet (same as Qwen3.6-27B) → expect 0% MTP acceptance + dense-27B ~7.8 tok/s throughput ceiling → not a production successor. A3B-class MoE without hybrid attention = ACTION; dense-GDN = WORTH WATCHING only (quality tradeoff).
+
+4. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify (a) EC version must fix 0x03000508 fan curve; (b) driver must not pair 580.173.02 GSP Secure Boot failure; (c) kernel bump — SecureBoot prebuilt check per CLAUDE.md before reboot.
+
+5. **[CARRY-FORWARD] Arm C/D eval target: dev247** (unchanged since Entry 129). Investigate "driver 595.58 requirement" for official NVIDIA vLLM containers before scheduling eval.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 27 days.** No action until merged.

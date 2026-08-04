@@ -8712,3 +8712,89 @@ Cross-ref Entry 116, Entry 118, [[spark-outage-2026-08-03]].
 **Standing risk, not resolved by this recovery:** the underlying forum pattern (PSU-safety-mode-under-resource-exhaustion theory, un-fixed by NVIDIA, other units needing RMA with PSU swaps not always sufficient) means **this could recur** under a similar sustained-heavy-load + eventual full-lockup scenario, especially since Entry 117's resilience items (admission control, mem_limit, earlyoom, management-plane cgroup protection) are still all undone. Entry 117 is now higher-priority than "nice to have" — it's the difference between a contained software incident and a repeat of today's multi-hour total outage + hard power failure. Also: **fix the broken recon cron** (PATH issue, 3 cycles silently failed) so forum intelligence like this doesn't go stale exactly when it's needed. Cross-ref Entry 116, Entry 117, [[spark-outage-2026-08-03]].
 
 _Further results appended below as executed._
+
+---
+
+## Entry 119 — DGX Spark Audit (2026-08-04)
+
+**Date:** 2026-08-04 06:00–06:15 UTC
+**Operator:** Claude Code (spark-audit skill)
+**Status:** AUDIT — no changes made. All commands read-only (`docker inspect`, `nvidia-smi`, `free`, `systemctl show`, `curl /health`) plus three non-mutating c1 inference requests for the perf datapoint.
+**Context:** first audit since the 2026-08-03 outage cluster (Entries 116–118). Host uptime 9h43m — this is the post-power-failure boot, so a primary goal was verifying the Entry 117 resilience work survived the unplanned power cycle.
+
+### Config Drift
+
+| Item | `SPARK_CONFIG.md` / CLAUDE.md says | Live | Severity |
+|------|-----------------------------------|------|----------|
+| `qwen35 --enforce-eager` | **not documented anywhere** | **PRESENT** | **HIGH** |
+| `qwen35 --gpu-memory-utilization` | 0.70 | 0.60 | WARNING (intentional, Entry 115; docs never updated) |
+| `qwen35 --max-num-seqs` | not in SPARK_CONFIG.md | 8 | INFO (Entry 117 item 1; notebook-documented, config doc stale) |
+| `qwen35 mem_limit` | not in SPARK_CONFIG.md | 100g | INFO (Entry 117 item 2, same) |
+| `bge-m3` (:8004) | documented running service | `Exited (0)` 10 days | WARNING (Entry 115 "restore TODO", now 11 days open) |
+
+**Headline finding — undocumented `--enforce-eager` on the primary LLM.** Live `qwen35` runs with CUDA graphs disabled. vLLM startup confirms it (`non-default args: {… 'enforce_eager': True …}`). It is in neither CLAUDE.md nor SPARK_CONFIG.md and **has no LAB_NOTEBOOK entry**. Provenance recovered from the box: `/home/claude/docker-compose.yml.bak-pre-enforce-eager-20260729101823` — added **2026-07-29 10:18 UTC**, i.e. during the 07-29 near-total-stack crash-recovery referenced in Entry 116, by a session that never logged it. Entry 117's diff shows it only as an unchanged context line, which is why it was never questioned. Most plausible intent: the vllm#37754 FlashInfer+MTP Xid-13 workaround (crash narrowed to CUDA graphs; `--enforce-eager` reported stable) — **but that is inference, not a recorded decision.** It is the direct cause of the throughput regression below.
+
+### Missing Optimizations
+
+- Present and correct: MTP=2 speculative config ✓, `VLLM_FLASHINFER_MOE_BACKEND=latency` ✓, absolute volume paths (no `~`) ✓, chunked prefill on (`max_num_batched_tokens=32768`) ✓, `qwen3-embed` has both `--runner pooling` + `--enforce-eager` ✓, `gliner` `GLINER_DEVICE=cuda` ✓.
+- Anti-patterns: none active. No `VLLM_TEST_FORCE_FP8_MARLIN`, no `--no-async-scheduling`, no tilde in binds.
+- `--enable-prefix-caching`: not explicit; absent from `non-default args`, so at vLLM V1 default (on). Not a gap.
+- `--load-format fastsafetensors`: missing (LOW — cold-start only).
+- **New anti-pattern to add to the skill's table: `--enforce-eager` on `qwen35`** (HIGH). It is a legitimate *stability* workaround but must never be silent — it costs the CUDA-graph win the whole cu132+MTP production config was adopted for.
+
+### Memory Budget
+
+- **GPU (unified, 121.6 GiB ceiling): 81.0 GiB allocated, ~40.6 GiB free** — HEALTHY (<95 GiB). Breakdown: `qwen35` 65.1 GiB, `qwen3-embed` 12.4 GiB, `gliner` 1.94 GiB, `ce-service` 1.50 GiB.
+- **Host RAM: 90 GiB used / 121 GiB, 31 GiB available** — HEALTHY (>12 GiB threshold). A different world from Entry 116's ~100–200 MiB.
+- **Swap: 6.2 GiB / 15 GiB used — residual, not active.** `vmstat 2 3` shows `si=0 so=0` at steady state (the nonzero first row is the since-boot average). With `vm.swappiness=1` these pages will not be reclaimed on their own; this is leftover from the 08-03 thrash, not ongoing pressure. Classified WARN-residual rather than CRITICAL on that evidence.
+- **KV cache: 378,416 tokens** (was 504K at gpu_util 0.70) → **max concurrency at 131K context ≈ 2.9x**. **`--max-num-seqs 8` therefore sits ~2.8x above the KV envelope at full context** (8 × 131K = 1.05M tokens vs 378K available). Not a defect — vLLM preempts/queues rather than failing — but the admission-control number and the KV envelope were set by two different sessions and never reconciled. At long contexts the cap does not bind; at short contexts it does.
+- `chromadb` at 14.7 MiB / 10 GiB (memwatch, 06:00 UTC) — post-restart floor, growth curve not yet re-established since the power event.
+
+### System Health — HEALTHY
+
+- Endpoints: `:8000` 200, `:8001` 200, `:8002` 200, `:8003` `/api/v2/heartbeat` 200, `:8005` `/docs` 200. **`:8004` (bge-m3) down** — container stopped, per above.
+- 8/9 containers up, all healthy. Restart counts 1–2 across the stack = the 08-03 recovery, nothing since.
+- GPU idle: **43 °C, 12.08 W, SM clock 2392 MHz** — healthy, and notably **the forum's "SM clock pinned at 721 MHz" bug (/t/376039) is NOT manifesting** on this unit post-power-event.
+- Disk 48% (1.7T/3.6T). Kernel 6.17.0-1021-nvidia, driver 580.159.03, `dpkg --audit` clean.
+- **`modinfo -F signer nvidia` = `Canonical Ltd. Kernel Module Signing`** — prebuilt, UEFI-CA-signed, SecureBoot-safe. The DKMS/MOK hazard from the CLAUDE.md dist-upgrade rule is **not** armed; the next reboot is safe from that specific failure.
+- **Entry 117 resilience work survived the power cycle — verified live:**
+  - `earlyoom` active + **enabled**, argv exactly as intended: `-m 5,2 -s 100 -p -r 300 --avoid sshd|tailscaled|dockerd|containerd`.
+  - `ssh.service` and `docker.service` drop-ins now **effective** (`systemctl show` → `MemoryHigh=2147483648`, `OOMScoreAdjust=-900`). Entry 117 noted docker's override would only take effect "on the next natural restart" — the 08-03 power event supplied it. That item is now live rather than pending.
+- **Blind spot (recurring):** `dmesg` and `journalctl -k` are unreadable as `claude` (`dmesg_restrict`, no `adm`/`systemd-journal` membership, `sudo dmesg` needs a TTY). **The audit cannot see kernel errors or confirm whether earlyoom has ever fired.** Same gap Entry 117 flagged and did not close. Cheap fix: `usermod -aG adm,systemd-journal claude`.
+
+### Performance vs Baseline — WARNING
+
+3 × 600-token c1 runs (`enable_thinking:false`, warm engine): **53.9 / 53.3 / 52.8 tok/s → 53.3 tok/s steady.**
+Authoritative baseline (Entry 080, same kernel 1021, same 600-tok × 3 harness, MTP=2): **73.1 tok/s.**
+**Delta: −27.1%** — inside the 15–30% WARNING band, just under CRITICAL. MTP still functions (66.4% acceptance across the measurement window; 72.8% lifetime) vs 79.8% baseline. Attribution: predominantly `--enforce-eager` (CUDA graphs off; CLAUDE.md's rule-of-thumb is 10–20%, Entry 7714's Nemotron note ~37% when graphs *and* MTP are lost — 27% with MTP intact fits between), secondarily the gpu_util 0.70→0.60 KV trim. **This is a real, unrecorded ~27% production regression that has been live for 6 days.**
+
+### Version Currency
+
+| Component | Running | Latest known | Gap |
+|-----------|---------|--------------|-----|
+| vLLM (qwen35) | 0.19.1rc1.dev219+g72ff142c3 (2026-04-12 build) | v0.25.1 | **HIGH** — 6 minors behind (known/accepted, Arm C deferred) |
+| FlashInfer | 0.6.7 | 0.6.7 | current ✓ |
+| PyTorch / CUDA | 2.11.0+cu130 / 13.0 runtime | — | as documented ✓ |
+| Driver | 580.159.03 | known-safe 580.142 | newer, on the safe 580.x line ✓ |
+| vLLM (qwen3-embed) | 0.17.0rc1.dev102 | — | INFO — pinned known-good image, by design |
+
+### Cross-Correlated Findings
+
+- **Drift (Check 1) explains the perf regression (Check 4):** undocumented `--enforce-eager` → −27% c1. Two independent checks, one root cause. Highest-confidence finding in this audit.
+- **Drift + memory (Checks 1/3):** gpu_util 0.60 → KV 378K → 2.9x envelope, against a `--max-num-seqs 8` cap chosen without reference to it. Both are individually justified; the pair was never reconciled.
+- **Health + history:** every restart count on the box maps to the 08-03 recovery, and swap is residual with zero paging — i.e. **the Entry 116/118 incident is over, not smouldering.** Combined with earlyoom + the now-effective systemd drop-ins, the host is in materially better shape than at any point in Entries 116–118.
+
+### Overall: NEEDS ATTENTION
+
+Driven by: the undocumented `--enforce-eager` drift, the −27% c1 regression it causes, and `bge-m3` being down 11 days. No CRITICAL findings; the vLLM version gap is a pre-existing accepted deferral, not a fresh problem. **The system is stable and healthy — the issue is that its live config no longer matches its documented config, and nobody decided that.**
+
+### Recommendations
+
+1. **Resolve `--enforce-eager` — decide, then document either way (HIGH).** Two outcomes, both acceptable, neither is "leave it undecided": (a) it is a deliberate vllm#37754 Xid-13 workaround → record it in CLAUDE.md + SPARK_CONFIG.md with the 27% cost stated, so it is a *priced* decision; or (b) it was ad-hoc 07-29 crash-recovery → remove it in an idle window and re-measure c1 against 73.1. Given Entries 116–118, stability probably still wins — **but pay the 27% knowingly.**
+2. **Refresh `SPARK_CONFIG.md` (MEDIUM).** It still documents gpu_util 0.70 and knows nothing of `--enforce-eager`, `--max-num-seqs 8`, or `mem_limit: 100g`. It is the audit's drift ground truth, so its staleness degrades every future audit.
+3. **Close the 11-day `bge-m3` decision (MEDIUM).** Restart it or formally decommission it. There is 40 GiB of GPU headroom now, so "no room" is no longer the reason. It has flagged unhealthy in every daily healthcheck since 07-24 — alert fatigue on a real channel.
+4. **Grant `claude` journal access (MEDIUM, cheap).** `usermod -aG adm,systemd-journal claude`. Until then no audit can verify kernel errors or whether earlyoom has ever fired — the exact evidence Entries 116/118 needed and lacked.
+5. **Reconcile `--max-num-seqs 8` against the 2.9x KV envelope (LOW).** Either accept that it only binds at short contexts, or restore gpu_util 0.70 (KV back to ~504K) if item 1 removes `--enforce-eager` anyway — they are the same maintenance window.
+6. **Reclaim ~209 GB of Docker space (LOW).** 107.9 GB reclaimable images + 100.9 GB build cache on a 48%-full 3.6T disk. Not urgent; worth doing before the Arm C v0.23.x build, which will want the room.
+
+**Not done (deliberately):** nothing on the box was modified. Recommendation 1 in particular is a `qwen35` recreate (~5–8 min `:8000` downtime, 420 s start_period) and is Troy's call, not a unilateral audit action.

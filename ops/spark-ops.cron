@@ -13,6 +13,11 @@ MAILTO=""
 # CRON_TZ makes the documented UTC schedule authoritative (fixed 2026-07-16).
 CRON_TZ=UTC
 
+# TEMPORARY (LAB_NOTEBOOK Entry 116, added 2026-08-03): chromadb memory-growth
+# instrumentation, every 10 min. Logs EVERY sample (not quiet-on-healthy) so the
+# growth curve toward the 10GiB cap / host RAM exhaustion is visible. Remove this
+# line once the growth pattern is confirmed/refuted and a real fix lands.
+*/10 * * * * /home/davistroy/dev/personal/spark/ops/spark-chromadb-memwatch.sh
 # Daily liveness + error check (13:05 UTC) — quiet unless something is wrong.
 5 13 * * *   /home/davistroy/dev/personal/spark/ops/spark-healthcheck.sh
 # Weekly NON-DISRUPTIVE inference smoke / perf-drift (Mon 13:30 UTC).

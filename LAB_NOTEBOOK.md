@@ -10146,3 +10146,89 @@ No action triggers fired. Arena in a recurring transient pruning pattern (Aug 1 
 5. **[CARRY-FORWARD] Arm C/D eval target: dev247** (unchanged since Entry 129). Investigate "driver 595.58 requirement" for official NVIDIA vLLM containers before scheduling eval.
 
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 27 days.** No action until merged.
+
+---
+
+## Entry 131 - DGX Spark Recon (2026-08-05)
+
+**Overall: WORTH WATCHING** — B12x MoE kernel ecosystem matures in eugr; Qwen3.8 weights imminent but architecture analysis dims production prospects; Arena pruning extends to 2nd consecutive day; new /t/379168 documents NGC vLLM driver dead-end.
+
+### Check 1 — Arena Firestore
+
+**SECOND consecutive transient pruning day (Aug 4 + Aug 5).** pageSize=30 again returns only 2 docs: `sub1770622524960` and `sub1770681883769` (both gpt-oss-120b MXFP4, Feb 9–10). No nextPageToken. Pattern: Aug 1 event recovered within ~24h; Aug 4 event persisted into Aug 5 — recovery may take 24–48h. Entry 130's pageSize=200 content-limit overflow confirms collection is intact server-side. No new FP8 vLLM Qwen3.6-35B-A3B submissions visible. **Baseline carried forward from Entry 129:** FP8 vLLM top = **80.27 tok/s** (Stojanovic, sub1779297106805, 2026-05-20); NVFP4 vLLM top = **118.91 tok/s** (Poveda, sub1782803609803, 2026-06-30); overall top = **218.85 tok/s** (Atlas NVFP4, Rawat, 2026-05-23).
+
+### Check 2 — vLLM Releases
+
+**v0.26.0 (2026-07-25) still latest.** No new release in 24h. No SM121/GB10-specific changes in v0.26.0 release notes (arm64 Blackwell refs = SM10x/SM110 ≠ SM121). PR #40099 (Gemma4 repetition detection): **OPEN, now ~28 days stalled** (last activity Jul 8; zero maintainer progress). Issue #41063 (DeepGEMM SM12.x): dormant 3+ months. **NEW (from community):** FlashInfer Issue #3013 "Using FlashInfer CUTLASS Backend for vLLM is Slow on SM120/121" — confirms CUTLASS MoE path is slow on SM121; b12x kernels are the proposed fix (see Check 3). FlashInfer Issue #3170 "DGX Spark (SM121) Current Support Audit" — open audit tracking SM121 kernel support gaps.
+
+### Check 3 — spark-vllm-docker + B12x
+
+**svd UPDATED: dev247 → dev298** (v0.26.1rc1.dev298+g1ea84d74b.d20260803, Aug 4, 2026) — **+51 commits since Entry 130.** FlashInfer companion: **0.6.17** (unchanged). Recent commits:
+- Aug 4: "Updated README with B12x support"
+- Aug 1: "Added DSV4F recipe for b12x"; "Merge branch 'main' into b12x"
+- Jul 31: "Updated DSV4F 0731 recipe"; "switched qwen3-coder to instanttensor"; "switched nemotron super to instanttensor"
+
+**NEW: B12x MoE kernel support now active in eugr ecosystem.** `--exp-b12x` preset pulls `eugr/spark-vllm-b12x:latest` — a separate Dockerhub image built and tested nightly by CI. This leverages PR #40082 ("Integrate flashinfer b12x MoE and FP4 GEMM kernels for SM120/121", merged May 2026) and community kernel work. Community claim: **"3x faster on Spark"** for MoE operations via b12x vs CUTLASS baseline (Issue #174 in eugr). Caveat: this claim is vs CUTLASS (slow on SM121 per FlashInfer #3013), not necessarily vs Triton (our current production MoE backend). vLLM Issue #47365 "NVFP4 flashinfer_b12x MoE produces empty/garbage output under pipeline or tensor parallel on SM120 — regression between dev552 (2026-06-29) and dev601 (2026-06-30)" — possible b12x regression; verify fix status before production eval. PR #279 (DFlash+FP8 KV): still dormant (~13 weeks).
+
+### Check 4 — Qwen HuggingFace
+
+**Qwen3.8 open weights NOT YET on HuggingFace as of Aug 5.** Qwen3.8-Max (2.4T total, ~95B active, sparse MoE, multimodal) officially announced Aug 3 — API-only via DashScope. Qwen3.8-27B also announced for open weights. Official timeline: "next week" from Aug 3 = ~Aug 9–10. **Architecture assessment (Entry 130 + 131):**
+- Qwen3.8-Max (95B active): NOT Spark-viable — 95B active params far exceeds single-node serving envelope; NVFP4 required, no FP8 variant expected at this size
+- Qwen3.8-27B: per Qwen naming convention (no `-A` suffix = dense, cf. Qwen3.6-27B dense-27B), likely NOT an A3B-class MoE successor; if architecture inherits Gated DeltaNet from Qwen3.6-27B: (a) 0% MTP acceptance (same q_scale=1.0 fallback as Coder-Next, Entry 072); (b) dense-27B bandwidth-limited ~7.8 tok/s ceiling. **Pre-check on release: verify `config.json` for hybrid attention fields before any eval planning.** No other new A3B-class MoE models from official Qwen org. No HF name squats confirmed on official org.
+
+### Check 5 — NVIDIA Forum
+
+719.json: 403 (WebSearch fallback). **NEW THREAD /t/379168:** "vllm:26.04-py3 — 'compatibility mode is UNAVAILABLE' on driver 580.173.02; no DGX Dashboard path to >=595.58" — NGC vLLM 26.04-py3 container requires driver ≥595.58 or later; after DGX Dashboard updated driver to 580.173.02 (which breaks GPU on reboot per /t/378200), users receive: `ERROR: This container was built for NVIDIA Driver Release 595.58 or later, but version 580.173.02 was detected and compatibility mode is UNAVAILABLE`. **Production relevance: LOW** (we use community eugr containers, not NGC vLLM containers). **But confirms: the NVIDIA official NGC vLLM upgrade path AND driver safety path are both blocked** — no DGX Dashboard mechanism exists to reach driver 595.58. EC 0x03000508 fan curve: **STILL UNRESOLVED** (case 260716-000029 OPEN). Driver 580.173.02 breakage (/t/378200): **STILL OPEN**, no NVIDIA response. OTA2608: **NOT announced**. Thermal cluster /t/378500 (professional-workload suitability): still growing, no NVIDIA engagement. No new threads above /t/379168.
+
+---
+
+### Cross-Correlated Findings
+
+1. **B12x MoE kernels now in vLLM + eugr (Checks 2+3 cross-corr):** PR #40082 merged May 2026 adds FlashInfer b12x MoE + FP4 GEMM for SM120/121 to vLLM. eugr has operationalized this as `--exp-b12x` with nightly CI builds. Community claims "3x faster on Spark" for MoE vs CUTLASS (which itself is confirmed slow on SM121 per FlashInfer #3013). Our production MoE backend is TRITON (auto-selected over CUTLASS) — direct comparison vs b12x is unmeasured. If b12x outperforms Triton, this is a material production improvement candidate. Evaluate in Arm C/D window with dev298+ and `--exp-b12x`. Gate: verify vLLM Issue #47365 regression is fixed.
+
+2. **Arena pruning pattern now 2 consecutive days (Check 1 recurring):** Aug 1 (1 day), Aug 4–5 (2+ days). Period may be lengthening. Collection is server-intact per pageSize=200 overflow signal. No arithmetic change to baselines; FP8 vLLM frontier at 80.27 tok/s static since May 2026.
+
+3. **Driver dead-end compounding (Checks 3+5):** Driver 580.173.02 in noble-updates/restricted (breaks GPU on reboot, /t/378200) + NGC vLLM 26.04-py3 requiring driver ≥595.58 + no DGX Dashboard mechanism to reach 595.58 = three compounding blockers for any path involving official NGC containers. eugr community containers (our path) bypass the NGC requirement; driver hold at 580.159.03 remains the only safe production state.
+
+4. **Qwen3.8 architecture analysis converges (Checks 4+CLAUDE.md):** Two data points — Qwen3.8-Max (95B active) outside serving envelope; Qwen3.8-27B naming convention predicts dense model with potential GDN hybrid attention. Neither is a near-drop-in successor to production Qwen3.6-35B-A3B-FP8 (3B active, standard MoE).
+
+---
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27 baseline) | NOT FIRED — arena in 2nd consecutive pruning day |
+| vLLM new release >v0.26.0 | NOT FIRED — v0.26.0 still latest |
+| vLLM SM121/GB10/Blackwell arch-guard | NOT FIRED — no SM121 changes in v0.26.0 release notes |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled 28 days |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant 3+ months |
+| Qwen3.8 open weights on official HF org | NOT FIRED — release window ~Aug 9; weights not yet visible |
+| OTA2608 announced | NOT FIRED — no August firmware thread found |
+
+---
+
+### Overall: WORTH WATCHING
+
+No formal action triggers fired. The most significant development is the maturation of **B12x MoE kernels in the eugr ecosystem** (`--exp-b12x` preset, nightly CI, documented in README as of Aug 4): FlashInfer b12x MoE + FP4 GEMM for SM120/121 (PR #40082, merged May 2026) now has a ready-to-use delivery mechanism. Community claims "3x faster on Spark" for MoE vs CUTLASS — though vs our Triton baseline is unmeasured. This elevates the Arm C/D eval window priority. Qwen3.8 open weights remain imminent (~Aug 9) but architecture analysis makes neither variant a viable production successor. Arena pruning extends to a 2nd consecutive day — collection intact, no baseline changes.
+
+---
+
+### Recommendations
+
+1. **[NEW — ELEVATED PRIORITY] Add B12x MoE eval to Arm C/D window.** dev298+ with `--exp-b12x` enables FlashInfer b12x MoE kernels on SM120/121. Claimed "3x faster than CUTLASS on Spark" (production uses TRITON — comparison vs Triton unmeasured). Steps: (a) pull `eugr/spark-vllm-b12x:latest`; (b) verify vLLM Issue #47365 (NVFP4 b12x MoE empty-output regression) is fixed in dev298; (c) run head-to-head vs production TRITON MoE on FP8 model at c1/c4/c8 — gate ≥+5% c8 for adoption. Sandbox only.
+
+2. **[CARRY-FORWARD — BEFORE NEXT APT] Pin driver 580.173.02** (/t/378200 unresolved; /t/379168 confirms NGC vLLM upgrade path also blocked):
+   ```
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+
+3. **[CARRY-FORWARD] Do NOT apply OTA.** EC 0x03000508 fan curve unpatched; OTA2608 not yet announced. Triple hold maintained.
+
+4. **[UPDATED — Aug 9] Qwen3.8-27B HF release: immediately check `config.json` architecture.** Expect dense-27B or GDN-hybrid (same Qwen3.6-27B pattern) → not a production successor in either case. Only action if standard A3B-class MoE confirmed (unexpected given naming). Qwen3.8-Max: no eval path at 95B active.
+
+5. **[UPDATED — Arm C/D target] Update eval target to dev298** (from dev247). New eval order: (a) B12x MoE b12x probe (new); (b) NVFP4 B1 probe on dev298 (verify KeyError fix + active FP4 path); (c) full throughput suite if both probes pass.
+
+6. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.
+
+7. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 28 days.** No action until merged.

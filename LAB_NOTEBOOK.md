@@ -10232,3 +10232,86 @@ No formal action triggers fired. The most significant development is the maturat
 6. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.
 
 7. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 28 days.** No action until merged.
+
+---
+
+## Entry 132 - DGX Spark Recon (2026-08-06)
+
+**Overall: WORTH WATCHING** — eugr stable build updated to dev371 (v0.26.1rc1, Aug 5) clearing the NVFP4 v0.23.x eval gate; thermal shutdown cluster adds /t/379195 (EC 0x03000508 + 580.173.02 hard-freeze under inference); Arena in 3rd consecutive pruning day but baselines confirmed unchanged via direct reads; Qwen3.8 weights still not released (expected ~Aug 10).
+
+### Check 1 — Arena Firestore
+
+**3rd consecutive pruning day.** pageSize=10/50/200 all return same 2 docs (sub1770622524960 + sub1770681883769, Amorim GPT-OSS-120B MXFP4, Feb 2026). Direct Firestore reads by known IDs confirm all 3 baselines intact (collection server-side is fine; listing is restricted by security rules, not data loss). **No new Arena submissions after 2026-07-26 confirmed.** Baselines carried forward from Entry 129:
+
+- FP8 vLLM top: **80.27 tok/s** (Stojanovic, sub1779297106805, DFlash n8+FlashQLA PR3, 2026-05-20)
+- NVFP4 vLLM top: **118.91 tok/s** (Poveda, sub1782803609803, FlashInfer attn+Marlin MoE+MTP=3+FP8 KV, 2026-06-30)
+- Overall single-stream top: **218.85 tok/s** (Rawat, Atlas NVFP4, sub1779495971526, 2026-05-23)
+
+Minor correction from direct reads: Nemotron-3-Super NVFP4 c1 = **23.71 tok/s** (was approximated as 23.45 in prior entries). Atlas confirmed open-source: `avarok/atlas-gb10:latest` (SLAI scheduling, NVFP4 weights + KV). No new runtimes. FP8 vLLM frontier static for **11+ weeks**.
+
+### Check 2 — vLLM Releases
+
+**v0.26.0 (2026-07-25) still latest** — no new release in 24h. No SM121/GB10/Blackwell/arch-guard mentions specific to SM121 in any of the top 5 releases (SM10x/SM110 arm64 Blackwell work is SM100/110-class, not SM121). PR #40099 (Gemma4 repetition detection): **OPEN, stalled ~29 days** (last activity 2026-07-08; zero maintainer engagement). Issue #41063 (DeepGEMM SM12.x): **OPEN, dormant ~3.5 months** (opened 2026-04-27, 0 comments).
+
+### Check 3 — spark-vllm-docker
+
+**Build updated dev298→dev371** (v0.26.1rc1.dev371+g85ea44b46.d20260805, published 2026-08-05 ~18:45–18:51Z). **+73 commits since Entry 131 (dev298).** FlashInfer companion: **0.6.17** (unchanged). Aug 5 commit: "Replaced loader with instanttensor in more recipes" (expands fast tensor loading coverage across DFlash, NVFP4, and B12x MoE recipes). **KEY: NVFP4 eval gate CLEARED — dev371 is v0.26.1rc1, well past the v0.23.x/v0.24.0 build threshold that blocked NVFP4 load in Entry 094.** B1 NVFP4 probe target upgrades from dev298 to dev371. PR #279 (DFlash+FP8 KV): OPEN, dormant since 2026-06-06 (~13+ weeks). PR #325 (multi-model stacks): OPEN, last activity 2026-07-31.
+
+### Check 4 — Qwen HuggingFace
+
+**Qwen3.8 NOT yet on HuggingFace as of 2026-08-06.** Qwen3.8-Max launched 2026-08-03 (API-only on DashScope): 2.4T total / ~95B active, sparse MoE, multimodal, 1M ctx — **NOT Spark-viable** at 95B active (4-GPU-class; no single-node FP8 path). Qwen3.8-27B announced alongside with no architecture specs; open weights expected ~2026-08-10. Per Qwen naming conventions (no `-A` suffix = dense; cf. Qwen3.6-27B): likely dense 27B (~7.8 tok/s bandwidth ceiling on GB10) or GDN hybrid → not an A3B successor in either case. No other new A3B-class 30-40B MoE models confirmed from any lab since April 2026.
+
+### Check 5 — NVIDIA Forum
+
+719.json: 403 (WebSearch fallback). **NEW /t/379195** (~2026-08-05, ~24h before recon): "DGX Spark hard-freezes under sustained few minutes inference; PowerStress thermal failure; support portal unavailable." System: kernel 6.17.0-1029-nvidia, driver 580.173.02, EC 3.5.8 (0x03000508). Silent hard freeze under sustained GPU/LLM load; PowerStress code **MODS-020000610139** (distinct from prior cluster code MODS-020000600139). No NVIDIA response. Direct extension of /t/378500 + EC 0x03000508 thermal cluster. DGX Spark User Guide re-dated 2026-08-03 (content 403 — potential OTA2608 pre-release signal). EC 0x03000508 fan curve: **STILL UNRESOLVED** (case 260716-000029 OPEN, no patched EC). /t/378200 (driver 580.173.02 GPU break): **STILL no NVIDIA response**. OTA2608: **NOT announced**. /t/378500 (professional workloads): 2+ pages, growing, only NVIDIA response is "clear filesystem cache" (inadequate).
+
+---
+
+### Cross-Correlated Findings
+
+1. **eugr dev371 clears NVFP4 gate + B12x MoE ready (Checks 3 + CLAUDE.md):** dev371 (v0.26.1rc1, Aug 5) passes the v0.23.x build threshold that blocked NVFP4 load in Entry 094. Simultaneously, `--exp-b12x` preset (B12x MoE kernels, PR #40082, merged May 2026) is available in the same build family. Both probes — B12x MoE throughput test AND NVFP4 B1 load probe — can now run on dev371 in the Arm C/D eval window. **Eval readiness upgrades from "waiting for build" to "ready now."**
+
+2. **EC 0x03000508 thermal cluster expands to EC+driver combo (Checks 5 + CLAUDE.md):** /t/379195 is the first thread explicitly pairing EC 0x03000508 with driver 580.173.02, reporting hard freeze + new PowerStress code MODS-020000610139. Production unit remains safe (on prior EC 0x03000302, driver 580.159.03) — but the cluster is growing and NVIDIA has not responded in 3+ weeks (case 260716-000029). Two distinct PowerStress failure codes now in the wild for this hardware.
+
+3. **Arena FP8 frontier static 11+ weeks, no new vLLM submissions (Checks 1+2):** Last FP8 vLLM submission was 2026-05-20 (80.27 tok/s). vLLM v0.26.0 has no SM121-specific changes. The FP8 vLLM performance ceiling on single-node GB10 appears saturated until the Arm C/D eval window produces new data.
+
+4. **Qwen3.8 architecture analysis converged pre-release (Check 4 + CLAUDE.md Watch Item):** Multiple sources (naming convention, Yotta Labs estimate, prior Watch Item analysis) concur neither Qwen3.8 variant is a viable production successor. Weight release (~Aug 10) will allow architecture confirmation.
+
+---
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27 baseline) | NOT FIRED — no new submissions; frontier static 11+ weeks |
+| vLLM new release >v0.26.0 | NOT FIRED — v0.26.0 still latest |
+| vLLM SM121/GB10/Blackwell arch-guard | NOT FIRED — no SM121 changes in release notes |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled 29 days, last activity Jul 8 |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant 3.5 months |
+| Qwen3.8 open weights on official HF org | NOT FIRED — expected ~Aug 10; neither variant is A3B successor |
+| OTA2608 announced | NOT FIRED — DGX User Guide re-dated Aug 3 (possible pre-release signal only) |
+
+---
+
+### Overall: WORTH WATCHING
+
+No formal action triggers fired. Most significant development: **eugr stable build updated to dev371 (v0.26.1rc1.dev371, 2026-08-05)** clears the NVFP4 v0.23.x eval gate and packages the B12x MoE preset, making both Arm C/D eval probes runnable now without a custom build. The thermal shutdown cluster gains /t/379195 (new PowerStress code MODS-020000610139, EC 0x03000508 + 580.173.02 pairing) — production unit is on safe prior firmware, low urgency. Qwen3.8 weights expected ~Aug 10; architecture analysis dims prospects for both variants. Arena remains in 3rd consecutive pruning day; baselines confirmed unchanged via direct Firestore reads; no new FP8 vLLM submissions in 11+ weeks.
+
+---
+
+### Recommendations
+
+1. **[ELEVATED — READY NOW] Arm C/D eval window: upgrade target to dev371.** dev371 (v0.26.1rc1.dev371, Aug 5) supersedes dev298 as the eval target. Eval order: (a) B12x MoE probe — pull `eugr/spark-vllm-b12x:latest` with `--exp-b12x`, compare FP8 MoE throughput vs production TRITON at c1/c4/c8; gate ≥+5% c8. (b) NVFP4 B1 probe — verify `nvidia/Qwen3.6-35B-A3B-NVFP4` loads without KeyError on dev371 (gate CLEARED); probe whether native FP4 GEMM activates vs Marlin fallback. (c) Full throughput suite if both probes pass. Sandbox only — do NOT touch production qwen35.
+
+2. **[CARRY-FORWARD — BEFORE NEXT APT] Pin driver 580.173.02** (/t/378200 unresolved; /t/379195 adds EC+driver combo = hard freeze risk):
+   ```
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+
+3. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched (3+ weeks, case 260716-000029 OPEN). OTA2608 not yet announced (DGX User Guide Aug 3 re-date = possible pre-release signal — check on next recon). Triple hold maintained.
+
+4. **[NEW — Aug 10] Qwen3.8-27B HF release: check `config.json` architecture on drop.** Expect dense-27B or GDN-hybrid (neither = A3B successor). Only ACTION if unexpected standard MoE with A3B active-param class confirmed — not anticipated given naming convention. Ignore premature HF name squats.
+
+5. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled 29 days.** No action until merged.

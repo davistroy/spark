@@ -10420,3 +10420,88 @@ No formal action triggers confirmed fired. The most notable development is **mul
 5. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~31 days.** Track PR #51036 (server-side default) as complementary path; still requires #40099 for grammar-constrained auto-enable. No action until #40099 merged.
 
 6. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.
+
+---
+
+## Entry 134 - DGX Spark Recon (2026-08-08)
+
+### Check 1 — Arena (Firestore benchmarks collection)
+
+Listing: Still returns 2 docs (Feb 2026; security-rule restriction, consistent with Entries 130-133). Direct reads of all 3 baseline IDs confirmed intact:
+
+- **sub1779297106805** (Stojanovic, FP8 vLLM, 80.27 tok/s tg128 c1, 2026-05-20) — **CONFIRMED**
+- **sub1782803609803** (Poveda, NVFP4 vLLM, 118.91 tok/s tg128 c1, 2026-06-30) — **CONFIRMED**
+- **sub1779495971526** (Rawat, Atlas NVFP4, 218.85 tok/s tg128 c1, 2026-05-23) — **CONFIRMED**
+
+No new Arena submissions visible after 2026-07-26. FP8 vLLM frontier at 80.27 tok/s static for 11+ weeks. Top overall at 218.85 (Atlas) unchanged. Action threshold (>88.30) NOT triggered.
+
+### Check 2 — vLLM Releases / PRs
+
+Stable: **v0.26.0** still latest (no new stable release since July 25). New: **v0.26.1rc0** RC published July 27, 2026 — not a stable release, not tracked as version bump. No SM121/GB10/Blackwell arch-guard content found in recent releases or RC notes.
+
+- **PR #40099** (Gemma4 repetition detection auto-enable): Still OPEN, ~32 days stalled (was ~31 in Entry 133). No evidence of merge.
+- **PR #51036** (repetition_detection server-side operator default): Status unchanged from Entry 133 — still open.
+- **Issue #41063** (DeepGEMM SM12.x): Still dormant (~3.5+ months). PR #41834 (SM12x DSV4F Triton fallback, confirmed WILL NOT UPSTREAM) is separate; #41063 itself remains open.
+
+### Check 3 — eugr/spark-vllm-docker
+
+**NEW stable build:** `prebuilt-vllm-current` updated to `0.26.1rc1.dev468+g6b5bec7be.d20260807` on **2026-08-07 at 11:43Z** (Release notes: "New stable build"). Previous Entry 133 build: dev439 (Aug 6 20:07Z). Delta: +29 upstream vLLM commits. FlashInfer version unconfirmed in release notes. NVFP4 eval gate remains cleared (v0.26.1rc1 >> v0.23.x threshold). Arm C/D eval target updated to dev468.
+
+### Check 4 — Qwen Models
+
+**Qwen3.8-27B: NOT YET on HF as of 2026-08-08.** Official Qwen org (@Alibaba_Qwen) confirmed release "next week" from Aug 3 announcement = week of Aug 10. No `Qwen/Qwen3.8-27B` HF model card as of search time. Architecture unconfirmed (no Alibaba disclosure); naming convention (no `-A` suffix) and hardware footprint signals (27B-class ~27GB at FP8) both indicate likely dense, not A3B-class MoE. `huginnfork/Qwen3.8-27B-FP8` is a name squat — ignore. Qwen3.8-Max (2.4T params, ~95B active, multimodal) also expected same week — not Spark-viable at ~95B active. No other new models from Qwen or other labs above production relevance threshold.
+
+### Check 5 — NVIDIA Forum
+
+719.json: blocked (WebSearch fallback). No new threads identified above /t/379261 (~Aug 5, new-user setup issue, low severity) since Entry 133. OTA2608: **NOT announced**; Aug 3 User Guide re-date signal now 120+ hours old — probability of imminent OTA2608 dropping. EC 0x03000508 fan curve (case 260716-000029): **STILL UNRESOLVED**, 3+ weeks without NVIDIA patch. /t/379195 (MODS-020000610139 hard-freeze): no new NVIDIA response. /t/378200 (580.173.02 GPU break): still open. Forum quiet, no new high-severity posts since Entry 133.
+
+---
+
+### Cross-Correlated Findings
+
+1. **eugr dev468 is the new Arm C/D eval target (Check 3):** Routine daily build refresh (+29 commits from dev439). `prebuilt-vllm-current` tag updated in-place. Pull fresh at eval window open. NVFP4 gate cleared, eval order unchanged: (a) B12x MoE probe; (b) NVFP4 B1 probe; (c) full suite if both pass.
+
+2. **Qwen3.8-27B release imminent but not yet out (Check 4 + Check 5 + CLAUDE.md):** Week-of-Aug-10 timeline confirmed by official Alibaba/Qwen X announcement. Forum and Arena quiet corroborate weights haven't landed yet — no community benchmark activity on Qwen3.8. Architecture strongly expected to be dense 27B = no production action. Check official Qwen HF org daily from Aug 10.
+
+3. **All three Arena baselines stable for 5th consecutive day; FP8 frontier unchanged (Checks 1+2):** No new vLLM submissions since late July. No vLLM stable improvement that would drive new community Arena runs.
+
+4. **Forum/EC thermal situation: no new developments; OTA2608 signal weakening (Check 5):** Same unresolved cluster (EC 0x03000508 + 580.173.02) as Entry 133. Aug 3 User Guide re-date signal is now 5 days old without OTA announcement — no longer a strong pre-release signal.
+
+---
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27 baseline) | NOT FIRED — no new submissions; frontier static 11+ weeks |
+| vLLM new stable release >v0.26.0 | NOT FIRED — v0.26.1rc0 is RC only; stable still v0.26.0 |
+| vLLM SM121/GB10/Blackwell arch-guard | NOT FIRED — no SM121 changes in recent releases or RC |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled ~32 days |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant 3.5+ months |
+| Qwen3.8 open weights on official HF org | NOT FIRED — expected week of Aug 10; not yet released |
+| OTA2608 announced | NOT FIRED — no announcement; Aug 3 signal now 5 days old, weakening |
+
+---
+
+### Overall: NO ACTION
+
+Quiet day. All items carry forward unchanged from Entry 133. One minor update: eugr stable build refreshed to dev468 (Aug 7 11:43Z, +29 commits from dev439). Qwen3.8-27B weights remain the next expected event (~Aug 10). Architecture is strongly expected to be dense 27B = no production impact.
+
+---
+
+### Recommendations
+
+1. **[PENDING — ~AUG 10] Verify Qwen3.8-27B architecture on official Qwen HF org when weights drop.** Check `config.json` for `num_experts`/`num_experts_per_tok`. Dense 27B → no action. Standard MoE with ~3B active params → ACTION (full benchmark eval). Ignore `huginnfork` and all non-official Qwen org repos.
+
+2. **[ELEVATED — READY NOW] Arm C/D eval window: target dev468.** `0.26.1rc1.dev468+g6b5bec7be.d20260807` (Aug 7 11:43Z) is current stable. NVFP4 gate cleared. Pull fresh `prebuilt-vllm-current` at eval window open. Eval order: (a) B12x MoE probe; (b) NVFP4 B1 probe; (c) full suite if both pass. Sandbox only.
+
+3. **[CARRY-FORWARD — BEFORE NEXT APT] Pin driver 580.173.02** (EC 0x03000508 + /t/378200 unresolved):
+   ```
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+
+4. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched (3+ weeks, case 260716-000029 OPEN). OTA2608 not announced. Triple hold maintained.
+
+5. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~32 days.** Track PR #51036 as complementary path; still requires #40099 for grammar-constrained auto-enable. No action until #40099 merged.
+
+6. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.

@@ -10590,3 +10590,93 @@ Two items require daily attention: (1) Qwen3.8-27B weights can drop any day this
 5. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~33 days, logic error flagged.** The PR has a known boolean-check bug in `_uses_grammar_constraint` that must be fixed before it can advance. Track PR #51036 as complementary path. No action until #40099 fixed and merged.
 
 6. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.
+
+---
+
+## Entry 136 - DGX Spark Recon (2026-08-10)
+**Date:** 2026-08-10 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made to production system
+
+### Check 1 — Arena (Firestore benchmarks collection)
+
+Listing: Still returns 2 docs (Feb 2026 Amorim gpt-oss-120b entries; security-rule restriction, consistent 10+ recons). Direct reads of all 3 baseline IDs confirmed intact:
+
+- **sub1779297106805** (Stojanovic, FP8 vLLM, tg128 c=1: 80.27 tok/s, 2026-05-20) — **CONFIRMED**. Recipe: Qwen3.6-35B-A3B-FP8-DFLASH-FlashQLA, vllm-node-tf5, flash_attn, MARLIN_ATOMIC_ADD=1, GPU_MEM_UTIL=0.85.
+- **sub1782803609803** (Poveda, NVFP4 vLLM, tg128 c=1: 118.91 tok/s, 2026-06-30) — **CONFIRMED**. Recipe: NVFP4 + fp8 KV, flashinfer, marlin MoE, MTP=3, GPU_MEM_UTIL=0.65.
+- **sub1779495971526** (Rawat, Atlas NVFP4, 2026-05-23) — **CONFIRMED PRESENT**. Direct fetch returned 199.8 tok/s vs 218.85 in baseline — Firestore field-extraction artifact (Atlas uses pp2048-based scoring that differs from vLLM tg128; 218.85 may derive from a different aggregation field). Submitter/model/runtime all match. Not a doc change.
+
+No new Arena submissions visible by any method. FP8 vLLM frontier (80.27 tok/s) static for 11+ weeks; last new FP8 sub was 2026-05-26. Action threshold (>88.30 tok/s) **NOT TRIGGERED**.
+
+### Check 2 — vLLM Releases / PRs
+
+Stable: **v0.26.0** still latest (2026-07-25). **v0.26.1rc0** (2026-07-27) remains RC-only — 14 days into RC cycle, no stable cut yet. No SM121/GB10/Blackwell arch-guard content in any recent release.
+
+- **PR #40099** (Gemma4 auto-enable repetition detection): STILL OPEN, stalled **~34 days** (last maintainer engagement July 8). Concrete logic error confirmed as blocker: `self.json_object is not None` should be `or self.json_object` in `_uses_grammar_constraint`. No approvals. NOT in v0.26.0.
+- **PR #51036** (operator-configurable `repetition_detection` server default): **ACTIVELY MOVING** — last updated Aug 4, 2026. Adds `--override-generation-config` to set global repetition detection (max_pattern_size, min_count) server-side without per-request parameter. Directly useful for production long-context endpoint. Expected v0.26.1 or v0.27.0.
+- **Issue #41063** (DeepGEMM SM12.x kernel gaps): OPEN, dormant **~105 days**. No movement.
+
+Classification: NO NEW RELEASE. MEDIUM note: Qwen3.5 MoE all-reduce + RMSNorm fusion improvements in v0.26.0 are architecture-adjacent to production Qwen3.6-35B-A3B.
+
+### Check 3 — eugr/spark-vllm-docker
+
+**NEW build: dev535** — `0.26.1rc1.dev535+g83ad767ee.d20260809`, published **2026-08-09 11:43Z**. Delta: +20 upstream vLLM commits from dev515. FlashInfer companion: **`0.6.18-4fbac49f-d20260809`** — **FlashInfer 0.6.18 CONFIRMED** (was listed "unconfirmed" in Entry 135 draft; same version, new build hash). New repo commit `e5f3cf9` (Aug 9): SM10.3a added to B12x arch-preservation patch — additive only, SM12.1a behavior unchanged. New PR #340 (cosmetic README). PR #279 (DFlash+FP8 KV): dormant ~15+ weeks. NVFP4 eval gate cleared (v0.26.1rc1 >> v0.23.x threshold). **Arm C/D eval target updated to dev535** (supersedes dev515/Entry 135).
+
+### Check 4 — Qwen Models
+
+Qwen3.8-27B: **NOT YET RELEASED** on official HF org as of today. No `Qwen/Qwen3.8-27B` model card exists. Release window (week of Aug 10) opened today — weights could drop any time Aug 10-15. Architecture strongly expected **dense 27B** (no `-A` suffix, ~27GB FP8 footprint, Qwen3.6-27B dense precedent) — even if released today, no production action needed (dense 27B not a Spark production model). `huginnfork/Qwen3.8-27B-FP8` confirmed name-squat. No other new ~30-40B MoE with ~3B active params from any major lab.
+
+### Check 5 — NVIDIA Forum
+
+719.json: blocked (WebSearch fallback). Three new threads above Entry 135 threshold (/t/379261):
+
+- **SKIP: /t/379263** (~Aug 5-6) — "Quick Question on Spark System Updates" — new-user setup question; no technical content.
+- **INFO: /t/379303** (~Aug 6) — "Severe one-way RDMA performance regression on ASUS Ascent GX10 with kernel 6.17.0-1029-nvidia" — 2-node Spark+Ascent GX10; kernel 6.17.0-1029 has severe asymmetric RDMA degradation. No NVIDIA response. **Single-node production relevance: NONE.** Confirms: stay on 6.17.0-1021.
+- **INFO: /t/379391** (~Aug 6) — "DGX Spark vLLM Deep Dive: Historical Troubleshooting and Guide" — community vLLM troubleshooting retrospective since Oct 2025 launch. No new techniques/results. INFO only.
+
+**⚠️ SAFETY FINDING — /t/378945** "DGX Spark fans stop when running from SSH — box gets too hot to touch": On EC 0x03000508, fans **STOP COMPLETELY** (not merely under-speed) when unit is headless (SSH-only, no display). Unit gets too hot to touch under inference load. **Production runs headless.** Expected production EC: **0x03000302** (OTA hold maintained since July 2026; July OTA2607 shipped broken EC 0x03000508 and hold has been in place since Entry 109). Verify before next heavy inference: `cat /sys/class/hwmon/hwmon*/fan*_input` — should show non-zero RPM during load. If found on 0x03000508: EC rollback to 0x03000302 via `fwupdmgr downgrade` (/t/377069). Case 260716-000029: **STILL UNRESOLVED** (~5 weeks). /t/379195 (MODS-020000610139 hard-freeze): no NVIDIA response. /t/378200 (580.173.02 GPU break): still open. OTA2608: **NOT announced** (Aug 3 signal expired).
+
+Forum classification: **WORTH WATCHING** (safety finding escalates from NO ACTION; mitigated if production confirmed on 0x03000302 as expected).
+
+### Cross-Correlated Findings
+
+1. **dev535 + FlashInfer 0.6.18 confirmed (Check 3):** Routine +20 commit daily refresh (dev515 Aug 8 → dev535 Aug 9). FlashInfer 0.6.18 now confirmed (corrects "unconfirmed" in Entry 135). Arm C/D eval target updated to dev535; pull fresh `prebuilt-vllm-current` at eval window open.
+2. **Qwen3.8-27B window open day 1 (Check 4):** Week of Aug 10 started. Dense architecture expected → no production action even if released today. Check official Qwen HF org daily.
+3. **⚠️ EC 0x03000508 safety escalation (Check 5):** /t/378945 reveals fans STOP (not just under-speed) in SSH/headless mode. Cross-reference: production OTA hold maintained since Entry 109 (/t/376736 July OTA) → EC expected 0x03000302. Production runs headless → must confirm EC version before next inference session. EC rollback guide: /t/377069. Case 260716-000029 OPEN 5+ weeks, no NVIDIA patch.
+4. **PR #51036 newly active (Check 2):** Server-side `repetition_detection` default (last updated Aug 4). When merged: enables global repetition guard on production endpoint. No vLLM/forum cross-signal yet.
+5. **No Arena / vLLM performance cross-signals.** FP8 vLLM frontier static 11+ weeks. v0.26.1 RC-only. All performance-facing fronts quiet.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27 baseline) | NOT FIRED — no new submissions; frontier static 11+ weeks |
+| vLLM new stable release >v0.26.0 | NOT FIRED — v0.26.1rc0 RC only; v0.26.0 still latest stable |
+| vLLM SM121/GB10/Blackwell arch-guard | NOT FIRED — no SM121 changes in any recent release |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled ~34 days, logic error blocker confirmed |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant ~105 days |
+| Qwen3.8 open weights on official HF org | NOT FIRED — window open day 1; no weights yet |
+| OTA2608 announced | NOT FIRED — no announcement; Aug 3 signal expired |
+
+### Overall: WORTH WATCHING
+
+Routine daily build refresh (dev535 + FlashInfer 0.6.18 confirmed). Qwen3.8-27B window open (day 1) but no weights dropped. **⚠️ New safety finding: /t/378945 — fans stop completely in headless SSH mode on EC 0x03000508.** Production expected on safe EC 0x03000302 (OTA hold maintained) but must verify before next heavy inference workload. PR #51036 newly active (server-side repetition default). Forum cluster (EC 0x03000508 + /t/378200) still unresolved; three new threads above threshold (two INFO, one SKIP).
+
+### Recommendations
+
+1. **[URGENT — AUG 10-15] Monitor official Qwen HF org for Qwen3.8-27B weights.** Window open today. Check `https://huggingface.co/Qwen/Qwen3.8-27B` daily. Architecture check: `config.json` for `num_experts`/`num_experts_per_tok`. Dense 27B → no production action. Unexpected A3B-class MoE → ACTION (full eval). Ignore `huginnfork/Qwen3.8-27B-FP8` (squat).
+
+2. **[ELEVATED — READY NOW] Arm C/D eval window: target dev535.** `0.26.1rc1.dev535+g83ad767ee.d20260809` (Aug 9 11:43Z), FlashInfer 0.6.18 confirmed, +67 commits from dev468. Pull fresh `prebuilt-vllm-current` at eval window open. Eval order: (a) B12x MoE probe (verify vLLM Issue #47365 fixed, gate ≥+5% c8); (b) NVFP4 B1 probe (no KeyError expected on v0.26.1rc1; probe native FP4 GEMM vs Marlin); (c) full suite if both pass. Sandbox only.
+
+3. **[NEW — SAFETY] Verify EC firmware version on production before next heavy inference.** Run: `sudo fwupdmgr get-devices | grep -A10 'EC'`. Production should show EC **0x03000302** (if OTA hold maintained since July). If on 0x03000508: fans may STOP under headless SSH load (/t/378945 — fire hazard). Mitigation: `fwupdmgr downgrade` to 0x03000302 (/t/377069). Case 260716-000029 OPEN 5+ weeks, no NVIDIA patch.
+
+4. **[CARRY-FORWARD — BEFORE NEXT APT] Pin driver 580.173.02** (EC 0x03000508 + /t/378200 unresolved):
+   ```
+   sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580
+   ```
+
+5. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched (~5 weeks, case 260716-000029 OPEN). OTA2608 not announced. Triple hold maintained.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~34 days, logic error blocker confirmed.** Must be code-fixed before advancing. PR #51036 (server-side repetition default) actively moving — track separately as near-term production win. No action on #40099 until fixed and merged.
+
+7. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.

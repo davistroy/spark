@@ -10680,3 +10680,59 @@ Routine daily build refresh (dev535 + FlashInfer 0.6.18 confirmed). Qwen3.8-27B 
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~34 days, logic error blocker confirmed.** Must be code-fixed before advancing. PR #51036 (server-side repetition default) actively moving — track separately as near-term production win. No action on #40099 until fixed and merged.
 
 7. **[CARRY-FORWARD] OTA2608 poll.** When announced: verify EC fixes 0x03000508 fan curve; driver must not be 580.173.02; kernel bump SecureBoot prebuilt check.
+
+---
+
+## Entry 137 - DGX Spark Recon (2026-08-11)
+
+### ⚠ ACTION NEEDED — vLLM v0.27.0 + v0.27.1 released with SM121 arch-detection fix and DGX Spark-specific "Markov heads" feature
+
+**Check 1 — Arena (Firestore direct reads):** Three baseline documents confirmed (HTTP 200). FP8 frontier: 80.27 tok/s (sub1779297106805, Stojanovic; touched 2026-08-11T06:09Z — metadata/share-count update only, score unchanged). No new FP8 vLLM single-node entries found. sub1784993080195 (Leung, 2026-07-25) re-confirmed as second NVFP4 vLLM entry: 98.43 tok/s (c=1), MTP=3, Marlin MoE, FlashInfer attn, fp8 KV, `gpu-memory-utilization 0.5`; recipeCopyCount=3; below Poveda 118.91. Listing returns only Feb 2026 docs (ordering limitation unchanged; no entries after 2026-08-02 accessible via listing). **10% trigger NOT FIRED** (threshold 88.30 tok/s). FP8 frontier static 11+ weeks.
+
+**Check 2 — vLLM releases:** ⚠ **TWO new stable releases.** v0.27.0 (2026-08-10, 561 commits, 242 contributors): release notes include "CUDA arch detection producing kernel-less builds on SM121" — SM121 arch-guard trigger FIRED. Also: SM107/Rubin NVLink all-reduce paths, Kimi K3 support, PyTorch 2.13.0, FlashAttention 4 on SM100, DeepSeek-V4 perf improvements. v0.27.1 (2026-08-11, today — patch): "Support quantized DSpark Markov heads" — "DSpark" = DGX Spark, new speculative decode mechanism for Spark. **Stable series skipped v0.26.1 entirely; jumped v0.26.0 → v0.27.0 → v0.27.1.** PR #40099 (Gemma4 repetition): OPEN, stalled ~35 days, logic error in `_uses_grammar_constraint` (null-check vs false-check) confirmed by Gemini Code Assist — needs code fix, no change since Aug 10. Issue #41063 (DeepGEMM SM12.x): OPEN, dormant 106 days, zero comments. PR #51036 (server-side repetition default): OPEN 7 days, no reviewer approvals yet.
+
+**Check 3 — spark-vllm-docker:** `prebuilt-vllm-current` updated 2026-08-10 11:52Z: **dev553** (v0.26.1rc1.dev553+g51562de5a.d20260810, +18 from dev535). `prebuilt-flashinfer-current`: `0.6.18-2ab910c5-d20260810` (same 0.6.18, new build stamp). Two 2026-08-11 commits: docs only (`AGENTS.md` agent-routing file + DeepSeek V4 Flash 0731 quick-start section in README; no build triggered). No recipe or SM121/B12x changes. **docker builds now one full major version behind upstream** (dev553 = v0.26.1rc1; upstream stable = v0.27.1). SM121 arch-detection fix and DSpark Markov heads feature both absent from dev553. PR #279 (DFlash+FP8 KV): dormant ~16+ weeks. Eval target: dev553, pending v0.27.x build.
+
+**Check 4 — Qwen/HuggingFace:** Qwen3.8-27B NOT released — Alibaba's "week of Aug 10" commitment passed with no drop and no new date. Dense 27B architecture expected (Unsloth ~17GB hint consistent with 4-bit dense 27B) → not a production A3B MoE successor regardless. Qwen3.8-Max: API-only, 95B active params — not Spark-viable. Meta Muse Glimmer 30B (released 2026-08-10, Apache 2.0, `meta-models/Muse-Glimmer-30B`): 30B dense, hybrid `[Local×3, Global]` repeating attention across 52 layers — both disqualifiers (dense + hybrid attn) apply. Qwen4: September Apsara Conference rumor, no weights/announcement.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719.json blocked):** No new threads above /t/379391 found (24h indexing lag possible). EC 0x03000508 fan regression: STILL UNRESOLVED — case 260716-000029 ~6 weeks open, no NVIDIA patch; /t/378945 (fans stop completely in headless/SSH mode, fire hazard) confirmed indexed. /t/378200 (580.173.02 GPU break on reboot): STILL OPEN. /t/379195 (MODS-020000610139 hard-freeze): STILL OPEN, no NVIDIA response. OTA2608: NOT announced. /t/379391 (vLLM Deep Dive thread) still active with replies ~Aug 6.
+
+### Cross-Correlated Findings
+
+1. **vLLM v0.27.0 SM121 fix + v0.27.1 "DSpark Markov heads" (Check 2 × Check 3):** Two stable releases in 48 hours with SM121/DGX Spark-specific language — highest-confidence signal in months. spark-vllm-docker dev553 (v0.26.1rc1) lacks both fixes: SM121 arch-detection fix not present; DSpark Markov heads not present. NVIDIA upstream investment in SM121 speculative decoding is accelerating in the v0.27.x cycle. Need to read full v0.27.0 changelog and investigate "Markov heads" mechanism before next Arm C/D eval window. Watch for eugr v0.27.x docker build.
+
+2. **EC 0x03000508 unresolved at 6 weeks (Check 5 × CLAUDE.md safety rules):** Three active threads (/t/378945, /t/377044, /t/379195), case 260716-000029 open ~6 weeks. No escalation since Entry 136 — same stable-but-unresolved state. Production on EC 0x03000302 (OTA hold maintained). Fans STOP in headless SSH mode on 0x03000508 — fire hazard under inference load.
+
+3. **Qwen3.8-27B deadline missed + dense architecture (Check 4 × Watch Items):** Alibaba missed the "week of Aug 10" self-imposed deadline with no new date. Dense 27B architecture confirmed expected → deprioritize vs Arm C/D eval planning. Qwen4 September timing adds urgency to completing Arm eval before Apsara Conference.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| vLLM new stable release >v0.26.0 | ⚠ **FIRED** — v0.27.0 (2026-08-10) + v0.27.1 (2026-08-11) released |
+| vLLM SM121/GB10/Blackwell arch-guard | ⚠ **FIRED** — SM121 arch-detection fix in v0.27.0; "quantized DSpark Markov heads" in v0.27.1 |
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27) | NOT FIRED — frontier static 11+ weeks |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled ~35 days, logic error blocker |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant 106 days |
+| Qwen3.8 open weights on official HF org | NOT FIRED — "week of Aug 10" deadline overdue, no drop |
+| OTA2608 announced | NOT FIRED — no announcement |
+
+### Overall: ⚠ ACTION NEEDED
+
+vLLM v0.27.0 (2026-08-10) and v0.27.1 (2026-08-11) released in 48 hours with explicit SM121 arch-detection fix and "quantized DSpark Markov heads" speculative decode feature. Both stable-release and SM121/arch-guard triggers fired simultaneously. spark-vllm-docker dev553 (v0.26.1rc1) is one full major version behind and lacks both SM121 changes. All other fronts quiet: Arena FP8 static 11+ weeks, Qwen3.8-27B overdue+dense, Forum cluster unchanged.
+
+### Recommendations
+
+1. **[ACTION — URGENT] Read v0.27.0 + v0.27.1 full changelogs for SM121/DSpark specifics.** Key questions: (a) Does SM121 arch-detection fix materially change kernel selection vs current dev553? (b) What exactly are "DSpark Markov heads" — new speculative decode method, latency target vs throughput? Impact on MTP=2 config? (c) Are there additional SM121-specific kernel improvements beyond arch-detection in v0.27.0? Read before scheduling Arm C/D eval to ensure eval target captures these changes.
+
+2. **[ACTION — ELEVATED] Watch for eugr v0.27.x docker build.** spark-vllm-docker dev553 = v0.26.1rc1, now one full stable version behind upstream v0.27.1. Monitor `eugr/spark-vllm-docker` releases for `prebuilt-vllm-current` build based on v0.27.x. Update Arm C/D eval target on arrival. SM121 arch-fix and DSpark Markov heads first available in v0.27.x docker build. Do NOT upgrade production before eval validates improvement.
+
+3. **[CARRY-FORWARD — SAFETY] Verify EC firmware on production before next heavy inference.** Case 260716-000029 OPEN 6+ weeks; no NVIDIA patch. Fans STOP completely in headless SSH mode on EC 0x03000508 (/t/378945 — fire hazard). Production must be on EC 0x03000302. Run: `sudo fwupdmgr get-devices | grep -A10 EC`. If on 0x03000508: rollback via `fwupdmgr downgrade` (/t/377069).
+
+4. **[CARRY-FORWARD — BEFORE NEXT APT] Driver pin still required.** 580.173.02 breaks GPU on reboot (/t/378200): `sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580`.
+
+5. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched (6+ weeks, case 260716-000029 OPEN). OTA2608 not announced. Triple hold maintained.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~35 days, logic error blocker confirmed.** Needs author code fix before advancing. PR #51036 (server-side repetition default): open 7 days, no reviews — track for near-term production win.
+
+7. **[CARRY-FORWARD] Qwen3.8-27B daily check.** Alibaba "week of Aug 10" deadline overdue. Check `Qwen/Qwen3.8-27B` on HF. Dense architecture expected → config.json architecture check only; no production action unless unexpected A3B-class MoE. Qwen4 September Apsara Conference window: complete Arm C/D eval before then.

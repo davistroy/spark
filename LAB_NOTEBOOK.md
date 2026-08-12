@@ -10736,3 +10736,63 @@ vLLM v0.27.0 (2026-08-10) and v0.27.1 (2026-08-11) released in 48 hours with exp
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN, stalled ~35 days, logic error blocker confirmed.** Needs author code fix before advancing. PR #51036 (server-side repetition default): open 7 days, no reviews — track for near-term production win.
 
 7. **[CARRY-FORWARD] Qwen3.8-27B daily check.** Alibaba "week of Aug 10" deadline overdue. Check `Qwen/Qwen3.8-27B` on HF. Dense architecture expected → config.json architecture check only; no production action unless unexpected A3B-class MoE. Qwen4 September Apsara Conference window: complete Arm C/D eval before then.
+
+---
+
+## Entry 138 - DGX Spark Recon (2026-08-12)
+
+### Overall: WORTH WATCHING — carry-forward ACTION from Entry 137 maintained; no new triggers; DSpark Markov head architecture fully characterized
+
+**Check 1 — Arena (Firestore direct reads):** Three baseline documents confirmed (HTTP 200). sub1779297106805 (FP8 vLLM baseline): lastModified 2026-08-12T10:32:04Z (touched again today vs Entry 137's 06:09Z) — metadata/recipeCopyCount update only, score unchanged at 80.27 tok/s, recipeCopyCount still 203. sub1782803609803 (Poveda NVFP4 118.91 tok/s): lastModified 2026-08-12T05:31:47Z, recipeCopyCount 22, score 118.91 confirmed. sub1779495971526 (Atlas top overall 218.85 tok/s): lastModified 2026-08-10T18:55Z, score 218.85 confirmed. Listing returns empty (security-rule restricted; direct reads remain operational). **@sparkarena tweet (x.com/spark_arena/status/2051083928128414149): "Qwen/Qwen3.6-35B-A3B-FP8 achieved 130 tok/s on text generation via vLLM at concurrency 10, 128-token reply, 100k tokens of prior context in memory"** — c=10 with prefix cache (different metric from our tg128/c=1 baseline). spark-arena.com blocked in this env; cannot resolve submission ID or c=1 score from tweet alone. **10% trigger NOT FIRED** (threshold 88.30 tok/s; c=1 FP8 vLLM frontier static at 80.27 for 11+ weeks).
+
+**Check 2 — vLLM releases:** v0.27.1 (2026-08-11) remains latest; no v0.27.2 found. **Deeper v0.27.0 (2026-08-10) DSpark analysis confirmed:** (a) SM121 arch-detection fix = PR #49904 "fixed CUDA arch detection producing kernel-less builds on SM121"; (b) DSpark Markov head replicated across TP ranks (#49731); (c) DSpark AR fusion (#50242); (d) DSpark top-k Markov optimization PR #49969 (merged Aug 4, +45% per-user throughput at c=64, +4.5–6.3% GPU decode time reduction — likely in v0.27.0); (e) DeepGEMM support for Kimi K3 (#50458); (f) FlashInfer upgraded to 0.6.16.post3 (#50892). **v0.27.1 (PR #50424) architecture detail:** "DSparkMarkovHead" is a speculative decode component within Qwen3 DSpark models featuring a "markov_w2" projection layer; W4A16 quantization now supported (w/ weight_scale_2). Author: Andrii Skliar (NVIDIA, askliar@nvidia.com). Related open PR #50737 (DSpark Markov addmm) has "needs-rebase" label (Aug 4) — author deprioritized it in favor of PR #49969 (already merged). **PR #40099 (Gemma4 repetition):** OPEN, last activity July 8 (kiucho comment on reproducibility), logic error confirmed (json_object null-check vs false-check) — ~36 days stalled. **PR #51036 (server-side repetition default):** OPEN, last activity Aug 4, no reviewer approvals yet from requested code owners. **Issue #41063 (DeepGEMM SM12.x):** OPEN; transform_sf_into_required_layout still has no SM121 branch for (gran_mn=1, gran_k=32) NVFP4 expert scales.
+
+**Check 3 — spark-vllm-docker:** dev553 (v0.26.1rc1.dev553+g51562de5a.d20260810) still latest — no new builds in last 24h. FlashInfer 0.6.18-2ab910c5-d20260810 unchanged (ahead of PyPI v0.27.0's 0.6.16.post3). Still one full major version behind upstream v0.27.1. **SM121 arch-detection fix (#49904), DSpark Markov TP-rank (#49731), AR fusion (#50242), top-k optimization (#49969), and W4A16 quant (#50424) all absent from dev553.** Watching for eugr v0.27.x build.
+
+**Check 4 — Qwen/HuggingFace:** Qwen3.8-27B still NOT released. Release window now extended: "official window through August 16" (sources note Alibaba did not commit to a hard Aug 10 cutoff; window extends to Aug 16). Dense 27B architecture still expected (consistent with Unsloth hint, Qwen3.6-27B precedent). NOT a production A3B-class MoE successor. HF direct check blocked by network egress. No other new models with SM121/production relevance identified.
+
+**Check 5 — NVIDIA Forum (719.json blocked; WebSearch fallback):** No new threads above /t/379391 found. EC 0x03000508 fan regression: STILL UNRESOLVED — case 260716-000029 now **~7 weeks open**, no NVIDIA patch. /t/378945 (fans stop completely in headless SSH mode under inference — fire hazard), /t/378200 (580.173.02 GPU break), /t/379195 (MODS-020000610139 hard-freeze) all still OPEN. OTA2608 not announced.
+
+### Cross-Correlated Findings
+
+1. **DSpark Markov head system now fully characterized (Check 2 multi-PR analysis):** NVIDIA has invested 4+ PRs into DGX Spark-specific speculative decode in v0.27.0/v0.27.1: TP-rank replication (#49731), AR fusion (#50242), top-k candidate optimization (#49969, +45% at c=64), W4A16 quantization (#50424). This is a distinct mechanism from DFlash/MTP — a Markov-chain head within Qwen3 DSpark model architecture with "markov_w2" projection. The top-k optimization (+45% at c=64) substantially increases eval value. Key unknown: Is there a publicly accessible "Qwen3 DSpark" model variant on HF that enables this mechanism?
+
+2. **dev553 missing SM121 fix + full DSpark Markov stack (Check 3 × Check 2):** eugr's FlashInfer 0.6.18 is ahead of PyPI (v0.27.0's 0.6.16.post3) but the vLLM base (v0.26.1rc1) is missing the SM121 arch-detection fix and all 4 DSpark Markov PRs. The eval gap is wider than it appeared in Entry 137.
+
+3. **Arena tweet — unverified c=10 submission (Check 1 × Arena context):** @sparkarena highlighted 130 tok/s at c=10 with 100k prefix cache. Cannot determine c=1 baseline from tweet. If a new FP8 vLLM submission exists with improved c=1, it would need to exceed 88.30 tok/s to fire the action trigger. Requires direct Firestore ID check at next opportunity.
+
+4. **EC 0x03000508 cluster at 7 weeks (Check 5 × CLAUDE.md):** No escalation; same stable-but-unresolved state. Three open threads, case OPEN. Production on EC 0x03000302 (OTA hold).
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| vLLM new stable release >v0.27.1 | NOT FIRED — v0.27.1 remains latest |
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27) | NOT FIRED — c=1 frontier static; c=10 tweet not comparable |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — ~36 days stalled, logic error blocker |
+| PR #51036 (server-side repetition default) merged | NOT FIRED — OPEN, no approvals |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — still open |
+| Qwen3.8 open weights on official HF org | NOT FIRED — window extended to Aug 16, no drop |
+| OTA2608 announced | NOT FIRED — no announcement |
+
+### Overall: WORTH WATCHING
+
+Carry-forward ACTION from Entry 137 (vLLM v0.27.0 SM121 fix + DSpark Markov heads) remains actionable — eugr v0.27.x docker build still absent. Today's primary value: full characterization of DSpark Markov head as a 4-PR investment by NVIDIA in DGX Spark-specific speculative decode, with a top-k optimization showing +45% throughput at c=64. The eval value of v0.27.x upgrade is substantially higher than apparent from release notes alone. Arena tweet (130 tok/s c=10) cannot be confirmed against c=1 baseline. Qwen3.8-27B window extended to Aug 16.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — URGENT] Watch eugr/spark-vllm-docker for v0.27.x build.** dev553 (v0.26.1rc1) lacks SM121 arch-fix (#49904) and the full DSpark Markov suite (TP-rank #49731, AR fusion #50242, top-k #49969, W4A16 quant #50424). Update Arm C/D eval target to v0.27.x build when published. Pull fresh `prebuilt-vllm-current` at eval window open.
+
+2. **[NEW — INVESTIGATION] Identify the Qwen3 DSpark model variant enabling Markov heads.** The DSparkMarkovHead is a component within "Qwen3DSparkModel." Check HF for a model ID like `Qwen/Qwen3.6-35B-A3B-DSpark` or similar. If publicly available: evaluate latency vs throughput tradeoff vs MTP=2 on Spark.
+
+3. **[NEW — ARENA FOLLOW-UP] Retrieve submission ID for @sparkarena 130 tok/s c=10 tweet.** Access spark-arena.com leaderboard directly (blocked from this env) or check Firestore for new submission IDs above sub1784993080195 (Leung, Jul 25). If new vLLM FP8 single-node submission exists with c=1 >88.30 tok/s, the action trigger fires.
+
+4. **[CARRY-FORWARD] Qwen3.8-27B: check HF daily through Aug 16.** Dense 27B expected → config.json architecture check on release; no production action unless unexpected A3B-class MoE. Window now Aug 10–16.
+
+5. **[CARRY-FORWARD — SAFETY] Verify EC firmware before next heavy inference.** Case 260716-000029 OPEN ~7 weeks; no NVIDIA patch. Fans STOP on EC 0x03000508 in headless SSH mode (/t/378945 — fire hazard). `sudo fwupdmgr get-devices | grep -A10 EC`.
+
+6. **[CARRY-FORWARD — BEFORE NEXT APT] Driver pin.** 580.173.02 breaks GPU on reboot: `sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580`.
+
+7. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched ~7 weeks. OTA2608 not announced.
+
+8. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN ~36 days, logic error blocker.** PR #51036 (server-side repetition default): OPEN, no approvals — track separately.

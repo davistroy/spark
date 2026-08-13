@@ -10796,3 +10796,61 @@ Carry-forward ACTION from Entry 137 (vLLM v0.27.0 SM121 fix + DSpark Markov head
 7. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched ~7 weeks. OTA2608 not announced.
 
 8. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN ~36 days, logic error blocker.** PR #51036 (server-side repetition default): OPEN, no approvals — track separately.
+
+---
+
+## Entry 139 - DGX Spark Recon (2026-08-13)
+
+### Overall: WORTH WATCHING — carry-forward ACTION from Entry 137/138 maintained; dev693 build noted (+140 commits, still v0.26.1rc1); Qwen3.8-27B Aug 16 deadline looming; all other fronts quiet
+
+**Check 1 — Arena (Firestore direct reads):** Three baseline documents confirmed (HTTP 200). sub1779297106805 (FP8 vLLM baseline, Stojanovic, 80.27 tok/s): recipeCopyCount **205** (was 203 in Entry 138 — +2; engagement touch only, score unchanged). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): recipeCopyCount 22 (unchanged). sub1779495971526 (Atlas top overall, 218.85 tok/s, RedHatAI NVFP4): recipeCopyCount 135 (unchanged). Listing returns same 2 early Amorim gpt-oss-120b entries from Feb 2026 — consistent with security-rule-restricted LIST behavior; direct reads operational. Probe of sub1785500000000 (estimated ~Aug 3 timestamp range) returned 404 — no submission at that ID. @sparkarena tweet (130 tok/s c=10/100k prefix) from Entry 138 unchanged — no new c=1 submission confirmed. **10% trigger NOT FIRED** (threshold 88.30 tok/s; c=1 FP8 vLLM frontier static 11+ weeks). No new Arena submissions found.
+
+**Check 2 — vLLM releases:** GitHub API scope-blocked for external repos (only `davistroy/spark` allowed in this session); WebSearch fallback confirms v0.27.1 (2026-08-11) remains the latest stable release — no v0.28 found. All v0.27.0/v0.27.1 details fully characterized in Entry 138 (SM121 arch-fix #49904, DSpark Markov suite: #49731 TP-rank, #50242 AR fusion, #49969 top-k +45% at c=64, #50424 W4A16 quant). No new SM121 arch-guard trigger. **PR #40099** (Gemma4 repetition): still OPEN, ~37 days stalled — no new activity found. **Issue #41063** (DeepGEMM SM12.x): still OPEN. All triggers NOT FIRED.
+
+**Check 3 — spark-vllm-docker:** `prebuilt-vllm-current` tag confirmed at **`0.26.1rc1.dev693+g7f7a32cfe.d20260812`** (built 2026-08-12). Was dev553 in Entry 138 — **+140 upstream commits** since the Aug 10 build. Still v0.26.1rc1 base; NOT v0.27.x. SM121 arch-fix (#49904), DSpark Markov TP-rank (#49731), AR fusion (#50242), top-k optimization (#49969), and W4A16 quant (#50424) all remain absent (v0.27.0+ only). FlashInfer version for dev693 unconfirmed (likely 0.6.18 unchanged from dev553; GitHub API blocked for detailed inspection). PR #279 (DFlash+FP8 KV): no new status. Watching for eugr v0.27.x build.
+
+**Check 4 — Qwen/HuggingFace:** Qwen3.8-27B still **NOT released** on HuggingFace as of 2026-08-13. Alibaba "week of August 10" deadline has passed without drop; community sources report window extends "through August 16." Dense 27B architecture expected (consistent with Unsloth ~17GB hint, Qwen3.6-27B precedent). NOT a production successor (wrong architecture class for A3B MoE path). Qwen3.8-Max: 2.4T total / 95B active params, multimodal MoE — API-only, NOT Spark-viable at any quant level. No new A3B-class MoE models from other labs identified.
+
+**Check 5 — NVIDIA Forum (719.json blocked; WebSearch fallback):** **NEW: /t/379627** "Running Proxmox VE on the NVIDIA DGX Spark (GB10)" — above prior /t/379391 threshold. Content: Proxmox VE officially supports Arm64 with day-one NVIDIA Grace CPU architecture support (~Aug 12-13). **Severity: LOW** — infrastructure/platform topic, not perf/driver/firmware/inference relevance. EC 0x03000508 fan regression: **STILL UNRESOLVED** — case 260716-000029 now **~8 weeks open**, no NVIDIA patch. /t/378945 (fans stop in headless SSH mode — fire hazard), /t/378200 (580.173.02 GPU break), /t/379195 (MODS-020000610139 hard-freeze) all still OPEN, no NVIDIA response on any. OTA2608: **NOT announced**.
+
+### Cross-Correlated Findings
+
+1. **dev693 still misses v0.27.x SM121 improvements (Check 3 × Check 2):** The +140 commit jump (dev553 → dev693) keeps dev693 current within the v0.26.1rc1 branch but does not close the gap to v0.27.x. The full DSpark Markov stack (4 PRs) and SM121 arch-detection fix (#49904) remain absent. The carry-forward ACTION from Entry 137/138 is still active and unresolvable until eugr publishes a v0.27.x-based build.
+
+2. **Qwen3.8-27B Aug 16 deadline is tomorrow (Check 4 × watch item):** The "week of Aug 10" has passed. Aug 16 is the outer bound of the community-reported window. Either the model drops by Aug 16 or the watch item converts to "delayed/no confirmed date" requiring re-scoping. Dense 27B is NOT a production successor but still requires a HF architecture check on release.
+
+3. **Arena c=10 tweet and c=1 baseline status (Check 1):** @sparkarena 130 tok/s c=10/100k-prefix from Entry 138 remains unresolved at the c=1 level. Sub probe at estimated Aug 3 timestamp range returned 404. No confirmed new c=1 FP8 vLLM submission above 80.27 tok/s. FP8 vLLM c=1 frontier static 11+ weeks.
+
+4. **EC 0x03000508 cluster at 8 weeks (Check 5 × CLAUDE.md):** Unchanged state — same three open threads, case OPEN, no NVIDIA response. Production on EC 0x03000302 (OTA hold maintained). Proxmox Arm64 support (/t/379627) is the only new thread above the threshold and is not part of this cluster.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| vLLM new stable release >v0.27.1 | NOT FIRED — v0.27.1 remains latest |
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27) | NOT FIRED — c=1 frontier static 11+ weeks |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — ~37 days stalled, logic error blocker |
+| PR #51036 (server-side repetition default) merged | NOT FIRED — still OPEN |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — still OPEN |
+| Qwen3.8 open weights on official HF org | NOT FIRED — past Aug 10 deadline; window Aug 16 tomorrow |
+| OTA2608 announced | NOT FIRED — no announcement |
+
+### Overall: WORTH WATCHING
+
+Carry-forward ACTION from Entry 137/138 (eugr v0.27.x build) still the primary open item. dev693 (+140 commits, 2026-08-12) is the freshest available build but still v0.26.1rc1 — the SM121 arch-fix and DSpark Markov suite remain absent. Qwen3.8-27B Aug 16 deadline arrives tomorrow — either drops or watch item requires re-scoping. All other fronts unchanged: Arena c=1 static 11+ weeks, forum cluster stable-but-unresolved at ~8 weeks.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — URGENT] Watch eugr/spark-vllm-docker for v0.27.x build.** dev693 (v0.26.1rc1, 2026-08-12) is the current latest but still missing SM121 arch-fix (#49904) and DSpark Markov suite (#49731, #50242, #49969, #50424). Update Arm C/D eval target to v0.27.x build when published. Pull fresh `prebuilt-vllm-current` at eval window open.
+
+2. **[EXPIRING TOMORROW] Qwen3.8-27B HF check.** Aug 16 is the outer community-reported window. If not dropped by Aug 16, convert to "no confirmed open-weight date" and stop daily checks. Architecture check still required on any official Qwen org drop.
+
+3. **[CARRY-FORWARD — INVESTIGATION] Identify Qwen3 DSpark model variant enabling Markov heads.** Check HF for `Qwen/Qwen3.6-35B-A3B-DSpark` or similar. If available, DSparkMarkovHead probe is next eval item after v0.27.x build arrives.
+
+4. **[CARRY-FORWARD — SAFETY] Verify EC firmware before next heavy inference.** Case 260716-000029 OPEN ~8 weeks; no NVIDIA patch. Fans STOP on EC 0x03000508 in headless SSH mode (/t/378945 — fire hazard). `sudo fwupdmgr get-devices | grep -A10 EC`.
+
+5. **[CARRY-FORWARD — BEFORE NEXT APT] Driver pin.** 580.173.02 breaks GPU on reboot: `sudo apt-mark hold nvidia-driver-580 nvidia-driver-580-open nvidia-utils-580 nvidia-kernel-common-580 nvidia-kernel-open-580 libnvidia-common-580`.
+
+6. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched ~8 weeks. OTA2608 not announced.
+
+7. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN ~37 days, logic error blocker.** PR #51036 (server-side repetition default): OPEN — track separately.

@@ -10854,3 +10854,67 @@ Carry-forward ACTION from Entry 137/138 (eugr v0.27.x build) still the primary o
 6. **[CARRY-FORWARD] Do NOT apply any OTA.** EC 0x03000508 fan curve unpatched ~8 weeks. OTA2608 not announced.
 
 7. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN ~37 days, logic error blocker.** PR #51036 (server-side repetition default): OPEN — track separately.
+
+---
+
+## Entry 140 - DGX Spark Recon (2026-08-14)
+**Date:** 2026-08-14 UTC
+**Operator:** Claude Code (spark-recon skill) — All 5 checks
+**Status:** RECON — no changes made
+
+### Overall: ACTION NEEDED — eugr v0.27.2rc1 build landed Aug 13 (carry-forward ACTION fired); Nemotron 3.5 Lightning is a new DGX Spark contender; Qwen3.8-2.4T open weights on HF; LVFS partnership adds fwupdmgr risk to production
+
+**Check 1 — Arena (Firestore direct reads):** Three baseline documents confirmed (HTTP 200). sub1779297106805 (FP8 vLLM baseline, Stojanovic, 80.27 tok/s): recipeCopyCount **205** (unchanged from Entry 139). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): recipeCopyCount **24** (was 22 in Entry 139 — +2 engagement touches; score unchanged). sub1779495971526 (Atlas top overall, 218.85 tok/s): recipeCopyCount 135 (unchanged). Probe sweep of 12 IDs spanning Jul 27 – Aug 14 all returned 404 — no new submissions in this period. Listing returns same 2 early Amorim docs (security-rule restricted). FP8 vLLM c=1 frontier static **12+ weeks** (last submission 2026-05-26). **10% trigger NOT FIRED** (threshold 88.30 tok/s).
+
+**Check 2 — vLLM releases:** v0.27.1 (2026-08-11) is still the latest upstream stable; no v0.27.2 stable or v0.28 found. **New: vLLM blog post 2026-08-12 "Day 0 Support for Qwen3.8-2.4T-A95B on vLLM"** — v0.27.1 includes Qwen3.8-2.4T day-0 serving. No SM121-specific changes beyond what was documented in Entry 137/138 (SM121 arch-fix #49904, DSpark Markov suite, all in v0.27.0). **PR #51036 (server-side `repetition_detection` default): OPEN, NEW merge conflict added** (rebase-only blocker — actionable when merged for production config). PR #40099 (Gemma4 repetition): OPEN, ~38 days stalled — same dual-blocker (logic error in `_uses_grammar_constraint` bool-check + no maintainer repro). Issue #41063 (DeepGEMM SM12.x): OPEN, ~109 days.
+
+**Check 3 — spark-vllm-docker:** **CARRY-FORWARD ACTION FIRED: v0.27.x build landed.** `prebuilt-vllm-current` is now **`0.27.2rc1.dev54+gb96bcd0b4.d20260813`** — published **2026-08-13 19:26 UTC**. Base is v0.27.2 RC, ahead of upstream stable v0.27.1. FlashInfer: `0.6.18-2febce55-d20260813` (same version, new build hash). SM121 arch-fix (#49904) and DSpark Markov suite (#49731, #50242, #49969, #50424) now expected present. Release commits (Aug 11–13): "Nemotron 3.5 Support" (Aug 11), "Nemotron 3.5 Lightning support" (Aug 11), "bump deps" (Aug 12), "Fix flashinfer build issues" (Aug 13), "Updated Nemotron recipe for best perf" (Aug 13). This supersedes dev693 (v0.26.1rc1, Aug 12) as the eval target. Prior entries (137/138/139) identified this v0.27.x build as the gating prerequisite for Arm C/D eval.
+
+**Check 4 — Qwen/HuggingFace:** **Qwen3.8-2.4T-A95B (Qwen3.8-Max) open weights released 2026-08-12.** `Qwen/Qwen3.8-2.4T-A95B` (BF16) and `Qwen/Qwen3.8-2.4T-A95B-FP8` now on HuggingFace. Architecture: 2.4-trillion-parameter MoE, 95B active, 1M ctx, native multimodal. NOT Spark-viable on single node (2.4T params at FP8 ~2.4 TB >> 128GB unified memory). NVIDIA blog targets GB300 NVL72. **Qwen3.8-27B: NOT released as of 2026-08-14** — placeholder on HF (5,733 waiting), ModelScope countdown targets Aug 15 00:00 JST. Expected dense 27B; if so, Spark-viable at FP8 (~27 GB). Watch item extended to Aug 15; if no drop by Aug 16, convert to "no confirmed date." **NEW contender: NVIDIA Nemotron 3.5 Lightning 30B-A3B** (released 2026-08-11, OpenMDW-1.1 license). Architecture: hybrid Mamba-2 + MoE + Attention (interleaved SSM/attention blocks, NOT a pure transformer). Same 30B/3B-active tier as production. Checkpoints: `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`, `-NVFP4`, `-NVFP4-DSpark` (DGX Spark dedicated speculative draft). vLLM flags: `--mamba-backend flashinfer`, `--moe-backend humming`. Community benchmarks (NVFP4 + D-Spark on DGX Spark): c=1 **~108–116.84 tok/s** (+60–75% vs production 66.9), c=8 ~421 tok/s (comparable to production 427.7). eugr already added recipe support Aug 11–13 — validated on the same build that just shipped.
+
+**Check 5 — NVIDIA Forum (719.json blocked; 721.json blocked; WebSearch fallback):** No new threads above /t/379627 found for Aug 13-14. **New context: NVIDIA joined LVFS as premier sponsor (~early Aug 2026)** — DGX Spark firmware now distributed via fwupd. **WARNING: NO new EC version found** — LVFS distributes the BROKEN OTA2607 EC 0x03000508. Do NOT run `fwupdmgr update` on production machine (currently EC 0x03000302). EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED, ~9 weeks OPEN**; fans stop completely in headless SSH mode under inference (/t/378945, fire hazard). /t/378200 (580.173.02 GPU break on reboot): STILL OPEN. /t/379195 (MODS-020000610139 hard-freeze on EC 0x03000508): STILL OPEN. OTA2608: NOT announced.
+
+### Cross-Correlated Findings
+
+1. **eugr v0.27.x + Nemotron co-release (Check 3 × Check 4):** eugr shipped Nemotron 3.5 support (Aug 11) AND the v0.27.2rc1 build (Aug 13) in the same week, with a recipe optimization committed the same day as the build. This is a deliberate co-validation — eugr has already tested Nemotron on this exact build. Pull `prebuilt-vllm-current` and the Nemotron recipe is ready.
+
+2. **Nemotron D-Spark + v0.27.x DSpark Markov suite (Check 4 × Check 2/3):** Nemotron includes a native `NVFP4-DSpark` draft checkpoint that uses the DSpark Markov head mechanism. v0.27.2rc1 contains the full DSpark Markov suite (#49731, #50242, #49969, #50424). For Qwen3.6-35B-A3B, a `Qwen3.6-35B-A3B-DSpark` checkpoint is still needed (none confirmed on HF). Nemotron provides the first fully-packaged D-Spark eval opportunity.
+
+3. **Qwen3.8-2.4T open weights + vLLM Day 0 (Check 4 × Check 2):** Landed Aug 12 (same day). Will drive new multi-node Arena submissions. Not actionable for single-Spark but signals community attention shifting to 2.4T scale. Watch for Qwen3.8-27B as the single-Spark-viable variant.
+
+4. **LVFS + EC regression (Check 5 × CLAUDE.md):** NVIDIA's LVFS investment is a new attack surface: `fwupdmgr refresh` on the production machine will now surface the broken EC 0x03000508 as "available update." Requires explicit fwupdmgr restriction before any firmware-touching operation. The eval session pre-flight should include verifying EC version is still 0x03000302.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| eugr v0.27.x build published | **FIRED** — `0.27.2rc1.dev54` (2026-08-13 19:26 UTC) |
+| vLLM new stable release >v0.27.1 | NOT FIRED — v0.27.1 remains upstream latest |
+| Arena FP8 vLLM >88.30 tok/s (>10% above 80.27) | NOT FIRED — frontier static 12+ weeks |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — ~38 days stalled |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — still OPEN |
+| Qwen3.8-27B open weights on official HF org | NOT FIRED — Aug 15 JST countdown; check tomorrow |
+| OTA2608 announced | NOT FIRED — no announcement |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~9 weeks OPEN; LVFS now distributes broken EC |
+
+### Overall: ACTION NEEDED
+
+The long-pending carry-forward trigger (eugr v0.27.x build) fired on Aug 13. The v0.27.2rc1.dev54 build contains the SM121 arch-fix, the full DSpark Markov suite, and comes with validated Nemotron 3.5 Lightning support. This is the eval window. Qwen3.8-27B is still pending (Aug 15 deadline). The LVFS partnership introduces a new fwupdmgr safety constraint before any production-adjacent firmware operation.
+
+### Recommendations
+
+1. **[ACTION — OPEN EVAL WINDOW] Pull v0.27.2rc1.dev54 and run Arm C/D eval.** The carry-forward ACTION from Entries 137/138/139 has fired. Pull command from eugr's repo (`prebuilt-vllm-current`). Pre-flight: verify EC still 0x03000302 (`fwupdmgr get-devices`), verify driver pin in place (`apt-mark showhold | grep nvidia`), verify production qwen35 is idle. Run standard eval harness at c=1/c=4/c=8/c=16 vs production MTP=2 baseline. Check startup log for SM121 arch-detection fix confirmation. Decision gate: ≥+5% c=8 AND quality holds.
+
+2. **[ACTION — NEW CONTENDER] Evaluate Nemotron 3.5 Lightning 30B-A3B-NVFP4 on v0.27.2rc1.** eugr has the recipe. Sequence: (a) verify `--mamba-backend flashinfer` starts without crash on SM121; (b) verify NVFP4 loads without KeyError (distinct loader from Qwen); (c) c=1/c=8 benchmark vs production 66.9/427.7; (d) 3–5 quality spot-checks on representative prompts. Gate: c=1 ≥80 tok/s AND c=8 ≥380 tok/s. Quality evaluation non-trivial given hybrid Mamba architecture vs Qwen transformer.
+
+3. **[EXPIRING TOMORROW] Check Qwen3.8-27B official HF org (2026-08-15).** Aug 15 JST is the ModelScope countdown target. If released: check `config.json` for architecture class, context window, quantization variants. If dense (~54 GB BF16, ~27 GB FP8): single-Spark compatible; assess as Arm C/D comparator. If no drop by Aug 16: convert to "no confirmed open-weight date" and stop daily checks.
+
+4. **[NEW — SAFETY] Block fwupdmgr from applying EC update.** LVFS now surfaces broken EC 0x03000508 as available update on production machine (EC 0x03000302). Add EC GUID to fwupd blocked list: `sudo fwupdmgr get-devices` → find EC GUID → `sudo fwupdmgr block-firmware <GUID>`. Do NOT run `fwupdmgr update` until NVIDIA ships a patched EC (case 260716-000029 OPEN ~9 weeks).
+
+5. **[CARRY-FORWARD — SAFETY] Verify EC firmware before eval session.** `sudo fwupdmgr get-devices | grep -A10 EC` — confirm EC version is 0x03000302. Production on 0x03000508 = fans stop under inference = fire hazard.
+
+6. **[CARRY-FORWARD — BEFORE EVAL/APT] Driver pin.** Verify `apt-mark showhold | grep nvidia` before eval or any apt operation. 580.173.02 breaks GPU on reboot (/t/378200).
+
+7. **[CARRY-FORWARD] Do NOT apply any OTA or fwupdmgr update.** EC fan curve unpatched ~9 weeks; LVFS now distributes the broken EC. OTA2608 not announced.
+
+8. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN ~38 days, logic error blocker.** PR #51036 (server-side repetition default): OPEN — track separately.

@@ -10918,3 +10918,56 @@ The long-pending carry-forward trigger (eugr v0.27.x build) fired on Aug 13. The
 7. **[CARRY-FORWARD] Do NOT apply any OTA or fwupdmgr update.** EC fan curve unpatched ~9 weeks; LVFS now distributes the broken EC. OTA2608 not announced.
 
 8. **[CARRY-FORWARD] Gemma4 gate: PR #40099 OPEN ~38 days, logic error blocker.** PR #51036 (server-side repetition default): OPEN — track separately.
+
+---
+
+## Entry 141 - DGX Spark Recon (2026-08-15)
+
+**Date:** 2026-08-15 UTC
+**Operator:** Claude Code (spark-recon skill) — All 5 checks
+**Status:** RECON — no changes made
+
+### Overall: WORTH WATCHING — Qwen3.8-27B dropped early (GDN hybrid dense, not A3B MoE; low prod priority); eugr dev88 build incremental update; new forum thread /t/379959 extends July-update cluster; Entry 140 carry-forward ACTION (Arm C/D eval) still pending
+
+**Check 1 — Arena (Firestore direct reads):** Three baseline documents confirmed (HTTP 200). sub1779297106805 (FP8 vLLM baseline, Stojanovic, 80.27 tok/s): recipeCopyCount **205** (unchanged from Entry 140). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): recipeCopyCount **24** (unchanged). sub1779495971526 (Atlas top overall, 218.85 tok/s): recipeCopyCount **135** (unchanged). Probe of sub1785000000000: 404 — no new submissions in upper ID range. FP8 vLLM c=1 frontier static **13+ weeks** (last submission 2026-05-26). **10% trigger NOT FIRED** (threshold 88.30 tok/s). Qwen3.8-27B release may drive new community Arena submissions in coming days; monitor next recon.
+
+**Check 2 — vLLM releases:** v0.27.1 (2026-08-11) remains latest upstream stable; **no v0.27.2 stable or v0.28 found**. No new SM121-specific PRs or issues to add. PR #40099 (Gemma4 repetition): OPEN, **~39 days stalled**. Issue #41063 (DeepGEMM SM12.x): OPEN, ~3.9 months dormant. SM121 arch-fix (#49904) + DSpark Markov suite (#49731, #50242, #49969, #50424) remain in v0.27.1 / v0.27.2rc1-only — no change from Entry 140.
+
+**Check 3 — spark-vllm-docker:** **NEW BUILD: `0.27.2rc1.dev88+gaa3100357.d20260814`** (published 2026-08-14 11:49 UTC, **+34 upstream commits from dev54 Aug 13**). New FlashInfer: `0.6.18-555492e2-d20260814` (Aug 14 11:44 UTC, same version string, new build hash). Both tagged "New stable build." Specific recipe additions for dev88 not confirmed via commit log (GitHub API 403 in remote env); previous Nemotron 3.5 Lightning + Qwen3.8-2.4T recipes from Aug 11-13 latest confirmed. **Qwen3.8-27B recipe** may be added in this or next build given same-day model release (speculative). dev88 is now the Arm C/D eval target; supersedes dev54 (Entry 140). PR #279 (DFlash+FP8 KV): dormant ~19 weeks.
+
+**Check 4 — Qwen/HuggingFace:** **⚠ TRIGGER FIRED: `Qwen/Qwen3.8-27B` released 2026-08-14 ~15:00 UTC** — one day before the Aug 15 JST deadline. Official Qwen org repos: `Qwen/Qwen3.8-27B` (BF16, ~56 GB) and `Qwen/Qwen3.8-27B-FP8` (official FP8, ~28 GB). Architecture confirmed: **DENSE 28B, 64 layers, 48/64 layers = GatedDeltaNet (linear attention), 16/64 = full attention** — hybrid GDN dense, NOT A3B-class MoE. Context: 262K native (1M extensible). Includes vision encoder (VLM-capable). Built-in MTP draft head (distinct from separate draft checkpoint). License: Apache 2.0. **SM121 assessment:** Same GDN architecture class as `Qwen3.6-27B` which measured "bandwidth-limited ~7.8 tok/s on GB10" (prior baseline entry). GDN Triton kernels on SM121 unverified in v0.27.2rc1. GDN hybrid = same architecture risk class as rejected Qwen3-Coder-Next (vllm#37554 MTP acceptance concern; may differ since this uses different FP8 path + built-in MTP head). **Per watch item criteria ("only ACTION if A3B-class standard MoE"), architecture does NOT meet ACTION threshold** — treat as informational. Community: gitcommit90/qwen38-27b-dgx-spark repo appeared; early report on Ascent GX10 with Unsloth NVFP4 + MTP k=3 on vLLM 0.26.0 (no explicit tok/s). Community quants: huginnfork FP8, huginnfork NVFP4A16, unsloth FP8 + GGUF. **Watch item closes (Qwen3.8-27B dropped before EOD Aug 16).**
+
+**Check 5 — NVIDIA Forum (719.json/721.json blocked; WebSearch fallback):** **NEW /t/379959** "GB10 spontaneous reboots after July 2026 update: GSP health check fail, NVRM assert flood (gpu_user_shared_data.c:373)" — new highest thread (above /t/379627 Entry 140 threshold). User on kernel 6.17.0-1029-nvidia, driver 580.173.02, CUDA 13.0 (all post-July-update config); machine stable for months pre-update; spontaneous reboots ~2h apart within hours of applying July update; NVRM assert flood at `gpu_user_shared_data.c:373` is a new diagnostic signature. Extends the July-update/EC 0x03000508 cluster — new symptom class (GSP health check + NVRM assert flood) distinct from prior documented failures (fan curve regression, hard power-off, USB-C PD reboot). EC version not cited but configuration strongly implies 0x03000508. Production: kernel 6.17.0-1021 + driver 580.159.03 + EC 0x03000302 — unaffected. EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED, ~10 weeks OPEN**. OTA2608: NOT announced.
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-27B + eugr dev88 same-day release (Check 4 × Check 3):** Model released Aug 14 ~15:00 UTC; eugr dev88 also published Aug 14 11:49 UTC. eugr's historical pattern is same-day or next-day recipe additions for major Qwen releases. Probable Qwen3.8-27B recipe in dev89/dev90. However: GDN hybrid architecture requires kernel validation before any production consideration.
+
+2. **/t/379959 GSP reboot + July-update cluster (Check 5 × CLAUDE.md):** The new forum thread adds a third failure mode to the July-2026-update cluster: (1) EC 0x03000508 fan curve regression (fans stop in headless mode, existing); (2) hard power-off at 90W / acpitz overtemp (existing); (3) GSP health check fail + NVRM assert flood → spontaneous reboot. All three require kernel 1029 / driver 580.173.02 / EC 0x03000508. Production (1021 / 580.159.03 / EC 0x03000302) is unaffected by all three.
+
+3. **Qwen3.8-27B GDN + vLLM #37431 (Check 4 × Check 2):** GDN linear attention Triton kernels on SM121 are the same CUDA-graph / Triton JIT risk class as Mamba-2 (#37431). However: Nemotron Lightning bypasses Mamba-2 Triton via `--mamba-backend flashinfer`; an analogous `--linear-attn-backend flashinfer` flag may exist for GDN. Research needed before any Qwen3.8-27B SM121 eval.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Qwen3.8-27B on official HF org | **FIRED** — `Qwen/Qwen3.8-27B` + FP8 released 2026-08-14 ~15:00 UTC; architecture = GDN hybrid dense (NOT A3B MoE) → no aggressive eval action per watch item |
+| eugr new v0.27.2rc1 build | **SECONDARY FIRE** — dev88 (Aug 14 11:49 UTC), incremental from dev54; Arm C/D eval target updated |
+| Arena FP8 vLLM >88.30 tok/s | NOT FIRED — frontier static 13+ weeks |
+| vLLM new stable release >v0.27.1 | NOT FIRED — v0.27.1 remains latest |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — ~39 days stalled |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — ~3.9 months dormant |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~10 weeks OPEN |
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — EVAL WINDOW OPEN] Arm C/D eval target is now `0.27.2rc1.dev88` (Aug 14).** Entry 140 ACTION still pending. Pull `prebuilt-vllm-current` (now dev88). Pre-flight: EC 0x03000302 (`fwupdmgr get-devices`), driver pin (`apt-mark showhold | grep nvidia`), production qwen35 idle. Eval plan unchanged from Entry 140: (a) B12x MoE probe; (b) NVFP4 B1 probe; (c) Nemotron 3.5 Lightning NVFP4 probe; (d) full throughput suite if probes pass. Gate: ≥+5% c=8 AND quality holds.
+
+2. **[NEW — INFORMATIONAL] Qwen3.8-27B: defer eval; research GDN SM121 path first.** Model is on HF (FP8 ready, ~28 GB, fits Spark). BUT: GDN hybrid architecture is bandwidth-limited on GB10 (Qwen3.6-27B precedent: ~7.8 tok/s), and GDN Triton kernels on SM121 are unvalidated in v0.27.2rc1. Before scheduling any eval: (a) check vLLM #37431 / GDN SM121 status in v0.27.2rc1 release notes; (b) check if `--linear-attn-backend flashinfer` or equivalent flag exists (analogous to Nemotron Lightning's Mamba bypass); (c) wait for community /t/ GB10 report before dedicating eval time. Not a production upgrade path (dense GDN, no A3B MoE efficiency, vision encoder not needed). **Close the Qwen3.8-27B watch item — model dropped, architecture confirmed, low prod priority.**
+
+3. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 update.** /t/379959 adds a third failure mode (GSP health check + NVRM assert → spontaneous reboot) to the July-update cluster. EC 0x03000508 fan regression still OPEN 10 weeks. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin. OTA2608 not announced.
+
+4. **[CARRY-FORWARD — SAFETY] Driver pin and EC firmware check before any apt or eval operation.** Verify `apt-mark showhold | grep nvidia`; verify `fwupdmgr get-devices` shows EC 0x03000302.
+
+5. **[CARRY-FORWARD] Monitor Arena for Qwen3.8-27B submissions.** Community uptake already started (gitcommit90 repo, Ascent GX10 early report). New vLLM submissions using Qwen3.8-27B-FP8 may appear within 1-2 weeks; will provide tok/s data point for GDN performance on GB10.

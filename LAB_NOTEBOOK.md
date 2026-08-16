@@ -10971,3 +10971,58 @@ The long-pending carry-forward trigger (eugr v0.27.x build) fired on Aug 13. The
 4. **[CARRY-FORWARD — SAFETY] Driver pin and EC firmware check before any apt or eval operation.** Verify `apt-mark showhold | grep nvidia`; verify `fwupdmgr get-devices` shows EC 0x03000302.
 
 5. **[CARRY-FORWARD] Monitor Arena for Qwen3.8-27B submissions.** Community uptake already started (gitcommit90 repo, Ascent GX10 early report). New vLLM submissions using Qwen3.8-27B-FP8 may appear within 1-2 weeks; will provide tok/s data point for GDN performance on GB10.
+
+---
+
+## Entry 142 - DGX Spark Recon (2026-08-16)
+
+**Date:** 2026-08-16 UTC
+**Operator:** Claude Code (spark-recon skill) — All 5 checks
+**Status:** RECON — no changes made
+
+### Overall: WORTH WATCHING — eugr dev113 supersedes dev88 as Arm C/D eval target; Arena frontier static 13+ weeks; no new stable vLLM; PR #40099 still open; OTA2608 not announced; carry-forward ACTION (Arm C/D eval) pending
+
+**Check 1 — Arena (Firestore direct reads):** All three baseline docs accessible (HTTP 200). sub1779297106805 (FP8 vLLM, Stojanovic, 80.27 tok/s): recipeCopyCount **205** (unchanged from Entry 141). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): recipeCopyCount **24** (unchanged). sub1779495971526 (Atlas top overall, 218.85 tok/s): recipeCopyCount **136** (was 135 — +1). Probes at sub1785000000000, sub1785500000000, sub1786000000000: all 404 — no new submissions in upper ID range. FP8 vLLM c=1 frontier static **13+ weeks** (last submission 2026-05-26). **10% trigger NOT FIRED** (threshold 88.30 tok/s). No new Qwen3.8-27B vLLM Arena submissions detected yet (consistent with early community uptake phase).
+
+**Check 2 — vLLM releases:** v0.27.1 (2026-08-11) remains latest upstream stable; **no v0.27.2 stable or v0.28 found**. PR #40099 (Gemma4 repetition detection): confirmed **STILL OPEN** via direct GitHub page fetch (~40 days stalled, awaiting multiple code-owner reviews). Issue #41063 (DeepGEMM SM12.x): no new information, presumed still OPEN (~4 months dormant). No new SM121/GB10-specific PRs or issues surfaced.
+
+**Check 3 — spark-vllm-docker:** **NEW BUILD: `0.27.2rc1.dev113+g5cecfc013.d20260815`** (published **2026-08-15 12:32 UTC** — post-Entry 141 check time, making it a same-day incremental update). +25 upstream commits from dev88 (Aug 14 11:49 UTC). Tagged "New stable build." FlashInfer version: not confirmed (release page loading error); likely same 0.6.18 series. Recipe additions for dev113 not confirmed (GitHub API 403 in remote env); Nemotron 3.5 Lightning and Qwen3.8-2.4T recipes from prior commits still the latest confirmed. **dev113 is now the Arm C/D eval target**, superseding dev88. PR #279 (DFlash+FP8 KV): dormant ~19+ weeks.
+
+**Check 4 — Qwen/HuggingFace:** No new A3B-class MoE models from official Qwen org since Qwen3.8-27B (closed watch item, Entry 141). **Qwen3.8-2.4T-A95B** (flagship) and `Qwen3.8-2.4T-A95B-FP8` confirmed on HF — NOT Spark-viable (2.4T total params >> 128 GB budget). Qwen3.8-27B community quantizations expanding: `RadixArk/Qwen3.8-27B-NVFP4` (unofficial, new since Entry 141), unsloth NVFP4/GGUF variants already tracked. **Qwen4: September 2026 Apsara Conference release rumored** (multiple X/social media signals, consistent pattern with Qwen 2.5 at 2024 Apsara and Qwen 3 models at 2025 Apsara) — no official announcement yet. Treat as rumor; reopen Qwen4 watch when official HF card appears.
+
+**Check 5 — NVIDIA Forum (719.json/721.json blocked; WebSearch fallback):** No new threads above /t/379959 found for Aug 15–16. WebSearch returned highest indexed thread still /t/379959 (GSP reboot cluster, Entry 141 threshold). EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED, ~10+ weeks OPEN**; OTA2608: **NOT announced**. No new driver/firmware release. All previously-tracked clusters unchanged.
+
+### Cross-Correlated Findings
+
+1. **eugr dev113 timing + commit pace (Check 3 × Check 2):** eugr published dev113 on Aug 15 just hours after Entry 141 ran. At roughly 25 commits/day pace, a dev114–dev120 build is likely within 24–72h. The upstream vLLM v0.27.1 stable has not moved, so the accumulating dev commits are likely recipe additions, SM121 bug fixes, and FlashInfer updates rather than major architecture changes. Eval target stability is adequate — dev113 is a solid eval foundation.
+
+2. **Qwen4 Apsara signal + Arena static frontier (Check 4 × Check 1):** If Qwen4 releases at September Apsara with an A3B-class MoE, it could immediately trigger new Arena submissions. The FP8 vLLM frontier has been static 13+ weeks, suggesting community optimization interest has shifted (Nemotron, Atlas). A Qwen4-35B-A3B-FP8 would be a strong forcing function for new Arena activity.
+
+3. **PR #40099 still open (Check 2 × CLAUDE.md):** 40 days stalled with no maintainer engagement visible. This blocks the Gemma4 structured output experiment (Entry 061). PR #51036 (server-side repetition default) remains OPEN as complementary path, but does NOT replace #40099 for the Gemma4 gate.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| eugr new v0.27.2rc1 build (incremental update) | **SECONDARY FIRE** — dev113 (Aug 15 12:32 UTC), +25 commits from dev88; Arm C/D eval target updated |
+| Arena FP8 vLLM >88.30 tok/s | NOT FIRED — frontier static 13+ weeks |
+| vLLM new stable release >v0.27.1 | NOT FIRED |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — confirmed still OPEN, ~40 days stalled |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — ~4 months dormant |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~10+ weeks OPEN |
+| Qwen4 on official HF org | NOT FIRED — Apsara rumor only |
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — EVAL WINDOW OPEN] Arm C/D eval target is NOW `0.27.2rc1.dev113+g5cecfc013.d20260815` (Aug 15 12:32 UTC).** Updated from dev88 (Aug 14). +25 incremental commits; same SM121 arch-fix (#49904) and DSpark Markov suite intact. Pre-flight unchanged: EC 0x03000302, driver pin, production qwen35 idle. Eval plan: (a) B12x MoE probe; (b) NVFP4 B1 probe; (c) DSpark Markov head probe; (d) Nemotron 3.5 Lightning NVFP4 probe; (e) full throughput suite if probes pass.
+
+2. **[NEW — MONITOR] Watch for Qwen4 at September Apsara Conference.** Historical pattern (Qwen 2.5 at 2024 Apsara, Qwen 3 at 2025 Apsara) makes this a credible signal. If a Qwen4-35B-A3B-FP8 variant releases, treat as ACTION-level trigger: architecture check (verify standard MoE, not GDN hybrid), load FP8 to verify size fits Spark (target ~22 GB), eval against production baseline. Do NOT open watch item until official Qwen org HF card exists.
+
+3. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~10+ weeks OPEN. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin. OTA2608 not announced.
+
+4. **[CARRY-FORWARD — SAFETY] Driver pin and EC firmware check before any apt or eval operation.** Verify `apt-mark showhold | grep nvidia`; verify `fwupdmgr get-devices` shows EC 0x03000302.
+
+5. **[CARRY-FORWARD] Monitor Arena for Qwen3.8-27B submissions.** First tok/s data points for GDN-dense on GB10 expected within 1–2 weeks based on community uptake pace. No submissions detected today.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 stalled 40 days.** No escalation path visible. Only action is to keep monitoring; schedule Gemma4 experiment immediately when it merges.

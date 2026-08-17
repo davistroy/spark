@@ -11040,3 +11040,58 @@ Arena subagent returned additional findings after Entry 142 was already committe
 **Updated Check 1 Assessment:** FP8 vLLM frontier may have moved above Stojanovic's 80.27 tok/s c1 with the new submission, but this is UNCONFIRMED pending direct arena access. The trigger state is PENDING, not FIRED. The new config (FP8 KV + FlashInfer + InstantTensor + 262K + 0.80 util) represents a substantially different operating point — even if c1 is higher, the recipe differences (FP8 KV, non-production context window, higher gpu_util) may not be directly applicable to production without evaluation.
 
 **Revised Recommendation for Check 1:** Access spark-arena.com directly from the Spark device (browser, NOT this remote session). Find the new FP8 vLLM Qwen3.6-35B-A3B submission linked by @spark_arena. Record the tg128 c1 score. If >88.30 tok/s: ACTION NEEDED — investigate config delta. Key config items to assess for production applicability: (1) `--kv-cache-dtype fp8` — note Entry 073 explicitly rejected FP8 KV for pre-quant FP8 model (5-15% throughput cost); (2) FlashInfer attention vs production FLASH_ATTN; (3) InstantTensor load format compatibility; (4) 0.80 vs 0.70 gpu_util (within safe range per community reference).
+
+---
+
+## Entry 143 - DGX Spark Recon (2026-08-17)
+
+**Date:** 2026-08-17 UTC
+**Operator:** Claude Code (spark-recon skill) — All 5 checks
+**Status:** RECON — no changes made
+
+### Overall: WORTH WATCHING — Arena trigger PENDING (c10 @spark_arena submission unresolved); FlashInfer 0.6.18 now confirmed for dev113; no new vLLM stable or eugr build; no new Qwen A3B MoE; EC fan regression still open; carry-forward ACTION (Arm C/D eval) pending
+
+**Check 1 — Arena (Firestore direct reads):** All three baseline docs HTTP 200. sub1779297106805 (Stojanovic FP8 vLLM): recipeCopyCount **205** (unchanged from Entry 142). Firestore field returned **76.61 tok/s** labeled "tg128 @ d8192, c1" — **discrepancy vs tracked 80.27 tok/s**. Prior tracking (Entry 129 automated check) confirmed 80.27; the 76.61 is likely a different benchmark field within the document (d8192 = 8192-token prefill context vs d0 = blank-slate context). recipeCopyCount unchanged at 205 confirms same submission has not been superseded; maintain 80.27 as the c1 tg128 (d0) baseline for trigger comparison. sub1782803609803 (Poveda NVFP4): recipeCopyCount **24** (unchanged), tg128 c1 = **118.91 tok/s** ✓. sub1779495971526 (Atlas top overall): recipeCopyCount **137** (+1 vs Entry 142), tg128 c1 = **218.85 tok/s** ✓. Arena listing: still returns only 2 earliest docs (consistent prior pattern). New ID probes sub1786500000000 and sub1786900000000: both **404** (extending prior probe coverage through estimated Aug 16-17 range). **@spark_arena c10 submission: CONFIRMED VIA WEBSEARCH** — tweet confirmed: "Qwen3.6-35B-A3B-FP8 achieved 130 tokens/sec at concurrency 10, for a 128-token reply with 100K tokens of prior context." This is NOT the tg128 c1 metric — 130 tok/s aggregate at c=10 @100K context is a different benchmark point (aggregate throughput under load, not single-stream c1 latency). **10% trigger (>88.30 tok/s tg128 c1) state: PENDING** — c1 score unknown, submission ID unrecoverable (spark-arena.com egress-blocked, x.com egress-blocked). FP8 vLLM c1 frontier static **13+ weeks** (last submission 2026-05-26).
+
+**Check 2 — vLLM releases:** v0.27.1 (2026-08-11) confirmed as latest stable; **no v0.27.2 stable or v0.28 found**. PR #40099 (Gemma4 repetition detection): confirmed **STILL OPEN** — last activity July 8 (~40 days stalled), awaiting code-owner review. Issue #41063 (DeepGEMM SM12.x): **STILL OPEN**, no August 2026 comments found. No new SM121/GB10-specific upstream changes identified.
+
+**Check 3 — spark-vllm-docker:** Latest build confirmed **0.27.2rc1.dev113+g5cecfc013.d20260815** (Aug 15 12:32 UTC) — **no new build since Entry 142**. **NEW: FlashInfer 0.6.18 NOW CONFIRMED** — release `prebuilt-flashinfer-current` tag shows version `0.6.18-8044d94b-d20260815` published Aug 15 12:26 UTC. This resolves the "unconfirmed" FlashInfer version in Entry 142. **dev113 remains the Arm C/D eval target**, fully characterized: vLLM 0.27.2rc1 + FlashInfer 0.6.18. PR #279 (DFlash+FP8 KV): presumed still dormant.
+
+**Check 4 — Qwen/HuggingFace:** No new A3B-class MoE models from official Qwen org. Qwen3.8 collection (27B dense + 2.4T-A95B) already tracked and deprioritized (Entry 141). No Qwen4 announcement. September Apsara Conference Qwen4 rumor carry-forward (no new signal). No other new ~30-40B MoE models from other labs identified.
+
+**Check 5 — NVIDIA Forum (forums.developer.nvidia.com egress-blocked; WebSearch fallback):** **NEW /t/379766** "Measured inference benchmarks on a single DGX Spark — same harness across Ollama, llama.cpp and vLLM (notes + data published)" — thread ID between /t/379627 (Entry 140) and /t/379959 (Entry 141); **missed in Entry 141** (likely search coverage gap or indexed late); content 403, details unavailable; benchmarking community interest, low urgency. No new threads above /t/379959 found for Aug 16-17. EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED** (WebSearch confirms /t/379195 "hard-freezes under inference" still a recent top result; ~11+ weeks open). OTA2608: **NOT announced**. No new driver or firmware release.
+
+### Cross-Correlated Findings
+
+1. **eugr FlashInfer 0.6.18 confirmed + dev113 stable (Check 3 × Check 2):** Arm C/D eval target is fully characterized for the first time. vLLM 0.27.2rc1.dev113 + FlashInfer 0.6.18 + SM121 arch-fix + DSpark Markov suite = complete foundation for eval. This removes the last uncertainty flagged in Entry 142.
+
+2. **@spark_arena c10 submission + FP8 KV + FlashInfer attn (Check 1 × Check 3):** The new submission uses FlashInfer attention backend (not production FLASH_ATTN) and FP8 KV cache. These are exactly the components being evaluated in the Arm C/D plan (FlashInfer MoE b12x eval, FP8 KV considerations). The submission's performance under sustained c10 @100K context with these features is a useful data point that the Arm C/D eval should address. If the c1 tg128 (d0) score is above 88.30, the FlashInfer attention backend would be a key config delta to evaluate.
+
+3. **Arena static frontier + no new vLLM stable (Check 1 × Check 2):** FP8 vLLM frontier at Arena has been static 13+ weeks; vLLM v0.27.1 has been the latest stable for 6 days. The major optimization wave (v0.27.0 DSpark Markov, SM121 arch-fix) hasn't materialized in new Arena submissions yet. Community is likely waiting to evaluate the new vLLM version before submitting — expected activity when Arm C/D evals complete.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (tg128 c1) | **PENDING** — @spark_arena c10 submission confirmed; c1 metric unknown |
+| eugr FlashInfer version confirmed | **NEW INFO** — 0.6.18 confirmed (was "unconfirmed" in Entry 142) |
+| vLLM new stable release >v0.27.1 | NOT FIRED — v0.27.1 still latest |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled ~40 days |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — open, dormant |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~11+ weeks OPEN |
+| Qwen4 on official HF org | NOT FIRED — September Apsara rumor only |
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — EVAL WINDOW OPEN] Arm C/D eval target: `0.27.2rc1.dev113+g5cecfc013.d20260815` fully characterized.** vLLM 0.27.2rc1 + FlashInfer 0.6.18 confirmed. SM121 arch-fix (#49904) and DSpark Markov suite present. Eval plan unchanged: (a) B12x MoE probe on production Qwen3.6-35B-A3B-FP8; (b) NVFP4 B1 probe; (c) DSpark Markov head probe; (d) Nemotron 3.5 Lightning NVFP4 probe; (e) full throughput suite if probes pass. Pre-flight: verify EC 0x03000302, driver pin, production qwen35 idle.
+
+2. **[CARRY-FORWARD PENDING] Arena trigger resolution: check spark-arena.com directly from the Spark device.** The @spark_arena c10 submission (130 tok/s @c10 @100K ctx) is confirmed real. The c1 tg128 score is the only outstanding question for the 10% trigger. Access spark-arena.com via browser from the Spark device to retrieve the tg128 c1 score. If >88.30: ACTION NEEDED. Also note: the submission's FP8 KV + FlashInfer attention config means any c1 gain from this submission would need to be evaluated as part of Arm C/D — not a direct production recommendation.
+
+3. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~11+ weeks OPEN. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin. OTA2608 not announced.
+
+4. **[CARRY-FORWARD — SAFETY] Driver pin and EC firmware check before any apt or eval operation.** Verify `apt-mark showhold | grep nvidia`; verify `fwupdmgr get-devices` shows EC 0x03000302.
+
+5. **[CARRY-FORWARD] Monitor Arena for Qwen3.8-27B submissions.** No Arena submissions detected for this model yet. Community uptake pace suggests first submissions within 1 week.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 stalled 40+ days.** Schedule Gemma4 structured output experiment immediately on merge.

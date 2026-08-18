@@ -11095,3 +11095,58 @@ Arena subagent returned additional findings after Entry 142 was already committe
 5. **[CARRY-FORWARD] Monitor Arena for Qwen3.8-27B submissions.** No Arena submissions detected for this model yet. Community uptake pace suggests first submissions within 1 week.
 
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 stalled 40+ days.** Schedule Gemma4 structured output experiment immediately on merge.
+
+---
+
+## Entry 144 - DGX Spark Recon (2026-08-18)
+
+**Date:** 2026-08-18 UTC
+**Operator:** Claude Code (spark-recon skill) — All 5 checks
+**Status:** RECON — no changes made to production system
+
+### Overall: WORTH WATCHING — new eugr dev158 build (Arm C/D eval target updated); Arena @spark_arena PENDING trigger resolved to NOT FIRED; no new vLLM stable; no new Qwen A3B MoE; EC fan regression ~12 weeks open
+
+**Check 1 — Arena (Firestore direct reads):** All three baseline docs HTTP 200. sub1779297106805 (Stojanovic FP8 vLLM): recipeCopyCount **205** (unchanged), tg128 c1 = **80.27 tok/s** confirmed. sub1782803609803 (Poveda NVFP4): recipeCopyCount **25** (+1 from 24), tg128 c1 = **118.91 tok/s** confirmed. sub1779495971526 (Atlas top overall): recipeCopyCount **137** (unchanged), aggregateScore 66,171 confirmed. **New submission probes through sub1789000000000: ALL 404** — no new submissions detected through approximately September 2026 ID range. **@spark_arena c10 submission (Entries 142-143 PENDING) RESOLVED TO NOT FIRED:** The @spark_arena-tweeted Qwen3.6-35B-A3B-FP8 vLLM c10 submission does not appear in the Firestore benchmarks collection through the probed ID range; it was either not published to the collection or is pending review. The tracked tg128 c1 baseline at 80.27 tok/s (Stojanovic) is confirmed as the current FP8 vLLM frontier; 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static 14+ weeks (last submission 2026-05-26).
+
+**Check 2 — vLLM releases:** v0.27.1 (2026-08-11) confirmed as latest stable; **no v0.27.2 or v0.28 found**. PR #40099 (Gemma4 repetition detection): OPEN, last activity 2026-07-08 (~41 days stalled). Issue #41063 (DeepGEMM SM12.x): OPEN, last activity 2026-04-27 (~4 months dormant). No new SM121/GB10-specific upstream changes.
+
+**Check 3 — spark-vllm-docker:** **NEW BUILD: `0.27.2rc1.dev158+gcc7cf71fc.d20260817`** (prebuilt-vllm-current, 2026-08-17 11:44 UTC) — up from dev113 (+45 dev commits). FlashInfer: **0.6.18** unchanged (new build date d20260817 vs d20260815). New mod `mods/radixark-dspark/` (Aug 17): fixes `RadixArk/Qwen3.8-27B-DSpark` routing — vLLM incorrectly routes DSparkDraftModel+qwen3 to DeepSeek-V4 loader; not relevant to production Qwen3.6. Nemotron recipe: num_speculative_tokens bumped 3→7. PR #279 (DFlash+FP8 KV): still dormant.
+
+**Check 4 — Qwen/HuggingFace:** **No Qwen3.7 exists** — Alibaba skipped the 3.7 designation entirely, going directly from Qwen3.6 (April) to Qwen3.8 (August). No Qwen4 (September Apsara rumor only). No Qwen3.8-35B-A3B MoE — only Qwen3.8-27B (dense, Aug 14, already tracked) and Qwen3.8-2.4T-A95B. Nemotron 3.5 Lightning (released Aug 11) carry-forward — already in Watch Items (Entry 140). No other new ~30-40B MoE from major labs.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; direct endpoints blocked):** No new threads above /t/379959 found for Aug 17-18 (indexing lag possible). /t/379601 "DGX Spark 2 release date? Will there be one?" — informational, no NVIDIA commitment. EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED** (~12 weeks open). OTA2608: **NOT announced**. Driver 580.173.02 break (/t/378200): no NVIDIA response or hotfix; /t/379959 (GSP reboot flood after 580.173.02 on kernel 1029) adds another failure mode for the same driver version. Production (580.159.03, kernel 1021) unaffected.
+
+### Cross-Correlated Findings
+
+1. **eugr dev158 (Check 3) × vLLM v0.27.1 stable (Check 2):** Arm C/D eval target advances to dev158 (Aug 17). The rc series tracks v0.27.2 dev commits — 45 ahead of dev113. No known breaking changes vs dev113; drop-in eval candidate upgrade. SM121 arch-fix (#49904), DSpark Markov suite, and Nemotron recipe all confirmed present in the dev158 lineage.
+
+2. **Arena @spark_arena PENDING cleared (Check 1):** Firestore probes through sub1789000000000 returned 404. The @spark_arena c10 submission (Entries 142/143) does not appear in the benchmarks collection. FP8 vLLM frontier confirmed static at 80.27 tok/s since May 26. Community is not submitting new Arena benchmarks.
+
+3. **Forum /t/379959 580.173.02 GSP reboot (Check 5) × driver hold (carry-forward):** This new thread (GSP health check fail, NVRM assert flood, kernel 6.17.0-1029, driver 580.173.02) is the second distinct failure mode for 580.173.02 (the first was the OTA2607 GPT fail at /t/378200). Both involve the same driver version. Driver pin on production (580.159.03) is confirmed correct.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (tg128 c1) | **NOT FIRED** — baseline confirmed 80.27; @spark_arena PENDING resolved; no new submissions |
+| eugr new stable build | **INFO** — dev158 (Aug 17), +45 dev commits over dev113; new Arm C/D eval target |
+| vLLM new stable release >v0.27.1 | NOT FIRED |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — stalled ~41 days |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED — dormant ~4 months |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~12 weeks open |
+| Qwen3.7/Qwen4 on official HF org | NOT FIRED — Qwen3.7 does not exist; Qwen4 September rumor |
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — EVAL WINDOW OPEN] Arm C/D eval target UPDATED: `0.27.2rc1.dev158+gcc7cf71fc.d20260817`** (Aug 17 11:44 UTC, +45 commits over dev113). Same rc series, drop-in upgrade. Eval plan unchanged: (a) B12x MoE probe on Qwen3.6-35B-A3B-FP8; (b) NVFP4 B1 probe; (c) DSpark Markov head probe; (d) Nemotron 3.5 Lightning NVFP4 probe; (e) full throughput suite if probes pass. Pre-flight: verify EC 0x03000302, driver pin, production qwen35 idle.
+
+2. **[RESOLVED] Arena @spark_arena trigger cleared.** No submission found in Firestore through probe range sub1789000000000. FP8 vLLM frontier confirmed static at 80.27 tok/s (Stojanovic, sub1779297106805). 10% trigger NOT FIRED. No further direct-access check needed unless a new tweet/announcement surfaces.
+
+3. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~12 weeks OPEN. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin. OTA2608 not announced.
+
+4. **[CARRY-FORWARD — SAFETY] Driver pin and EC firmware check before any apt or eval operation.** Verify `apt-mark showhold | grep nvidia`; verify `fwupdmgr get-devices` shows EC 0x03000302.
+
+5. **[CARRY-FORWARD] Monitor Arena for Nemotron 3.5 Lightning NVFP4+DSpark benchmarks.** Community benchmarks (blog.kubesimplify.com, dev.classmethod.jp) cite ~90 tok/s at 21K context — but context-window and harness mismatch vs tracked tg128 metric. Wait for first Arena submission with comparable harness.
+
+6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 stalled 41+ days.** Schedule Gemma4 structured output experiment immediately on merge.

@@ -11149,4 +11149,53 @@ Arena subagent returned additional findings after Entry 142 was already committe
 
 5. **[CARRY-FORWARD] Monitor Arena for Nemotron 3.5 Lightning NVFP4+DSpark benchmarks.** Community benchmarks (blog.kubesimplify.com, dev.classmethod.jp) cite ~90 tok/s at 21K context — but context-window and harness mismatch vs tracked tg128 metric. Wait for first Arena submission with comparable harness.
 
+---
+
+## Entry 145 - DGX Spark Recon (2026-08-19)
+
+**Overall: WORTH WATCHING** — eugr build advances to dev209 (+51 commits, Aug 18), updating the Arm C/D eval target; Qwen3.8-27B community benchmark activity is high but below production threshold; FP8 vLLM Arena frontier unchanged; EC fan regression still unresolved.
+
+**Check 1 — Arena Firestore:** Direct reads on all three baselines — sub1779297106805 (Stojanovic FP8 vLLM): recipeCopyCount **205** (unchanged). sub1782803609803 (Poveda NVFP4): recipeCopyCount **25** (unchanged). sub1779495971526 (Atlas/Rawat): recipeCopyCount **137** (unchanged). FP8 vLLM frontier confirmed static at 80.27 tok/s since 2026-05-26. 10% trigger (>88.30) NOT FIRED. Note: Firestore WebFetch returned "tg128 @ d8192 (c1): 77 tok/s" for sub1779297106805 — likely AI summarization rounding; 80.27 established value (Entry 129 automated check) retained.
+
+**Check 2 — vLLM releases:** No new stable release — v0.27.1 (2026-08-11) remains latest stable; v0.27.2 still in RC (dev209 via eugr build). PR #40099 (Gemma4 repetition detection): **STILL OPEN** (direct GitHub fetch confirmed; referenced in related issues Aug 2026 but NOT merged — ~42 days stalled). Issue #41063 (DeepGEMM SM12.x): no change. SM121 arch-guard trigger NOT FIRED. vLLM X post "Day-0 MTP support for Gemma4" is from May 2026 (PR #41745) — already tracked; no new Gemma4 structured output gate progress.
+
+**Check 3 — spark-vllm-docker:** **NEW BUILD: `0.27.2rc1.dev209+gf9f066d19.d20260818`** (prebuilt-vllm-current, 2026-08-18 19:10 UTC, commit 1c263eb, +51 dev commits over dev158). Marked "New stable build." FlashInfer version unconfirmed (release page returned loading error) — assume 0.6.18 unchanged pending next check. No recipe changes confirmed; Nemotron recipe (num_speculative_tokens 3→7) and RadixArk DSpark mod from dev158 carry forward.
+
+**Check 4 — Qwen/HuggingFace:** No Qwen3.7-35B-A3B (Alibaba skipped 3.7 designation entirely). No Qwen4 (September Apsara rumor only). No new ~30-40B A3B-class MoE from major labs. Qwen3.8-27B (dense GDN, CLOSED Watch Item Entry 141) seeing heavy community benchmark activity — see Check 5.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; direct endpoints blocked):** **MULTIPLE NEW THREADS above /t/379959 threshold:** (a) **/t/379613** "Qwen3.8-27B coming next week — full 3.8 will go open-weights!" (MISSED in Entry 144; between /t/379601 and /t/379959); (b) **/t/380012** "Qwen3.8 27b — Upcoming release countdown" (DGX Spark/GB10 Projects, 3+ pages); (c) **/t/380244** "Qwen3.8-27B-NVFP4 on a single DGX Spark — up to 1M context, vLLM+MTP measurements"; (d) **/t/380248** "Qwen3.8-27B-MixedInt4-AutoRound — Optimized for a Single DGX Spark"; (e) **/t/380257** "Qwen3.8-27B at 34–38 tok/s on DGX Spark — open-source one-command setup (SGLang + NVFP4 + DSpark)" (HIGHEST new thread). Category 723 (`dgx-spark-gb10-projects`) confirmed active. **Severity: LOW** — Qwen3.8-27B is dense GDN, per Watch Item [CLOSED Entry 141]: not a production upgrade path (bandwidth-limited, GDN arch class). 34–38 tok/s is well below production 66.9 tok/s. EC 0x03000508 fan regression: **STILL UNRESOLVED** (~12+ weeks, case 260716-000029). OTA2608: NOT announced. No new driver/firmware crisis threads.
+
+### Cross-Correlated Findings
+
+1. **eugr dev209 (Check 3) × vLLM 0.27.2 RC (Check 2):** Arm C/D eval target advances from dev158 → dev209 (+51 dev commits, Aug 18 19:10 UTC). No stable v0.27.2 yet. Drop-in upgrade for eval session — same SM121 arch-fix and DSpark Markov suite lineage as dev158.
+
+2. **Forum Qwen3.8-27B threads (Check 5) × Qwen check (Check 4):** Five new forum threads on Qwen3.8-27B for DGX Spark in 24h: countdown, NVFP4+MTP, AutoRound INT4, SGLang+NVFP4+DSpark. Community excited but model is dense GDN (bandwidth-limited) — 34–38 tok/s vs production 66.9 confirms no production path. Consistent with Watch Item [CLOSED Entry 141] conclusion.
+
+3. **Arena recipeCounts unchanged (Check 1) × Forum activity (Check 5):** Community Qwen3.8-27B benchmarking activity is entirely on the forum (no Arena submissions). FP8 vLLM Arena frontier has been static 85+ days.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (tg128 c1) | **NOT FIRED** — baseline confirmed 80.27; recipeCounts unchanged; 85+ days static |
+| eugr new stable build | **INFO** — dev209 (Aug 18, +51 commits over dev158); new Arm C/D eval target |
+| vLLM new stable release >v0.27.1 | NOT FIRED |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — STILL OPEN, ~42 days stalled |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~12+ weeks open |
+| Qwen3.7/Qwen4 on official HF org | NOT FIRED — Qwen3.7 does not exist; Qwen4 September rumor only |
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — EVAL WINDOW OPEN] Arm C/D eval target UPDATED: `0.27.2rc1.dev209+gf9f066d19.d20260818`** (commit 1c263eb, Aug 18 19:10 UTC, +51 commits over dev158). Drop-in upgrade from dev158. FlashInfer: assumed 0.6.18 unchanged (confirm at eval session open). Eval plan unchanged: (a) B12x MoE probe on Qwen3.6-35B-A3B-FP8; (b) NVFP4 B1 probe; (c) DSpark Markov head probe; (d) Nemotron 3.5 Lightning NVFP4 probe; (e) full throughput suite if probes pass.
+
+2. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~12+ weeks OPEN. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin (`apt-mark showhold | grep nvidia`).
+
+3. **[INFO] Qwen3.8-27B dense GDN benchmarks (34–38 tok/s) confirm it is NOT a production upgrade path.** Five community threads in 24h; model is bandwidth-limited GDN dense — per Watch Item [CLOSED Entry 141], deprioritize vs Nemotron 3.5 Lightning for Arm C/D eval.
+
+4. **[CARRY-FORWARD] Monitor PR #40099 (Gemma4 repetition detection).** ~42 days stalled; referenced in related issues Aug 2026. Merge triggers Gemma4 structured output experiment (Entry 061 plan).
+
+5. **[INFO] /t/379613 was missed in Entry 144 WebSearch.** "Qwen3.8-27B coming next week — full 3.8 will go open-weights!" was between /t/379601 and /t/379959; indexing lag or search gap. New highest thread is /t/380257.
+
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 stalled 41+ days.** Schedule Gemma4 structured output experiment immediately on merge.

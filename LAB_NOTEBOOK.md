@@ -11199,3 +11199,52 @@ Arena subagent returned additional findings after Entry 142 was already committe
 5. **[INFO] /t/379613 was missed in Entry 144 WebSearch.** "Qwen3.8-27B coming next week — full 3.8 will go open-weights!" was between /t/379601 and /t/379959; indexing lag or search gap. New highest thread is /t/380257.
 
 6. **[CARRY-FORWARD] Gemma4 gate: PR #40099 stalled 41+ days.** Schedule Gemma4 structured output experiment immediately on merge.
+
+---
+
+## Entry 146 - DGX Spark Recon (2026-08-20)
+
+**Overall: WORTH WATCHING** — Poveda NVFP4 Arena recipe copies surged 25→103 (+78, +312%) in 24h (source unknown — likely viral blog post or social media); no new vLLM stable; eugr build unchanged at dev209; no new Qwen A3B model; no forum threads above /t/380257; EC fan regression still unresolved (~13 weeks).
+
+**Check 1 — Arena Firestore (direct sub reads):** sub1779297106805 (Stojanovic FP8 vLLM): recipeCopyCount **214** (+9 from 205). sub1782803609803 (Poveda NVFP4): recipeCopyCount **103** (**+78 from 25 — a 312% jump in 24h**). sub1779495971526 (Atlas/Rawat): recipeCopyCount **145** (+8 from 137). FP8 vLLM frontier 80.27 tok/s unchanged (Stojanovic confirmed). 10% trigger (>88.30) **NOT FIRED**. Note: Firestore AI-summaries returned 76.61/118.91/218.85 — 80.27 established value from Entry 129 automated check retained for Stojanovic. **Poveda surge is anomalous; no new submission detected.**
+
+**Check 2 — vLLM releases:** v0.27.1 (2026-08-11) confirmed latest stable via direct GitHub releases page fetch. No v0.27.2 stable. SM121 arch-guard NOT FIRED for any new release. PR #40099 (Gemma4 repetition detection): **STILL OPEN** — confirmed via direct GitHub PR fetch; last activity July 8, 2026 (collaborator lucianommartins questioned reproducibility); 9 reviewers pending; ~43 days stalled. Search result claiming "merged November 2025" was AI hallucination — debunked by direct fetch. Issue #41063 (DeepGEMM SM12.x): no change, still dormant.
+
+**Check 3 — spark-vllm-docker:** `prebuilt-vllm-current` confirmed still `0.27.2rc1.dev209+gf9f066d19.d20260818` (Aug 18, "New stable build") — **UNCHANGED from Entry 145**. No new build in the last 24h. Arm C/D eval target stable.
+
+**Check 4 — Qwen/HuggingFace:** No Qwen3.7-35B-A3B (designation skipped). No Qwen3.8-35B-A3B or Qwen4 (September Apsara rumor only). Qwen3.8-27B (dense GDN, Watch Item CLOSED Entry 141) confirmed on HF with community DGX Spark deployments (blog.kubesimplify.com guide published). No new ~30–40B A3B-class MoE from other major labs. Qwen3.8-27B at 34–38 tok/s remains well below production 66.9 tok/s threshold.
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; direct 719/721 endpoints blocked):** No new threads identified above /t/380257 threshold. **NEWLY SURFACED MISSED THREADS** (below current threshold, informational): **/t/379832** "New Nemotron 3.5 Lighting 30B-A3B" and **/t/379921** "NVIDIA Nemotron-3.5-Lightning-30B-A3B-NVFP4: DGX Spark vs. RTX PRO 6000 Blackwell Performance" — both between /t/379875 (Entry 142 missed) and /t/380012 (Entry 145); content 403; community Nemotron Lightning performance comparison, consistent with Watch Item [NEW Entry 140]. Severity LOW — informational, no new failure modes. EC 0x03000508 fan regression: **STILL UNRESOLVED** (~13 weeks, case 260716-000029 OPEN). OTA2608: NOT announced. No new driver/firmware crisis. **ALSO NOTED**: SparkBench.dev (community benchmark aggregation site) surfaced in search; network-blocked in this environment — track as emerging community resource.
+
+### Cross-Correlated Findings
+
+1. **Poveda NVFP4 recipe +78 copies (Check 1) × Nemotron Lightning forum activity (Check 5):** Community NVFP4 interest surging — /t/379921 (DGX Spark vs RTX PRO 6000 Blackwell Nemotron NVFP4 comparison) and Nemotron NVFP4 excitement may be cross-pollinating interest in the Poveda Qwen3.6 NVFP4 recipe. Source of +78 copy surge unconfirmed.
+
+2. **eugr dev209 unchanged (Check 3) × vLLM v0.27.1 still latest (Check 2):** Arm C/D eval target `0.27.2rc1.dev209+gf9f066d19.d20260818` stable for ≥2 days. No urgency to wait for a newer build — dev209 remains the correct eval target.
+
+3. **No new Qwen A3B (Check 4) × Arena FP8 frontier static 80.27 (Check 1) × no new vLLM stable (Check 2):** Production model (Qwen3.6-35B-A3B-FP8) and runtime (dev209) uncontested by open-weight alternatives. Nemotron 3.5 Lightning NVFP4 (~108–116 tok/s c1, Watch Item Entry 140) remains the only credible open competitor pending eval.
+
+### Triggered Alerts
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (tg128 c1) | **NOT FIRED** — baseline 80.27 confirmed; 86+ days static; Poveda +78 copies is a community activity signal, not a performance threshold event |
+| eugr new stable build | NOT FIRED — dev209 (Aug 18) unchanged |
+| vLLM new stable release >v0.27.1 | NOT FIRED |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — STILL OPEN, ~43 days stalled (last activity Jul 8); "Nov 2025 merge" claim was AI hallucination, debunked |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~13 weeks OPEN |
+| Qwen3.7/Qwen4 on official HF org | NOT FIRED — Qwen3.7 skipped; Qwen4 September rumor |
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — EVAL WINDOW OPEN] Arm C/D eval target: `0.27.2rc1.dev209+gf9f066d19.d20260818`** — unchanged from Entry 145. Stable for ≥2 days. Eval plan: (a) B12x MoE probe on Qwen3.6-35B-A3B-FP8; (b) NVFP4 B1 probe; (c) DSpark Markov head probe; (d) Nemotron 3.5 Lightning NVFP4 probe; (e) full throughput suite if probes pass.
+
+2. **[INVESTIGATE] Poveda NVFP4 recipeCopyCount surge (+78 in 24h, 25→103).** Likely driven by a blog post, social media post, or community guide referencing the recipe. 118.91 tok/s baseline unchanged — no new Arena submission. Monitor for new Arena FP8 or NVFP4 submissions at next check.
+
+3. **[NEW] SparkBench.dev emerging community benchmark site** — surfaced in searches but network-blocked in remote env. Check in a live session: potential new tracking source for DGX Spark performance landscape.
+
+4. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~13 weeks OPEN. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin.
+
+5. **[CARRY-FORWARD] PR #40099 (Gemma4 repetition detection) STILL OPEN, ~43 days stalled.** Do not rely on AI-generated search summaries for merge status — always verify via direct GitHub fetch. Schedule Gemma4 experiment immediately on merge.

@@ -1,7 +1,7 @@
 # Spark Performance Baseline
 
-Last updated: 2026-08-19 (Entry 145 — spark-recon, all 5 checks)
-Last recon: 2026-08-19 (Entry 145)
+Last updated: 2026-08-20 (Entry 146 — spark-recon, all 5 checks)
+Last recon: 2026-08-20 (Entry 146)
 Last audit: 2026-05-09 (Entry 062)
 Last benchmark: 2026-05-18 (Entries 070-072 — three-model comparative eval, 50h study)
 
@@ -116,7 +116,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 ## Arena Tracking
 | Field | Value |
 |-------|-------|
-| arena_top_fp8_qwen35_tok_s | **NOT FIRED (2026-08-19 Entry 145):** Stojanovic 80.27 tok/s (sub1779297106805) confirmed, recipeCopyCount **205** (unchanged). 10% trigger (>88.30) NOT FIRED — FP8 vLLM frontier static 85+ days (last submission 2026-05-26). sub1782803609803 (Poveda NVFP4): recipeCopyCount **25** (unchanged). sub1779495971526 (Atlas top overall): recipeCopyCount **137** (unchanged). No new submissions detected. |
+| arena_top_fp8_qwen35_tok_s | **NOT FIRED (2026-08-20 Entry 146):** Stojanovic 80.27 tok/s (sub1779297106805) confirmed, recipeCopyCount **214** (+9 from 205). 10% trigger (>88.30) NOT FIRED — FP8 vLLM frontier static 86+ days (last submission 2026-05-26). sub1782803609803 (Poveda NVFP4): recipeCopyCount **103** (**+78 from 25 in 24h — anomalous surge, source unknown; 118.91 tok/s performance unchanged**). sub1779495971526 (Atlas top overall): recipeCopyCount **145** (+8 from 137). No new submissions detected. |
 | arena_top_fp8_qwen35_entry | **sub1779297106805** (vllm-node-tf5, Stojanovic, 80.27 tok/s, 2026-05-20): DFlash (templated spec config), flash_attn backend, MARLIN_ATOMIC_ADD=1. Confirmed Entry 129 automated check. Second: sub1778790969973 (77.88 tok/s, 2026-05-14, DFlash n=15, flashinfer). No submissions since 2026-05-26. |
 | arena_top_nvfp4_vllm_tok_s | **118.91 on PORTABLE vLLM** (Luis Poveda, `nvidia/Qwen3.6-35B-A3B-NVFP4`, sub1782803609803, 2026-06-30; **confirmed via automated Firestore check Entry 129**). +78% vs prod 66.9, +48% vs FP8-vLLM 80.27. Second: Hon Lam Gabriel Leung 98.43 tok/s (sub1784993080195, 2026-07-25). Prior note "manual recon only (Entry 094)" is superseded — routine Firestore check now successfully retrieves this data. |
 | arena_top_hybrid_tok_s | 108-125 synthetic, ~80 sustained (INT4+FP8 hybrid + MTP=2) — stale 2026-04-30 capture |
@@ -141,7 +141,8 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 ## Forum Tracking
 | Field | Value |
 |-------|-------|
-| forum_last_checked_date | 2026-08-19 (Entry 145; 719.json + 721.json blocked — WebSearch fallback.) |
+| forum_last_checked_date | 2026-08-20 (Entry 146; 719.json + 721.json blocked — WebSearch fallback.) |
+| forum_posts_since_146 | No new threads above /t/380257 found (Entry 146, 2026-08-20). **NEWLY SURFACED MISSED THREADS** (below threshold, informational): /t/379832 "New Nemotron 3.5 Lighting 30B-A3B" and /t/379921 "NVIDIA Nemotron-3.5-Lightning-30B-A3B-NVFP4: DGX Spark vs. RTX PRO 6000 Blackwell Performance" — both between /t/379875 (Entry 142) and /t/380012 (Entry 145); content 403; Nemotron Lightning community benchmarks, consistent with Watch Item [NEW Entry 140]. EC 0x03000508 fan regression: **STILL UNRESOLVED** (~13 weeks, case 260716-000029). OTA2608: NOT announced. No new driver/firmware crisis. Classification: WORTH WATCHING. |
 | forum_posts_since_145 | **MULTIPLE NEW THREADS above /t/379959:** /t/379613 (MISSED Entry 144 — "Qwen3.8-27B coming next week — full 3.8 will go open-weights!"; between /t/379601 and /t/379959); /t/380012 "Qwen3.8 27b — Upcoming release countdown" (3+ pages, GB10 Projects); /t/380244 "Qwen3.8-27B-NVFP4 on a single DGX Spark — up to 1M context, vLLM+MTP measurements"; /t/380248 "Qwen3.8-27B-MixedInt4-AutoRound — Optimized for a Single DGX Spark"; /t/380257 "Qwen3.8-27B at 34–38 tok/s on DGX Spark — open-source one-command setup (SGLang + NVFP4 + DSpark)" (**new highest thread**). All five threads are Qwen3.8-27B community benchmarks; dense GDN model — NOT a production upgrade path per Watch Item [CLOSED Entry 141]. 34–38 tok/s well below production 66.9 tok/s. Category 723 (dgx-spark-gb10-projects) confirmed active. EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED** (~12+ weeks OPEN). OTA2608: NOT announced. No new driver/firmware crisis. Classification: WORTH WATCHING. |
 | forum_posts_since_144 | No new threads above /t/379959 found for Aug 17-18 (indexing lag possible). /t/379601 "DGX Spark 2 release date? Will there be one?" — informational community discussion, no NVIDIA commitment. EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED** (~12 weeks OPEN). OTA2608: NOT announced. Driver 580.173.02 (/t/378200 + /t/379959): still no NVIDIA response; driver live in apt repos. Classification: WORTH WATCHING. |
 | forum_posts_since_143 | No new threads above /t/379959 found for Aug 16–17. **NEWLY INDEXED: /t/379766** "Measured inference benchmarks on a single DGX Spark — same harness across Ollama, llama.cpp and vLLM (notes + data published)" — thread ID between /t/379627 (Entry 140) and /t/379959 (Entry 141); missed in Entry 141 (likely indexed late); content 403. Low urgency — community benchmark comparison, informational. EC 0x03000508 fan regression: **STILL UNRESOLVED** (case 260716-000029, **~11+ weeks OPEN**). OTA2608: NOT announced. Classification: WORTH WATCHING. |

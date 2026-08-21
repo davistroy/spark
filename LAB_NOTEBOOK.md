@@ -11248,3 +11248,92 @@ Arena subagent returned additional findings after Entry 142 was already committe
 4. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~13 weeks OPEN. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin.
 
 5. **[CARRY-FORWARD] PR #40099 (Gemma4 repetition detection) STILL OPEN, ~43 days stalled.** Do not rely on AI-generated search summaries for merge status — always verify via direct GitHub fetch. Schedule Gemma4 experiment immediately on merge.
+
+---
+
+## Entry 147 - DGX Spark Recon (2026-08-21)
+
+**Overall: WORTH WATCHING** — New spark-vllm-docker build `dev318` (Aug 20, +109 commits over dev209) with new `--apply-vllm-pr` launch-time patch mechanism. Ornith-1.5-35B-A3B announced Aug 19-21 with 68-70 tok/s NVFP4 on GB10 (new today). Community confirming vLLM 0.27.1 + NVFP4 works on GB10 (Qwen3.8-27B +30-34% vs FP8; Ornith-1.5 NVFP4 benchmarks). No new vLLM stable (v0.27.1 holds; v0.28.0rc1 pre-release is LOW). Arena FP8 frontier static 87+ days. Qwen3.8-35B-A3B does not exist. EC fan regression ~14 weeks unresolved.
+
+**Check 1 — Arena Firestore (direct sub reads):**
+- sub1779297106805 (Stojanovic FP8 vLLM 80.27 tok/s): recipeCopyCount **214** (+0). FP8 vLLM frontier unchanged 87+ days.
+- sub1782803609803 (Poveda NVFP4 118.91 tok/s): recipeCopyCount **104** (+1). Entry 146 surge (25→103) has fully dissipated; +78 was a one-day viral event.
+- sub1779495971526 (Atlas/Rawat 218.85 tok/s): recipeCopyCount **145** (+0).
+- sub1784993080195 (Gabriel Leung NVFP4, 98.43 tok/s, Jul 25): recipeCopyCount **4** — existing entry, very low traction, not a threat.
+- Probed Aug 2026 sub ID ranges: **no August submissions found**. Most recent submission confirmed Jul 25 (Leung).
+- 10% FP8 vLLM alert gate (>88.30 tok/s): **NOT FIRED**.
+- Classification: NO ACTION
+
+**Check 2 — vLLM releases:**
+- Latest stable: **v0.27.1** (2026-08-11) confirmed — no v0.27.2 stable, no v0.28.0 stable.
+- **v0.28.0rc1 pre-release found (2026-08-20)** — single item: OpenVINO processor security guard (`_load_ov2_processor`). No SM121/Blackwell/MoE keywords. Classification: LOW. Do not upgrade production.
+- PR #40099 (Gemma4 repetition detection): **OPEN** — ~44 days stalled (last activity Jul 8, collaborator questioned reproducibility; 9 reviewers pending).
+- Issue #41063 (DeepGEMM SM12.x): **OPEN** — ~3.9 months dormant. Three gap categories remain: dispatch routing, native SM120 FP4 kernels, vLLM device-capability gates.
+- PR #51036: **OPEN** — merge conflict as of Aug 14.
+- Classification: LOW / NO NEW STABLE RELEASE
+
+**Check 3 — spark-vllm-docker:**
+- **NEW BUILD: `0.27.2rc1.dev318+g5b1e7a812.d20260820`** (`prebuilt-vllm-current`, Aug 20 11:54 UTC, commit 44774ef, +109 upstream commits over dev209/1c263eb).
+- vLLM base: 0.27.2rc1 (same series, more commits). FlashInfer: **0.6.18 unchanged** (prebuilt-flashinfer-current last updated Aug 17).
+- **NEW: `--apply-vllm-pr <pr-num>` mechanism** (Aug 19 commit) — launcher fetches upstream PR, validates it only modifies `vllm/` Python (no native recompile), applies to every new container at launch. Repeatable, ordered. Documented example: NVFP4 + FP8 KV + DFlash on Qwen3.8-27B. **Key implication: NVFP4 loader PRs can now be tested without a multi-hour build.**
+- NEW recipe: `nvidia/GLM-5.2-NVFP4` added. GLM-4.7 was rejected (Entry 071, −42-65%); GLM-5.2 is a different model — check community benchmarks before scheduling eval.
+- README explicitly notes: Marlin backend recommended for NVFP4 on SM121 (FlashInfer NVFP4 limitations on SM121 documented).
+- PR #279 (DFlash+FP8 KV): not mentioned; still dormant ~23+ weeks.
+- Classification: WORTH WATCHING (new eval target; `--apply-vllm-pr` is a significant new capability)
+
+**Check 4 — Qwen/HuggingFace:**
+- **Qwen3.8-35B-A3B: DOES NOT EXIST** — community explicitly requesting it on HF; Qwen3.8 generation shipped 27B dense and 2.4T-A95B only. The A3B slot was skipped.
+- Qwen3.8-2.4T-A95B: open weights on HF as of Aug 12; 2.4T total params, too large for Spark.
+- Qwen4: vapor — no official signal, September Apsara Conference rumor unchanged.
+- Nemotron-3.5-Lightning: no new variants since 2026-08-20.
+- Meta Muse Glimmer 30B (Aug 10): dense 29.6B + 1.8B vision encoder — not MoE, bandwidth-limited, not a production candidate.
+- Classification: NO ACTION
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; direct 719/721 blocked):**
+- **New ceiling: /t/380746** (Ornith-1.5 BF16 vs NVFP4 comparison, Aug 21 today). Prior ceiling: /t/380257.
+- **NEW /t/380623** "DeepReinforce Ornith-1.5 family released" (~Aug 19-20): Ornith-1.5-35B-A3B — 35B/3B active, MIT, 256K ctx, Qwen3.5 base + RL, multimodal (image+video via Qwen3VL), vLLM-compatible.
+- **NEW /t/380731** "DGX Spark (GB10) Ornith-1.5-35B-A3B 68-70 tok/s, 16 Agent 385 tok/s" (Aug 21, today): NVFP4 on GB10 with vLLM 0.27.1. 68-70 tok/s c1, 385 tok/s aggregate c16.
+- **NEW /t/380746** "Ornith-1.5-35B-A3B BF16 vs NVFP4 (NVIDIA DGX Spark / GB10)" (Aug 21, today): BF16 26.5 tok/s vs NVFP4 68.3 tok/s. NVFP4 is mandatory — BF16 is too slow for production use.
+- **NEW /t/380258** "Qwen3.8-27B on DGX Spark using vLLM: NVFP4 vs FP8 performance" (~Aug 21): NVFP4 +30-34% vs FP8 on vLLM 0.27.1. Corroborates NVFP4 path now functional on GB10 at this vLLM version.
+- **Community NVFP4 on vLLM 0.27.1 now multiply confirmed**: Qwen3.8-27B (/t/380258), Ornith-1.5 (/t/380731, /t/380746), bjk110/spark_vllm_docker (Solar-Open2-250B, Aug 9) all running NVFP4 on 0.25.1-0.27.1. Confirms KeyError from Entry 094 (v0.19.x schema gap) is fixed in the current build lineage.
+- **NVIDIA staff (johnny_nv) active** in PSA NVFP4 thread — posts #131, #138, #149 in /t/353069. Signals NVIDIA invested in the vLLM NVFP4/GB10 path.
+- EC 0x03000508 fan regression: **STILL UNRESOLVED** (~14 weeks, case 260716-000029 OPEN). /t/378945 "fire hazard" confirmed: headless + 0x03000508 = fans never spin.
+- OTA2608: **NOT ANNOUNCED** — no August NVIDIA announcement thread found. Monthly cadence not strictly observed (no May 2026 OTA either).
+- Classification: WORTH WATCHING
+
+**Cross-Correlated Findings:**
+
+1. **dev318 `--apply-vllm-pr` (Check 3) × Community NVFP4 on vLLM 0.27.1 (Check 5):** The new launcher mechanism allows applying specific upstream NVFP4 loader PRs without a multi-hour rebuild. Combined with confirmed community NVFP4 success on 0.27.1 (which dev318's 0.27.2rc1 supersedes), this makes the NVFP4 B1 probe on dev318 the single highest-priority eval step. Entry 094 KeyError (`w2_input_scale` schema gap in v0.19.x) is almost certainly fixed in the dev318 build lineage.
+
+2. **Ornith-1.5-35B-A3B 68-70 tok/s NVFP4 (Check 5) × Qwen3.8-35B-A3B absent (Check 4):** The A3B MoE slot is not being filled by a Qwen successor model — Qwen3.8 skipped it. Ornith-1.5 (Qwen3.5 RL fine-tune, same architecture class) at 68-70 tok/s NVFP4 is below the FP8 vLLM frontier (80.27 tok/s) but is a community-validated newer model. The production upgrade path is still the vLLM build (Qwen3.6 NVFP4 → 118.91 tok/s), not a model swap.
+
+3. **Arena static 87+ days (Check 1) × Community NVFP4 validation (Check 5) × dev318 (Check 3):** No one has submitted the 0.27.x + Qwen3.6-NVFP4 combination to Arena yet — the community benchmarks are in forum threads. If the eval succeeds and the recipe gets submitted, it would fire the 10% alert and update the Arena frontier significantly.
+
+4. **v0.28.0rc1 pre-release (Check 2, LOW) × No new vLLM stable (Check 2) × dev318 based on 0.27.2rc1 (Check 3):** eugr is tracking the 0.27.2rc1 dev series correctly; no need to wait for v0.28 stable before eval.
+
+**Triggered Alerts:**
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (tg128 c1) | NOT FIRED — 80.27 confirmed, 87+ days static |
+| eugr new stable build | **FIRED** — dev318 (Aug 20 11:54 UTC, +109 commits over dev209) |
+| vLLM new stable release >v0.27.1 | NOT FIRED — v0.28.0rc1 is pre-release only, LOW |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — OPEN, ~44 days stalled |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~14 weeks OPEN, fire hazard confirmed |
+| Qwen3.7/Qwen4 on official HF org | NOT FIRED — Qwen3.8-35B-A3B does not exist; Qwen4 September rumor |
+
+**Recommendations:**
+
+1. **[UPDATED ACTION — EVAL TARGET] Arm C/D eval target upgraded to `0.27.2rc1.dev318+g5b1e7a812.d20260820`** (Aug 20 11:54 UTC, commit 44774ef, +109 commits over dev209). FlashInfer 0.6.18 confirmed unchanged. Eval plan: (a) B12x MoE probe on Qwen3.6-35B-A3B-FP8; (b) **NVFP4 B1 probe — highest priority** (community confirms working on 0.27.1; use `--apply-vllm-pr` if loader issues remain); (c) DSpark Markov head probe; (d) Nemotron 3.5 Lightning NVFP4 probe; (e) Ornith-1.5-35B-A3B NVFP4 probe (new, add after items a-d); (f) full throughput suite if probes pass.
+
+2. **[NEW] `--apply-vllm-pr` mechanism in dev318 is the fast path for NVFP4 loader validation.** If B1 probe fails due to any remaining loader issue, identify the specific upstream fix PR and apply via `--apply-vllm-pr <pr-num>` at launch — no multi-hour rebuild needed. This is a substantial new debugging tool.
+
+3. **[NEW] Ornith-1.5-35B-A3B** — 35B/3B active, MIT, 256K ctx, Qwen3.5 RL base, multimodal. NVFP4 68-70 tok/s / 385 tok/s c16 on GB10 today (vLLM 0.27.1). BF16 only 26.5 tok/s — NVFP4 mandatory. Below Arena FP8 frontier (80.27 tok/s), so not a production throughput upgrade; quality vs Qwen3.6 unknown. Schedule one eval pass after NVFP4 B1 probe succeeds.
+
+4. **[NEW] GLM-5.2-NVFP4** recipe added to dev318. GLM-4.7 was rejected (Entry 071); GLM-5.2 is architecturally different — check community GB10 benchmarks before committing eval time.
+
+5. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~14 weeks OPEN. Fire hazard confirmed for headless inference (/t/378945). Verify production is on EC 0x03000302. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin.
+
+6. **[CARRY-FORWARD] PR #40099 (Gemma4 repetition) OPEN ~44 days.** Schedule Gemma4 structured output experiment immediately on merge.

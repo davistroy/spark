@@ -11409,3 +11409,593 @@ Arena subagent returned additional findings after Entry 142 was already committe
 3. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~15 weeks OPEN. Production must stay on EC 0x03000302. Do NOT run `fwupdmgr update`. Maintain driver pin before any apt operation.
 
 4. **[CARRY-FORWARD] PR #40099 (Gemma4 repetition) OPEN ~45 days.** Schedule Gemma4 structured output experiment immediately on merge.
+
+---
+
+## Entry 149 - DGX Spark Recon (2026-08-22)
+
+**Date:** 2026-08-22 UTC
+**Operator:** Claude Code (spark-recon skill) — headless run, no user present
+**Status:** RECON -- no changes made to the Spark system
+
+**Overall: ACTION NEEDED**
+
+This is the second recon of 2026-08-22. Entry 148 ran earlier today and classified WORTH WATCHING,
+but its Check 1 (Arena) and Check 5 (Forum) were both **NO ACTION on blocked endpoints** — Firestore
+LIST returned `{}` and 719/721 fell back to WebSearch. **Both endpoints returned HTTP 200 on this
+run.** With enumeration restored, Check 1 surfaced 40 previously-invisible submissions and Check 5
+surfaced 87 previously-invisible threads. Entry 148's "no new Arena submissions" and "no new threads
+above /t/380746" are access artifacts, not landscape facts. This entry supersedes them.
+
+### Arena Check: ACTION NEEDED — listing UNBLOCKED after ~3 weeks; NVFP4 now runs on a stock image
+
+- **Firestore `benchmarks` LIST restriction is LIFTED.** HTTP 200, full pagination: **229 documents**
+  at `pageSize=300` (every entry since ~2026-08-03 reported 2 docs or `{}`). 216 carry a tg128 test;
+  **132 are single-node.** Full enumeration performed — no fallback needed.
+- All three tracked baseline docs read back with **zero drift**:
+
+  | Doc ID | Submitter | Model | Runtime | tg128 c1 | Date |
+  |---|---|---|---|---|---|
+  | sub1779297106805 | Stojanovic | Qwen/Qwen3.6-35B-A3B-FP8 | vLLM | 80.27 ± 22.89 | 2026-05-20 |
+  | sub1782803609803 | Poveda | nvidia/Qwen3.6-35B-A3B-NVFP4 | vLLM | 118.91 ± 6.54 | 2026-06-30 |
+  | sub1779495971526 | Rawat | RedHatAI/Qwen3.6-35B-A3B-NVFP4 | Atlas | 218.85 ± 13.63 | 2026-05-23 |
+
+- Top FP8 / Qwen3.6 / vLLM / single-node remains **80.27 tok/s, delta 0.00%**. ACTION gate (88.30)
+  not approached. Runner-up Walczak 77.88 (2026-05-14). **FP8 vLLM frontier genuinely static** — that
+  part of Entry 148 survives enumeration.
+- **Caveat now visible on the baseline metric itself:** 80.27 carries **± 22.89 (28.5% CV)**, by far
+  the noisiest point in that submission (its c5 is 158.31 ± 1.80). Our tracked gate rests on the
+  weakest measurement in the run. Worth widening the gate or switching to c5 as the tracked field.
+- **Open question from Entry 135 — CLOSED.** Both descriptions of sub1779297106805 are true; they
+  live in different sub-fields of the same recipe blob:
+  `recipe.fullRecipe.env` = `{"VLLM_MARLIN_USE_ATOMIC_ADD":"1","TZ":"Europe/Vienna"}` (source of the
+  baseline's "MARLIN_ATOMIC_ADD=1") and `recipe.fullRecipe.metadata.description` =
+  `"Qwen3.6-35B-A3B-FP8 + DFlash n8 + FlashQLA PR3, 262K ctx, 32K prefill"`. Full config: recipe
+  `Qwen3.6-35B-A3B-FP8-DFLASH-FlashQLA`, container `vllm-node-tf5`, builder eugr, `solo_only: true`,
+  spec `{"method":"dflash","model":"z-lab/Qwen3.6-35B-A3B-DFlash","num_speculative_tokens":8}`,
+  `gpu_memory_utilization 0.85`, `max_num_batched_tokens 32768`, `max_num_seqs 8`. Note this is
+  DFlash n=8 with **no MTP** — the drafter we rejected in Entry 080, paired with FlashQLA PR3 and the
+  Marlin atomic-add env var, neither of which we have tested.
+- **40 new submissions since 2026-08-08.** The significant one:
+  **`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` — 7 single-node vLLM submissions between
+  08-11 and 08-19 from 5 independent submitters**, clustering at 115.26 / 115.68 / 116.82 / 116.84 /
+  118.14 / 119.64 / **125.13** tok/s c1. That is +87% over our documented 66.9.
+  **The load-bearing detail is the container, not the number: Pathak's top recipe (125.13) runs
+  `vllm/vllm-openai:v0.27.1` — the unmodified upstream release image, described in the recipe as
+  "plain docker pull, no custom build."** Flags: `--moe-backend marlin --kv-cache-dtype fp8
+  --mamba-backend flashinfer --mamba-cache-mode align --enable-prefix-caching`, gpu_util 0.80,
+  `speculative_config {"method":"dspark","model":"nvidia/...-NVFP4-DSpark","num_speculative_tokens":3}`
+  (recipe notes depth 3 beat depth 7/8 single-stream). Hupało's 119.64 variant uses n=5, gpu_util
+  0.85, `max_num_batched_tokens 8192`, `max_model_len 1048576`.
+- Two more new NVFP4 contenders, both single-node vLLM: **`unsloth/Qwen3.6-35B-A3B-NVFP4-Fast`**
+  (Sawotin, 08-11) **103.96 ± 13.72** — *our exact model family*, env `CUTE_DSL_ARCH=sm_121a`,
+  `--moe-backend flashinfer_b12x --attention-backend flashinfer --kv-cache-dtype fp8
+  --async-scheduling --load-format fastsafetensors`, MTP=3, gpu_util 0.70; and
+  **`pocharlies/Ornith-1.0-35B-NVFP4-MTP-graft`** (Toberling, 08-13) **116.82 ± 12.35** on
+  `eugr/spark-vllm:latest`, MTP=3, gpu_util 0.55.
+- Top-5 single-node overall is not directly comparable: #1 Frick LiquidAI/LFM2.5-350M 222.77 (toy
+  model); #2–4 are Atlas-runtime NVFP4 (218.85 / 217.37 / 211.31) whose aggregateScore and pps are
+  two orders of magnitude off the vLLM scale (66171 / 132258 vs ~1600 / ~3100) — Atlas entries are
+  differently instrumented and should be tracked on a separate scale. **The top legitimate vLLM
+  30B-class single-node entry is now #6, Pathak at 125.13, and it is not a Qwen.**
+- **Qwen3.8-27B on Arena confirms it is not an upgrade for us:** every single-node submission lands
+  at **11.48–28.49 tok/s** across unsloth / RadixArk / Inferact variants. Consistent with Check 5.
+- New runtime activity: SGLang now 15 entries collection-wide (3 in August), all weak on Spark
+  (20.19–45.04). `vLLM-Ray` (7 entries) is multi-node only. `nvcr.io/nvidia/vllm:26.07-py3` observed.
+
+### vLLM Release Check: ACTION NEEDED — HIGH; v0.27.1 is a narrow safe window and v0.28.0rc* is not
+
+- **Two stable releases since Entry 134's baseline: v0.27.0 (2026-08-10T21:18:11Z) and v0.27.1
+  (2026-08-11T10:47:49Z).** v0.27.1 is a one-line patch ("Support quantized DSpark Markov heads
+  #50424"). Git tags **v0.28.0rc1 (08-20) and v0.28.0rc2 (08-21)** exist but are not Release objects
+  — confirming the Entry 135 finding that vLLM tags RCs without creating Releases.
+- **Classification HIGH**, on one changelog line in v0.27.0: *"fixed CUDA arch detection producing
+  kernel-less builds on SM121 (#49904)."* Already tracked from Entry 141, but the mechanism is worth
+  recording: on GB10 with CUDA 13, torch's vendored `select_compute_arch.cmake` rewrites `12.1` →
+  `12.1(2.0)` via a Fermi-era `string(REPLACE "2.1" "2.1(2.0)")`, so vLLM reads arch `2.0`, matches
+  nothing in `CUDA_SUPPORTED_ARCHS`, and **silently builds a `.so` containing only sm_75 cubins**.
+  Serving any FP8 model then dies with `NotImplementedError: No compiled cutlass_scaled_mm for a
+  compute capability less than CUDA device capability: 121`. Direct successor to #38126.
+
+- **NEW — three SM121 hazards not previously in the record, all gating Arm C:**
+
+  | Item | State | Substance |
+  |---|---|---|
+  | **#51987** revert of "FlashInfer XQA decode on SM12x" (#49718) | **OPEN, unmerged** | #49718 merged 2026-08-11T23:32Z and **broke DGX Spark specifically**: nightly `GPQA Eval (GPT-OSS) (DGX Spark)` went red on build 83511, `decode_backend=xqa … arch=sm121`, gpt-oss-20b decode becomes gibberish — **1081** `HarmonyError: unexpected tokens remaining in message header` vs 0 at baseline; runtime 33m14s vs 9m27s. Sibling 2×B200 and 2×H100 jobs passed — *"blast radius is confined to SM12x."* **v0.28.0rc1/rc2 contain #49718 and the revert is not merged. v0.27.1 predates the merge by ~13 hours and is XQA-free.** |
+  | **#52708** "Add SM121 (DGX Spark/GB10) to published build targets" | OPEN, 08-18 | *"Right now it's not in any published build target, so users on Spark either compile from source or rely on the sm_120 wheels' family-level forward compatibility, **which does not cover `CutlassFp8BlockScaledMMKernel`'s architecture-conditional MMA instructions**."* **Our production model is block-scaled FP8 `[128,128]` — this is exactly the kernel family at risk on a stock image.** Author validated by building on a real DGX Spark. |
+  | **#53390** int32 token-offset overflow in `silu_and_mul_per_block_quant` | OPEN, 08-22, **reported on GB10 sm_121a** | Illegal memory access once `token_idx * hidden_size * 2 > INT32_MAX`. For FP8 block-quant `[128,128]` with `intermediate_size 17408` the cliff is **61,681 tokens** → `--max-num-batched-tokens 65536` dies deterministically in `profile_run`; **32768 works.** We run 32768 — **under the cliff. Do not raise it on a v0.27.x/v0.28.x build.** |
+
+- **#52877 — recurring EngineCore fatal errors on GB10/sm_121, opened 08-19, OPEN.** Reported on
+  **stock `vllm/vllm-openai:v0.27.1` aarch64, driver 580.159.03, kernel 6.17.0-1021 — an identical
+  host config to ours.** CUDA kernel launch failures after **1.5–3 days of uptime**, Triton JIT +
+  FlashInfer cuDNN FP8 GEMM implicated, **zero Xid across the whole period** (so not hardware).
+  Direct soak-stability risk for any Arm C adoption.
+- **#53051 — prefill misdispatched into spec-decode FULL cudagraph when prompt length equals
+  `1 + num_speculative_tokens`**, opened 08-20, OPEN. `GPUModelRunner._is_uniform_decode` is a pure
+  shape check, so a prefill whose token count equals `uniform_decode_query_len * num_reqs` is
+  misclassified → silent GDN state loss → deterministic garbage and collapsed acceptance. **With
+  `num_speculative_tokens=2` — our exact setting — any 3-token prompt triggers the misdispatch.**
+  Currently scoped to hybrid/GDN models, so Qwen3.6-35B-A3B is *likely* unaffected, but the
+  misdispatch logic is model-agnostic. Cheap to probe (send a literal 3-token prompt).
+- **#52756** — V1 MTP `max_model_len` skip still schedules drafts with async scheduling, and
+  **async scheduling is auto-enabled by default in 0.27.1 for MTP configs**. A silent behavior change
+  that will apply to our MTP=2 on any Arm C build.
+- Tracked-item movement (days stalled to 2026-08-22):
+
+  | # | State | Last activity | Stalled | vs prior record |
+  |---|---|---|---|---|
+  | **#40099** Gemma4 repetition detection | open | **2026-07-08** | **45d** | **UNCHANGED — sole remaining Gemma 4 gate, still shut** |
+  | #49927 spec-decode acceptance regression | open | 2026-08-11 | 11d | **DE-RISKED** — maintainer yewentao256: *"appears specific to the v0.25.1 custom deployment and even reverses on v0.26.0 … deployment-specific numerics observation rather than a confirmed upstream regression."* One Arm C blocker removed. |
+  | #49548 dynamic spec-decode collapse | open | 2026-08-13 | 9d | **CHANGED** — reporter **retracted** the #51466 root-cause claim; new opt-in PR #52070 |
+  | #41063 DeepGEMM SM12.x | open | 2026-08-14 | 8d | **CHANGED** — first activity in a month (Entry 148 recorded "~4 months dormant"; that is incorrect) |
+  | #47629 TRITON_MLA_SPARSE SM80/SM121 | open | 2026-08-14 | 8d | CHANGED, 22 comments, active |
+  | #51036 repetition_detection default | open | 2026-08-14 | 8d | CHANGED |
+  | #49546 `VLLM_MARLIN_INPUT_DTYPE=fp8` corruption | open | 2026-08-09 | 13d | reproduces stock, no spec decode needed |
+  | #47365 NVFP4 b12x MoE empty output | open | 2026-07-19 | 34d | **UNCHANGED — b12x precondition still unmet** |
+  | #43906, #45317, #45334 | open | 07-18 / 07-06 / 08-07 | 35d / 47d / 15d | UNCHANGED |
+
+  Correction to the tracked set: **#50862 is "Enable FlashInfer GDN prefill on SM12x", not "Blackwell
+  kernel selection extended to SM120"** — it is SM12x-scoped (covers 121), gated on
+  `linear_key_head_dim==128` + CUDA ≥ 13, and is **not** a fix vehicle for #43906.
+- **#52502 MERGED 08-17 — first `device_name=NVIDIA_GB10` fused-MoE FP8 tuning configs in-tree**
+  (E=256/512, N=512, `fp8_w8a8`, `block_shape=[128,128]`). Shapes are DeepSeek-family, not
+  Qwen3.6-A3B, so no direct win, but the GB10 config path now exists. Companions #52192, #45949 open.
+- DeepGEMM on SM12x is now a cluster: #52732, #51959, #51884, #51758 — feeds tracked #41063.
+- Spec-decode/DFlash churn is heavy: #52816 (DFlash2 conv + candidate selector, **merged into
+  v0.28.0rc2**), #52883, #53292, #53122, #53116, #53063, #51581.
+
+### spark-vllm-docker Check: WORTH WATCHING — build advanced; b12x track is actively broken
+
+- **`prebuilt-vllm-current` = `0.26.1rc1.dev1105+g040700aaa.d20260822`**, published
+  2026-08-22T12:50:44Z (verified by direct GitHub API fetch during this run).
+  `prebuilt-flashinfer-current` = **`0.6.18-8cd56793-d20260822`** — FlashInfer version unchanged at
+  0.6.18, only the build hash moved (`b1d95851` → `8cd56793`).
+- **⚠ UNEXPLAINED DISCREPANCY WITH ENTRY 148 — resolve before the eval window.** Entry 148 (earlier
+  today) recorded the eval target as `0.27.2rc1.dev360+ge85d1b69c.d20260821`, and Entries 141–147
+  tracked a rising `0.27.2rc1.devNNN` series (dev113 → dev158 → dev209 → dev360). The live API now
+  returns base **`0.26.1rc1`** with dev **1105**. A base-version regression 0.27.2rc1 → 0.26.1rc1 is
+  anomalous. Either the rolling tag was rebuilt from a different upstream branch, or one of the two
+  readings is a staging-asset misread. **Do not pin the Arm C eval to a tag name — pin the dated
+  wheel filename** (`vllm-0.26.1rc1.dev1105+g040700aaa.d20260822-cp312-cp312-linux_aarch64.whl`).
+- The tag's `created_at` (2026-08-19T22:11:14Z) is byte-identical to commit `44774ef2`'s timestamp
+  and `published_at` is 3 days later with zero repo commits on 08-20/21/22 → **the 08-22 publish is a
+  pure CI rebuild against upstream vLLM main**, not a recipe or Dockerfile change. Daily
+  `staging-current-*` prereleases at ~11:50Z confirm an unattended nightly job.
+- 16 commits 08-09 → 08-19. Substantive ones: `e5f3cf9e` (08-09, sm103a in b12x builds, adds
+  `docker/patch_vllm_preserve_sm12x_target.py`); `c2500ee8`/`3ad56106`/`54672f7e` (Nemotron 3.5
+  Lightning recipe + perf tuning); `81b0a03a` (08-12, **PyTorch 2.13.0 / torchvision 0.28.0 /
+  torchaudio 2.11.0 / CUTLASS DSL 4.7.0** — the only repo change since 08-08 that alters the
+  regular-track wheel, so a re-validation trigger); `b3caac60` (08-14, b12x C128A topk-alignment
+  kernel patch, +140 lines); `04d8c94d` (08-17, `mods/radixark-dspark` for Qwen3.8-27B);
+  **`44774ef2` (08-19, `--apply-vllm-pr` for launch-cluster/run-recipe)**.
+- **`--apply-vllm-pr` is a genuinely useful new capability** — it layers an arbitrary upstream vLLM PR
+  onto a prebuilt container at launch, without a multi-hour source build. That is the cheapest
+  available vehicle for carrying #51318 / #52836 / #52492 (see Check 5) onto an eval image.
+- **⚠ The b12x track is actively broken on SM121 — do not chase it for Arm C.** Issue **#349**
+  (08-15, 6 comments): `deepseek-v4-flash-0731` dies in piecewise CUDA-graph profiling with
+  `CUDA_ERROR_ILLEGAL_ADDRESS` in the b12x FP8 GEMM on SM121 after the 08-15
+  `eugr/spark-vllm-b12x:latest` update (`0.1.dev20003+gad848fc41.d20260815`); rolling back to the
+  08-13 image fixes it. Issue **#352** (08-20): the same 08-15 build **deadlocks** in
+  `block_fp8_linear_mxfp8_fused` on 2-node GB10 TP=2 — server healthy, first request never returns,
+  GPU spins at 96%. Maintainer has not responded to either. Combined with vLLM #47365 (34d open),
+  **the b12x probe should be dropped to last in the eval order, not first.**
+- PRs: #279 (DFlash + FlashInfer FP8 KV) **dead at 71 days**; #323 (Laguna-S-2.1-NVFP4 W4A4) last
+  *human* comment 2026-08-04, `mergeable_state: unstable` (CI red) — the 08-12 timestamps on
+  #313/#319/#323 are within seconds of each other and are a bulk base-branch/CI event, not review;
+  #325 `dirty` (merge conflicts), 22d; #329 19d. New: #340, #347, **#354** (08-22, mod fixing
+  `tool_choice` enforcement for shared parser engines incl. Qwen3). 30 open PRs, near-zero merge
+  throughput for community recipes.
+- **NVFP4 W4A16-vs-W4A4 is NOT resolved by this repo.** 12 NVFP4 recipes ship; none declares an
+  activation precision; no docs distinguish the two. The only W4A4 reference anywhere is unmerged
+  PR #323. `mods/exp-w4a16/` exists (added 2026-05-22, `adb751cc`) and is **undocumented in the
+  README** — it applies upstream vLLM PRs **#42124, #42566, #42546** at launch; whether those are
+  merged into current builds is unverified (the mod self-skips if present).
+- Our directly-relevant `recipes/qwen3.6-35b-a3b-nvfp4.yaml` defaults to **`tensor_parallel: 2`**
+  (2-Spark), `--moe-backend marlin --attention-backend flashinfer --kv-cache-dtype fp8
+  --load-format fastsafetensors`, `VLLM_MARLIN_USE_ATOMIC_ADD=1`, MTP n=3, `gpu_memory_utilization
+  0.4`, ray executor. **Single-Spark users must re-derive TP=1 settings.** README still states Marlin
+  is used "until FlashInfer fully supports NVFP4 on sm121" — so Marlin MoE remains the correct NVFP4
+  backend assumption.
+- Incidental corroboration of our own findings: issue **#343** (08-10) measures
+  `gemma4-26b-a4b-nvfp4` with `num_speculative_tokens=2` **beating** the shipped 4 at 8-concurrent
+  (303.6 vs 210.0 tok/s; acceptance 65.5% vs 52.5%) — an independent reproduction of the Entry 080
+  "shorter draft wins under concurrency" result.
+
+### Qwen Model Check: WORTH WATCHING — no new Qwen; one strong non-Qwen candidate confirmed
+
+- **No new official Qwen releases.** The Qwen org has published exactly four repos since 2026-06-26:
+  `Qwen3.8-27B` + `-FP8` (public 2026-08-14T15:00Z, apache-2.0, 27.78B **dense**) and
+  `Qwen3.8-2.4T-A95B` + `-FP8` (license `other`, 2.45T — not Spark-viable). Both already closed in
+  Entry 141; **re-confirmed, no change.** No Qwen3.8 A3B MoE exists — Qwen shipped only the two poles
+  and skipped the middle. Two large HF discussion threads (`Qwen3.8-27B` #120, `2.4T-A95B` #15) are
+  open community requests for a 35B-A3B; Qwen has made no commitment. **Qwen4: no signal**
+  (API-verified, no `Qwen4*` repo). Qwen3.7 weights confirmed never shipped.
+- Recording the Qwen3.8-27B architecture facts, since prior entries closed it without them:
+  arch `Qwen3_5ForConditionalGeneration`, **same model class as Qwen3.6-27B**, hybrid Gated DeltaNet
+  + gated attention, `full_attention_interval: 4`, 64 layers, 24 Q / 4 KV heads, head_dim 256,
+  262,144 native context, **native MTP** (`mtp_num_hidden_layers: 1`), official FP8 pre-quant
+  (`fmt: e4m3`, dynamic activation scheme). **The GDN/Mamba warning does not apply** — our production
+  Qwen3.6-35B-A3B already carries the identical `layer_types` pattern at `full_attention_interval: 4`;
+  vllm#37554 bit Coder-Next because of FP8 **KV cache** + hybrid, and we run BF16 KV at 79.8%
+  acceptance. **The disqualifier is throughput, not loading: 27.8B dense active vs 3B active MoE is
+  ~9× the per-token weight traffic**, and every independent measurement agrees (Arena 11.5–28.5;
+  forum 13 FP8 / 24.5 NVFP4-vLLM / 34–38 SGLang+DSpark) — all far below our 66.9.
+- **`poolside/Laguna-XS-2.1` is the best structural match to production found to date** (family
+  already on the watch list since Entry 108; these specs are new to the record). **33.44B total /
+  ~3B active** MoE, 256 experts top-8, shared-expert intermediate 512, 40 layers, hidden 2048;
+  **SWA + global attention 3:1, `sliding_window: 512` — no Mamba, no GDN**, so architecturally safer
+  for us than Qwen3.x; 262,144 context; **OpenMDW-1.1, fully permissive commercial**; and an
+  **official FP8 pre-quant exists** (`poolside/Laguna-XS-2.1-FP8`, compressed-tensors
+  float-quantized 8-bit, group 128), plus NVFP4 / INT4 / GGUF / a DFlash drafter. `LagunaForCausalLM`
+  is almost certainly absent from our v0.19.1rc1.dev219 build, so it couples to Arm C.
+- **PR #323 targets the wrong Laguna for us.** It adds `poolside/Laguna-S-2.1-NVFP4` — **117.56B
+  total**, which needs ~118 GB at FP8 (no room for KV in 121.6 GiB); its NVFP4 build fits at ~59 GB
+  but is W4A4 and further from our validated path. **`Laguna-XS-2.1-FP8` is the variant that matches
+  our constraints, and no recipe covers it.**
+- `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B` (already tracked): 31.58B total, 128 experts top-6,
+  52 layers, 262K, MTP. Arch **`NemotronHForCausalLM` / `nemotron_h` — the Mamba-hybrid failure
+  class**, `license: other`, and **NVIDIA ships no first-party FP8** (NVFP4/BF16 only; FP8 exists
+  only third-party via `RedHatAI/...-FP8`, 08-13). The `-NVFP4-DSpark` artifact (101K downloads) is a
+  **763M / 6-layer `Qwen3DSparkModel` speculative drafter**, not the base model. "DSpark" drafters are
+  now appearing across LiquidAI, Ling and third-party Qwen3.8 repos — a spec-decode trend worth
+  tracking on its own.
+- Nothing qualifying from mistralai, CohereLabs, moonshotai, zai-org, allenai, ibm-granite, MiniMaxAI.
+  `inclusionAI/Ling-3.0-*` brackets our class without hitting it (tiny 7.9B, flash 127.5B/A5B).
+  `deepseek-ai/DeepSeek-V4-Pro-0813` (08-13) is frontier-scale.
+
+### NVIDIA Forum Check: ACTION NEEDED — 719.json unblocked; 87 new threads; fan defect ROOT-CAUSED
+
+- **All endpoints returned HTTP 200** (719 activity-order, `719/l/latest.json?order=created`, 722,
+  and 51 individual threads) on plain curl with a browser UA. Paged both orderings to depth 4 and
+  merged: **210 unique topics, 87 new threads above /t/379577.** New ceiling **/t/380957.**
+  Entry 148's "no new threads above /t/380746" was a WebSearch-fallback artifact.
+
+- **⚠ /t/378945 — ROOT CAUSE FOUND, and it changes the mitigation. The EC fan curve is bound to
+  package POWER DRAW, not display state and not temperature.** Posts #16–19 (@x1917x, 08-09→08-11)
+  A/B'd a "hot" and a "cold" GX10, both headless, both firmware-matched, **both idling at ~25 W** —
+  yet only one overheats. The differentiator is *added* draw: monitor+keyboard **+13 W**, VNC with an
+  actively-rendering app **+8 W**, **a charging phone on USB-C +9 W**. Any of these spins the fan up
+  and drops the unit to **38 °C**. **Measured threshold ≈ +4–4.5 W (call it 5 V / 1 A).** When the
+  phone finished charging, the unit began heating again with zero other changes. This also explains
+  why a CX7 cable "fixes" it — the NIC simply burns watts. **NVIDIA @Neill (Moderator, 08-10 #20)
+  called this "the clearest signal in this thread" and took it directly to engineering.** Official
+  interim workarounds: `xset -dpms`; VNC **with an active rendering app** (idle VNC is insufficient);
+  **any sustained USB load**; and explicitly *"do not leave the unit fully idle and headless without
+  one of the above in place."* Earlier in the thread an idle unit hit ACPI ~70 °C, was too hot to
+  touch, and emitted a hot-metal smell; a cold power-cycle (cord unplugged) restored fan
+  responsiveness. **Notable: the cold unit ran driver 580.159.03 — ours — and the hot unit ran
+  580.173.02.** The same "hot" unit **passes** fieldiag and runs a normal 75–78 °C under real load;
+  it only overheats *idle*. No fix, no patched EC.
+- **/t/380282 (new, corroborating):** independent ASUS GX10 A/B on two identical units. Affected unit
+  goes 38→48 °C in 10 min from cold start then cycles GPU 55–58 °C / ACPI 58.5–61.7 °C at P8, 0%
+  util, ~3.8–4.0 W; control unit — also headless, never logged in locally — stays 34–36 °C at
+  ~4.6–4.8 W. **So headless alone does not reproduce it; it is per-unit.** Clean hot-plug test: HDMI
+  in = 36–37 °C; unplug HDMI only, session still active → GPU rises monotonically 36→45 °C over
+  5 min. `nvidia-smi` reports fan **N/A** and Linux exposes **no fan input or PWM nodes** on either
+  unit. Fourth workaround suggested: a cheap **HDMI EDID dummy plug**.
+- **⚠ /t/380503 (08-18) — a unit is BRICKED at a firmware prompt starting from OUR EXACT EC.** Owner
+  ran `apt dist-upgrade` + `fwupdmgr upgrade`, accepting **EC 0x03000302 → 0x03000508** plus **UEFI
+  SoC 0x0200980f → 0x02009b0b**; both reported "Successfully installed." On reboot the box halts at a
+  blue `Capsule Update / Enter Admin Password:` screen **for a password never set**. 3 cycles × 3
+  failed attempts; empty submissions rejected. NVIDIA Customer Care case #260816-000170, told to post
+  here; **no moderator reply after 4 days.** Same dist-upgrade also pulled
+  `dgx-spark-ota-update-meta 26.03.1→26.04.1`, `dgx-dashboard 0.23.3→0.29.1`, `dgx-oobe
+  0.19.4→0.25.1`, `nvidia-dgx-telemetry 4.11→7.3`, and new pkg `nvidia-spark-ota-check 1.0.16-1`.
+- **⚠ /t/380889 (08-21) — MTP + CUDA graphs + prefix caching silently corrupts output on SM121.**
+  vLLM 0.26.1rc0, MTP=5, prefix caching, `FULL_AND_PIECEWISE`, DeepSeek-V4-Flash on 2× Spark.
+  Intermittent "armed windows": token salad / foreign characters / bad tool calls, **46% degeneration
+  rate inside a window vs 0/668 outside**, roughly one window every 2 hours. **Best early signal:
+  spec-decode acceptance drops ~24% about 30 s before visible corruption.** Corruption hits fresh
+  decodes *and* prefix-cache hits. Per-position: spec pos 0 degrades ~10%, **pos 1–4 degrade
+  ~39–44%.** Root cause is capture-time CUDA-graph state disagreeing with runtime sparse-attention
+  metadata (row stride). Fixed by backporting three upstream reverts/fixes together — **vLLM #51318**
+  (revert adaptive C128A metadata packing; closes #52448), **#52836** (revert DSv4 eager workspace
+  reuse), **#52492** (keep indexer scoring in breakable graphs). After backport: **0 corruption
+  windows in 6.35 h / ~2400 generations**, acceptance 0.3450 vs 0.3464 unpatched-healthy, throughput
+  unchanged at 42.9 tok/s. **The thread explicitly states v0.27.0 and v0.27.1 are still affected.**
+  Synthetic reproducer: `github.com/provos/dsv4-sm121-armed-window`. Two other owners confirmed
+  hitting it within 24 h.
+- **/t/380238 (08-14) — best-documented FE failure writeup to date; both units RMA'd in ~48 h.**
+  FE units, DGX OS 7.2.3/OTA 7.5.0, kernel 6.17.0-1026, driver 580.173.02, EC 0x03000508,
+  DeepSeek-V4-Flash vLLM TP=2, sustained 262K prefill. **12 silent hard-locks over 3 days** — no
+  panic, no OOM, no NVRM, no shutdown record; peer logs `mlx5 Port: 1 Link DOWN`; physical power
+  cycle required (a 120 s systemd watchdog failed to recover 3 of 4 events). At death: `CLOCK
+  THROTTLED 2197/3003 MHz [HW_THERMAL_SLOWDOWN]`, GPU 88→90 °C, CPU zones 97→98 °C against a single
+  104 °C trip. **Field Diagnostic FAIL on PowerStress at ~8:10, error `020000600139`**, 3 runs per
+  unit, fieldiag 1.0.9 and 2.0.4, ambient 22 °C, stock clocks. One unit hard-locked **mid-PowerStress
+  with only the MODS driver loaded** — no OS software involved. Documented dead ends: gpu_memory_util
+  sweeps, kernel alignment, swap tuning, CUDA-graph modes, spec-decode config, **EC rollback
+  0x03000508 → 0x02004e18 (no effect on FE)**, schedutil governor. Real and fixable: **dust-degraded
+  intake caused a GpuStress fail that cleaning resolved — brush the front grille.** GPU-clock cap +
+  CPU-freq cap made the cluster stable as a stopgap. **RMA approved for both units in ~48 h.**
+- **/t/380669 (08-20) — reboots reproducibly at ~75 W package draw; fixed by
+  `sudo nvidia-smi -lgc 300,2100`** (release with `nvidia-smi -rgc`). Stable since. Independently
+  echoed by /t/377069 #6 (@csaba.kecskemeti, 08-15): `sudo nvidia-smi -lgc 200,2100` was **the only
+  thing** that stopped intermittent thermal shutdowns on a 2× FE cluster. **Two independent owners
+  plus /t/380238's stopgap — clock capping is now the best-evidenced mitigation for the
+  crash-under-load class**, and it is reversible.
+- **/t/380948 (08-22) — `CUDNN_FE failure 11` / `CUBLAS_STATUS_INTERNAL_ERROR` under batch load,
+  fixed by driver 580.173.02.** A/B across 3 GB10 units from 3 OEMs; **failures tracked the software
+  stack, not the hardware.** Failing: 580.126.09/k1008 and 580.95.05/k6.14.0-1015. Passing: 580.142/
+  k1018 and, after upgrade, DGX OS 7.5.0 / k6.17.0-1031 / 580.173.02 → zero errors. **No Xid, not
+  OOM, GPU util < 40%.** Nastiest part: post-crash the CUDA context is poisoned — a respawned worker
+  gets `CUDA failure 100: no CUDA-capable device is detected`, then **silently falls back to
+  CPUExecutionProvider and keeps serving, slowly, until container restart.** This is the one
+  data point *for* 580.173.02, and it is an ONNX Runtime OCR workload, not vLLM.
+- **/t/380244 (08-15) — Qwen3.8-27B-NVFP4 on a SINGLE Spark using a PREBUILT image, no vLLM
+  modification:** `ghcr.io/spark-arena/dgx-vllm-eugr-nightly:latest` (tag `nightly-20260801`, vLLM
+  `0.26.1rc1.dev244+gd6a593feb.d20260801`), driver 580.173.02. Note the image **predates the model by
+  two weeks and still worked.** Flags: `--gpu-memory-utilization 0.45 --max-model-len 262144
+  --max-num-seqs 4 --max-num-batched-tokens 8192 --enable-chunked-prefill --enable-prefix-caching
+  --reasoning-parser qwen3 --tool-call-parser qwen3_xml --enable-auto-tool-choice
+  --distributed-executor-backend mp --speculative-config '{"method":"mtp","num_speculative_tokens":5}'`.
+  The MTP head ships **inside** the checkpoint (`model_mtp.safetensors`), so `--speculative-config`
+  takes **no** `"model"` field; look for `Resolved architecture: Qwen3_5MTP`. **Trap:**
+  `unsloth/Qwen3.8-27B-NVFP4` shipped `tokenizer.json` with `"truncation": {"max_length": 2048}`
+  compiled in, **silently truncating every prompt at 2048 tokens** (loud only with images). Upstream
+  `Qwen/` has `"truncation": null`. Since fixed by unsloth.
+- **/t/380258 (08-15) — NVFP4 beats official pre-quant FP8 by 29–34% on a single Spark**, vLLM
+  0.27.1, Qwen3.8-27B, 16 concurrent, identical flags. Output tok/s: prompt-heavy 8k→1k **65.58 →
+  87.91 (+34%)**; decode-heavy 1k→8k **99.47 → 132.07 (+33%)**; balanced **104.44 → 134.41 (+29%)**.
+  Mean TPOT decode-heavy 160.19 → 120.60 ms. KV usage ~15% → ~5.6%. Size 30.9 → 23.4 GB.
+- **/t/379959 (08-12) — GB10 spontaneous reboots after the July bundle, at near-exact 2-hour
+  intervals** (14:06 / 16:06 / 18:16), suggesting something periodic rather than workload-triggered.
+  Dell Pro Max GB10, headless, light load, previously 8+ days uptime. Crash 1:
+  `_threadNodeCheckTimeout: Timeout was set to: 4000 msecs!` / `kgspHealthCheck_TU102` /
+  `_issueRpcAndWait: rpcRecvPoll failed with status 0x00000062 for fn 76 sequence 5742` after GSP
+  "critical error 120". Crash 2: hundreds of `nvAssertFailedNoLog … gpu_user_shared_data.c:373` over
+  ~12 s. Crash 3: **no NVRM/GSP errors at all** — so the GSP errors may be symptom, not cause.
+  Confirmed `Xid 120, GSP task exception: supervisor timer interrupt`. Two operationally useful
+  facts: **DGX OS ships `/etc/modprobe.d/sbsa_gwdt.conf` with `options sbsa_gwdt action=1`**, so the
+  box panics and auto-reboots on watchdog WS0 rather than hanging — **the reboots are the recovery,
+  not the fault**; and **after any firmware capsule update, cut wall power rather than warm-reboot.**
+- **/t/378200 — auto-CLOSED by `@system` on 2026-08-11** (14 days after last reply). **No NVIDIA
+  advisory was ever issued** for the 580.173.02 GPU-break report. Note the tension with /t/380948.
+- **/t/379303 kernel 6.17.0-1029 RDMA regression — DE-ESCALATED.** @aniculescu (Mod, 08-11) could not
+  reproduce on an FE Spark; @huawenl (NVIDIA) engaged on cable topology. Consensus: the link sticks
+  one-way in slow mode (13.27 Gb/s) after hot-plugging the QSFP cable while a unit is running;
+  **rebooting both Sparks with the cable attached clears it.** One reporter fixed it by swapping an
+  FS.com 0.5 m cable for an Amphenol. **Not relevant to our single-unit, no-CX7 config** — this
+  removes one of the two "1029 regression" data points from Entry 135.
+- **/t/380584 — two fieldiag prerequisites worth filing before we ever need them.** Neill (08-19)
+  confirmed the Field Diagnostics guide has a **documentation error**: it wrongly tells Spark users to
+  add the CUDA apt repo, causing `E: Conflicting values set for option Signed-By`. Fix:
+  `sudo rm /etc/apt/sources.list.d/cuda-sbsa-ubuntu2404.list && sudo apt update`. Follow-on:
+  `dgx-spark-fieldiag : Depends: ofed-scripts but it is not installable` → aniculescu (08-21):
+  **DOCA-OFED must be installed before the fieldiag package.**
+- **/t/380721 (08-20) — three measured findings that apply directly to our cron suite.**
+  (a) `--gpu-memory-utilization` spends **system** RAM on GB10 — 0.75 on 121.7 GB reserves ~91 GB,
+  53.84 GiB of it KV (4,073,445 tokens, 31.08× at 131k), measured 0.0% idle / 0.5% under load on a
+  single-user box. (b) **`/health` returns 200 on an engine that has stopped serving** (`Running: 0
+  reqs`, KV 0.0%, nothing in journal) — a real liveness probe must generate. But a careless probe is
+  worse: his sent no API key, got `{"error":"Unauthorized"}` (no `"choices"`), concluded "wedged," and
+  **restarted a healthy vLLM every 45 min** with 4 min of weight reload each time. *"Every failure
+  branch needs to separate 'I couldn't ask' from 'the answer was wrong.'"* (c) systemd
+  `PrivateDevices=true` silently removes the nvidia device nodes and `DeviceAllow` cannot restore
+  them — use `BindPaths`.
+- **/t/379766 (08-10) — same-harness comparison across Ollama / llama.cpp / vLLM on one Spark.**
+  **Ollama does not batch** (8-concurrent aggregate equals single-stream on all 4 models) while vLLM
+  reaches 289–313 tok/s on the same box. **"NVFP4 is not a trap, missing kernels are":** the same
+  weights ran **1.1 tok/s** on vanilla vLLM (emulation fallback) vs **77.1** with FlashInfer CUTLASS.
+  **SM121 lacks `cvt.e2m1x2`** — you lose the FP4 *compute* speedup but keep the *bandwidth* saving,
+  which is the binding constraint on GB10. MTP took Gemma-4-26B-A4B-NVFP4 from 30.3 → 54.9 tok/s
+  (+81%), and **`num_speculative_tokens: 2` beat 4** (per-position acceptance decays
+  0.84 → 0.60 → 0.39 → 0.27) — a second independent reproduction of our MTP=2 result. Startup line
+  seen every run: `SM12x detected - using native FlashInfer CUTLASS attention instead of TRT-LLM
+  attention (cubins not available for SM12x)`.
+- **/t/380957 (08-22) — DFlash2 beat vLLM+MTP head-to-head on Qwen3.8-27B.** Same NVFP4 quant floor,
+  tool-eval-bench 69 scenarios: **SGLang + DFlash2 (block 8) + greedy = 91/100, median turn 3.6 s,
+  929 s wall** vs **vLLM + MTP(5) + greedy = 90/100, 7.8 s, 2386 s** — ~2.5× decode, 3.4× wall clock.
+  Sampler finding worth noting independently: Qwen's official `temp=1.0/top_p=0.95/top_k=20` cost
+  **2× latency for +1 point** and **broke TC-58** (followed a fake system message and leaked a fake
+  API key) — every greedy cell handled it cleanly. **Our Entry 080 rejected DFlash 1; DFlash2
+  (shipped 08-18 by inco.ai) is a different generation** and is now beating MTP in a controlled
+  comparison. Re-open the question at Arm C, do not carry the Entry 080 verdict forward blindly.
+- Other INFO: **/t/380257** (67 posts) — bandwidth-ceiling math says 225 GB/s ÷ ~20 GB/step ×
+  3.3–4.7 accepted = 34–47 tok/s, i.e. **~92% of the physical wall on Qwen3.8-27B; remaining levers
+  are better drafters, not faster engines**; also a hard warning **not to run SGLang natively on
+  GB10** (its memory accounting misses 25–40 GB of transient allocations on unified memory and
+  hard-froze the box — must be in a memory-capped container). **/t/380248** — Qwen3.8-27B
+  MixedInt4-AutoRound, 20.8 GB, **MMLU 82.92% vs 83.49% FP (99.32% recovery)**, KV cache 2,561,684
+  tokens at `--max-model-len 1010000`. **/t/380229** — `Muse-Glimmer-30B-NVFP4-W4A4` at **52.55
+  tok/s** on a single Spark with vLLM (a genuine W4A4 number, no config posted). **/t/379921/379875**
+  — Nemotron Lightning single Spark 16-concurrent 193 / 420 / 236 tok/s vs RTX PRO 6000 at
+  935 / 1730 / 1176 (~4.1–4.9× faster), and **Spark MTP acceptance only 28.89%** (accept length 1.87)
+  vs our Qwen3.6 79.8%. **/t/380283** — `github.com/shahizat/dgx-spark-dashboard`, a Prometheus
+  collector that reads `/proc/meminfo` + `nvidia-smi` because standard GPU exporters have nothing to
+  scrape on unified memory (`N/A`); possible source of extra UMA metrics for our Grafana.
+- **/t/380286 is a FALSE POSITIVE for us.** "GB10 hard-resets after vLLM exits 255 serving
+  Qwen3.8-27B-FP8" matched our 2026-08-03 signature closely (no OOM, no Xid, no traceback, exit 255,
+  hard reset 2–3.5 min later, 100% reproducible) and its **control was Qwen3.6-35B-A3B on the same
+  stack, 100% stable**. OP resolved it 08-16: **defective thermostat**, fieldiag FAIL.
+- **OTA verdict: no August 2026 software-update announcement.** Category 722's newest post is
+  /t/380528 (Google Chrome as a browser option, 08-18); the newest *software update* announcement is
+  still /t/376736 (July 2026 Release, 2026-07-14). **Two consecutive checks with no monthly release.**
+  **But content is shipping without an announcement** — DGX OS 7.5.0 with kernel 6.17.0-1026/-1029/
+  -1031 and driver 580.173.02 are reachable via ordinary `apt dist-upgrade` / DGX Dashboard, plus
+  `dgx-spark-ota-update-meta 26.03.1 → 26.04.1`. **No patched EC exists.** Latest FE EC is still
+  0x03000508 — the July one we deliberately skipped.
+- Watched builders posted **nothing** in the 51 threads fetched (author scan across all posts dated
+  ≥ 2026-08-08 returned zero hits for hellohal2064, Artyom, sus, sesmanovic, namake-taro, coolthor,
+  sggin1, eugr, serapis). Their **artifacts** remain load-bearing: **eugr** is referenced in 11 new
+  posts across 8 threads, and **SeraphimSerapis's `tool-eval-bench` is now the de facto community
+  quality harness.**
+
+### Cross-Correlated Findings
+
+1. **⚠ THE NVFP4 BUILD BLOCKER IS DISSOLVED — triple-source, and it retires an Entry 094
+   conclusion.** Entry 094 concluded NVFP4 was coupled to a multi-hour v0.23.x/v0.24.0 source build
+   because our v0.19.1rc1 loader hits `KeyError: 'layers.0.mlp.experts.w2_input_scale'`. Now:
+   **Check 1** shows 7 Arena submissions from 5 independent submitters running NVFP4 **MoE** on
+   **stock `vllm/vllm-openai:v0.27.1`, plain docker pull**; **Check 5 /t/380244** shows a prebuilt
+   `ghcr.io/spark-arena/dgx-vllm-eugr-nightly:latest` loading NVFP4 on a single Spark with no vLLM
+   modification; **Check 2** supplies the mechanism — #49904 in v0.27.0 fixed the SM121 arch
+   detection that was producing kernel-less builds. **The build step is off the critical path.** The
+   cost of an NVFP4 probe drops from a multi-hour build to a docker pull plus an idle window.
+2. **⚠ BUT the stock-image shortcut is valid for NVFP4 and NOT for FP8.** Check 2 #52708 states that
+   SM121 is **not a published build target**, and that sm_120 family forward-compat **does not cover
+   `CutlassFp8BlockScaledMMKernel`'s architecture-conditional MMA instructions**. Our production model
+   is block-scaled FP8 `[128,128]` — precisely that kernel family. So a stock-image NVFP4 probe is
+   sound, while a stock-image **FP8 A/B against production would silently measure a degraded kernel
+   path** and produce a false negative. Any FP8 comparison needs a source build with SM121 targets.
+   This reconciles why the Arena NVFP4 stock-image numbers are credible.
+3. **⚠ The Arm C target should be v0.27.1 + three backports; v0.28.0rc* and b12x are both
+   disqualified.** Check 2 **#51987**: the merged SM12x XQA decode path (#49718, 2026-08-11T23:32Z)
+   produces gibberish on DGX Spark and its revert is **unmerged**, so **v0.28.0rc1/rc2 contain the
+   bug while v0.27.1 predates the merge by ~13 hours.** Check 5 **/t/380889**: MTP + CUDA graphs +
+   prefix caching corrupts output on SM121 and **v0.27.0/v0.27.1 are explicitly still affected**,
+   needing **#51318 + #52836 + #52492**. Check 3: the eugr b12x track is crashing (#349 illegal
+   address, #352 deadlock, both SM121, both from the 08-15 image, maintainer silent) and vLLM #47365
+   is 34 days open. **Net: pin v0.27.1, carry the three backports — Check 3's new `--apply-vllm-pr`
+   (commit `44774ef2`) is the cheap vehicle for exactly that — and keep
+   `--max-num-batched-tokens` at 32768 (#53390 cliff at 61,681 tokens).**
+4. **⚠ The fan defect is root-caused, our unit sits in the failure envelope, and the fix is a
+   physical accessory.** Check 5 /t/378945 establishes the EC fan curve is gated on **package power
+   draw** (~4–4.5 W threshold), not display state and not temperature. We are **headless, with no
+   CX7 cable, and low idle draw** — the exact envelope. /t/380282 proves the defect is **per-unit**,
+   so we cannot assume we are affected *or* safe without measuring. /t/380238 shows where it ends
+   (2× FE RMA'd on a PowerStress `020000600139` FAIL) and /t/380669 + /t/377069#6 give the software
+   stopgap (clock cap). Suggestive detail: in /t/378945's A/B the **cold unit ran driver 580.159.03 —
+   our version — and the hot unit ran 580.173.02.** This is the strongest available candidate
+   mechanism for our unexplained 2026-08-03 power death.
+5. **The OTA hold is now strongly evidenced, and the July bundle looks actively harmful.**
+   /t/380503 (a unit **stranded at an un-passable Capsule Update password prompt starting from our
+   exact EC 0x03000302**), /t/379959 (2-hourly GSP wedges post-capsule), /t/380928 (vLLM/Claude-CLI
+   multi-minute stalls traced to the July bundle), and /t/380238 (EC 0x03000508 does **not** fix FE
+   thermals, and rollback to 0x02004e18 is also a no-op on FE). The single counter-datum, /t/380948
+   (580.173.02 fixes cuDNN/cuBLAS internal errors), is an ONNX Runtime OCR workload. **Hold.**
+6. **Our MTP=2 choice now has two independent third-party reproductions.** Check 3 issue #343
+   (gemma4-26b-a4b-nvfp4: n=2 beats the shipped n=4 at 8-concurrent, 303.6 vs 210.0 tok/s, acceptance
+   65.5% vs 52.5%) and Check 5 /t/379766 (per-position acceptance decay 0.84 → 0.60 → 0.39 → 0.27,
+   n=2 beats n=4). Entry 080's conclusion holds and generalizes beyond our model.
+7. **Qwen3.8-27B is confirmed a non-upgrade from four independent directions**; **Laguna-XS-2.1-FP8
+   is the candidate that actually fits.** Check 4 gives the mechanism (27.8B *dense* active vs 3B
+   active MoE ≈ 9× per-token weight traffic); Check 1 measures 11.5–28.5 tok/s across three Arena
+   variants; Check 5 measures 13 (FP8 sparkrun) / 24.5 (NVFP4 vLLM) / 34–38 (SGLang+DSpark); and
+   /t/380257's bandwidth math shows 34–47 tok/s is ~92% of the physical wall for that model — there
+   is no tuning path to our 66.9. Meanwhile **Laguna-XS-2.1 is 33.44B/A3B, SWA+global with no
+   Mamba/GDN, official FP8 pre-quant, OpenMDW-1.1 permissive** — and **PR #323 covers the wrong
+   family member** (Laguna-S-2.1 at 117.56B, which does not fit at FP8).
+8. **Our own `--enforce-eager` drift is no longer purely a cost.** /t/380889's corruption class
+   requires CUDA-graph capture; `--enforce-eager` disables capture entirely and therefore **immunizes
+   us**. The Entry 119 drift (−27.1% c1: 53.3 vs 73.1) has been framed as the largest unrealized gain
+   on the box; it is also, accidentally, a safety mitigation. Removing it is now a **deliberate
+   trade**, not a free win — and it must not be removed on a build lacking #51318/#52836/#52492.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---|---|
+| vllm_release: gemma4 AND (guided OR grammar OR xgrammar) | **MATCH → ACTION**, but hollow. v0.27.0 hits on two *independent* changelog lines (`ViT CUDA graph for Gemma-4 #46837`; `grammar advanced across the reasoning boundary with spec decode #44993`) — not a Gemma-4-grammar fix. **Our actual gate #40099 is UNCHANGED at 45 days stalled. Gemma 4 remains blocked.** New adjacent breakage: #53363 (gemma4 tool parser ignores `tool_choice="required"`), #53181 (xgrammar "Failed to advance FSM" persists after #52805). |
+| vllm_release: DeepGEMM AND (SM12 OR SM121 OR Blackwell OR GB10) | **MATCH → ACTION.** v0.27.0 body co-occurrence (`DeepGEMM support #50458` + the SM121 line #49904), corroborated off-changelog by a new cluster — #52732, #51959, #51884, #53055 — and by tracked **#41063 moving for the first time in a month.** No benchmark is actionable yet: DeepGEMM still has **no working SM12x path**. |
+| vllm_release: FlashInfer AND (heterogeneous OR mixed head) | MATCH (keyword only) → INFO. "heterogeneous" in v0.27.0 refers to P/D block sizes (#49612) and MoRIIO TP↔DP, **not attention head dims**. Low relevance. |
+| vllm_release: MXFP4 AND (online OR on-the-fly OR Qwen) | MATCH (weak) → INFO. `AutoRound W4A16 MoE and MXFP4 linear/MoE on XPU (#47124)`, `compact MXFP4 indexer KV cache (#48993)` — both XPU/DSv4-scoped, **not applicable to SM121**. |
+| vllm_release: speculative AND (Qwen OR MoE) | **MATCH → INFO, elevated.** `multi-layer MTP speculator (#48892)`, `DSpark Markov head replicated across TP ranks (#49731)`, `Qwen3.5 text-only dense and MoE (#50210)`. Elevated by **#53051** (spec-decode cudagraph misdispatch → garbage) and **#52756** (MTP + auto-enabled async scheduling in 0.27.1). |
+| vllm_release: #37754 OR (FlashInfer AND MTP AND (crash OR Xid)) | **NO literal match** — #37754 absent from both release bodies. **But three adjacent hits are materially the same hazard class the trigger was written to catch:** #51987 (FlashInfer XQA → gibberish on sm121, DGX Spark CI red), #52877 (FlashInfer cuDNN FP8 GEMM kernel-launch failures on GB10 after 1.5–3 days, **0 Xid**), #52225 (Xid 13 on SM120 under sustained load), plus forum /t/380889. **Recommend rewriting this trigger to cover silent-corruption and no-Xid failure modes, not just Xid crashes.** |
+| arena: fp8 AND single-node > baseline × 1.10 | **NO MATCH** — 80.27, delta 0.00%, gate 88.30. Now verified against a **full 229-doc enumeration**, not a blind direct-read. |
+| huggingface: Qwen3.7 (27B OR 35B) OR Qwen3.6-Plus OR Qwen4 weights | **NO MATCH.** Qwen3.7 confirmed never shipped; no Qwen4 repo exists (API-verified). **Trigger row is now stale** — it predates Qwen3.8 and cannot fire on anything Qwen has actually done. Recommend rewriting to target a Qwen3.9/Qwen4 **A3B-class MoE** release. |
+| forum: gemma4 AND (guided JSON OR grammar OR structured output) fix | **NO MATCH.** All gemma4 forum hits are 2026-04 → 2026-06 (newest /t/373422, 2026-06-15). No gemma4 thread appeared in this window. |
+
+### Overall: ACTION NEEDED
+
+Two independent `ACTION:` trigger matches (gemma4 keyword, DeepGEMM+SM12x) plus a materially better
+configuration now demonstrated as reachable without a build. The classification is driven mainly by
+cross-correlations 1–4: the NVFP4 build blocker is retired, the safe build window is narrow and
+time-sensitive, and the fan defect has a known mechanism that places our headless unit in the
+failure envelope.
+
+### Recommendations
+
+1. **[ELEVATED — PHYSICAL, DO FIRST] Put a sustained ≥5 W load on the Spark, or fit an HDMI EDID
+   dummy plug.** The EC fan curve is gated on package power draw with a measured ~4–4.5 W threshold
+   (/t/378945, NVIDIA-escalated 08-10). Our unit is headless with no CX7 and low idle draw — the
+   exact envelope. This is a few-dollar accessory against a defect that plausibly killed the box on
+   2026-08-03. **Then measure which unit we have:** baseline idle ACPI zone temps (`sensors`,
+   `\_TZ_.TGPU`, `\_TZ_.TSOC`) against the healthy 34–36 °C / failing 55–61 °C figures from
+   /t/380282. **And brush the front intake grille** — /t/380238 documents dust causing a GpuStress
+   FAIL that cleaning resolved.
+2. **[ELEVATED] Evaluate `sudo nvidia-smi -lgc 300,2100` as standing thermal insurance.** Now the
+   best-evidenced mitigation for the crash-under-load class: /t/380669 (reproducible reboots at
+   ~75 W, fixed), /t/377069 #6 (the only effective fix on a 2× FE cluster), /t/380238 (clock cap
+   stabilized a cluster pending RMA). Reversible with `nvidia-smi -rgc`. Requires a maintenance
+   window and a measured before/after — **do not apply blind. Gate: re-run the c1/c8 harness and
+   confirm ≤ 2% c8 regression.**
+3. **[ACTION — NEW] Run the NVFP4 probe now; the multi-hour build is no longer required.** Pull
+   **stock `vllm/vllm-openai:v0.27.1`** and load **`unsloth/Qwen3.6-35B-A3B-NVFP4-Fast`** — same
+   model family as production, so it is a genuine single-variable swap (Arena 103.96 c1 vs our
+   documented 66.9). Separate container name, separate port (8010), **separate Triton cache** — never
+   point a new build at `/home/claude/.cache/triton-cu132`. Production compose untouched; probe is
+   `--rm`. Requires an idle window (qwen35 stopped — two 35B models will not fit). **Gate on ≥ +5% at
+   c8** against the authoritative kernel-1021 MTP baseline (c1 73.1 / c4 186.7 / c8 406.9 / c16
+   730.5), not on c1 — that is exactly the criterion that correctly killed DFlash in Entry 080, and
+   the Arena only publishes c1/c2/c5/c10.
+4. **[ACTION — REVISED ARM C PLAN] Target vLLM v0.27.1, carry #51318 + #52836 + #52492, and reorder
+   the probes.** Disqualify **v0.28.0rc1/rc2** (contain #49718; revert #51987 unmerged; XQA decode
+   emits gibberish on sm121) and **drop b12x to last** (eugr #349 illegal address, #352 deadlock,
+   both SM121 and unanswered; vLLM #47365 open 34 days). Use eugr's new **`--apply-vllm-pr`** to
+   layer the three backports without a source build. **Keep `--max-num-batched-tokens` at 32768**
+   (#53390: deterministic illegal memory access above 61,681 tokens on GB10 sm_121a). **For any FP8
+   A/B, use a source build with SM121 targets, not a stock image** (#52708 — sm_120 forward-compat
+   does not cover `CutlassFp8BlockScaledMMKernel`). Revised order: **(a) NVFP4 W4A4 probe → (b)
+   DSpark/DFlash2 drafter probe → (c) Nemotron Lightning → (d) b12x last.**
+5. **[ACTION] Add spec-decode acceptance to `spark-smoke.sh` as a silent-corruption early warning.**
+   /t/380889 measured acceptance dropping **~24% about 30 s before** visible token corruption — a
+   cheap, high-value leading indicator for a failure mode that produces no error and no Xid. **And
+   audit `spark-healthcheck.sh` against /t/380721:** `/health` returns 200 on a wedged engine, so the
+   probe must actually generate; and an unauthenticated probe manufactures false outages. Every
+   failure branch must separate "I couldn't ask" from "the answer was wrong."
+6. **[CARRY-FORWARD — SAFETY, now much better evidenced] Continue holding EC 0x03000302, driver
+   580.159.03, kernel 6.17.0-1021. Do NOT run `fwupdmgr upgrade` or `apt dist-upgrade`.**
+   /t/380503 is a live, unresolved case of a unit **bricked at an un-passable Capsule Update password
+   prompt starting from our exact EC version**, with no NVIDIA reply after 4 days. See
+   cross-correlation #5 for the full evidence set.
+7. **Decide the `--enforce-eager` drift deliberately, not as free money.** Entry 119 framed it as
+   −27.1% c1 (53.3 vs 73.1) and the largest unrealized gain on the box. /t/380889 shows it also
+   **immunizes us against the MTP + CUDA-graph corruption class**. It must not be removed on any
+   build lacking #51318/#52836/#52492. It also confounds every A/B above — resolve it, or explicitly
+   compare against the documented 73.1 baseline rather than the running container.
+8. **Add `poolside/Laguna-XS-2.1-FP8` to the Arm C eval set; formally drop Qwen3.8-27B.** Laguna-XS
+   is 33.44B/A3B, SWA+global with no Mamba/GDN, official FP8 pre-quant, OpenMDW-1.1 permissive — the
+   best structural match to production found to date, and **not** what PR #323 covers (that is
+   Laguna-S-2.1 at 117.56B, which does not fit at FP8). Qwen3.8-27B is disqualified on throughput
+   from four independent directions (cross-correlation #7).
+9. **Re-open the DFlash question at Arm C — do not carry the Entry 080 verdict forward.**
+   /t/380957 shows **DFlash2** (shipped 2026-08-18, a different generation from the DFlash 1 we
+   rejected) beating vLLM+MTP(5) on a controlled 69-scenario harness: 91/100 vs 90/100 quality at
+   ~2.5× decode and 3.4× wall clock. Same thread: **greedy decoding beat Qwen's official sampler**
+   (`temp=1.0/top_p=0.95/top_k=20` cost 2× latency for +1 point and broke a prompt-injection case).
+10. **Housekeeping.** (a) The Arena baseline metric 80.27 carries **±22.89 (28.5% CV)** — consider
+    tracking c5 (158.31 ± 1.80) instead, or widening the gate. (b) **Resolve the eugr tag
+    discrepancy** in Check 3 before the eval (0.27.2rc1.dev360 in Entry 148 vs 0.26.1rc1.dev1105
+    verified live here) and **pin the dated wheel filename, not the rolling tag**. (c) Rewrite two
+    stale trigger rows — the Qwen3.7/Qwen4 row cannot fire on anything Qwen has done, and the #37754
+    row should cover silent-corruption / no-Xid modes. (d) Entry 148's "#41063 dormant ~4 months" is
+    incorrect — it moved 2026-08-14. (e) /t/379303 is de-escalated to a cable/hot-plug issue, so
+    Entry 135's "two independent 1029 regression reports" now has one. (f) File the fieldiag
+    prerequisites from /t/380584 (remove the CUDA apt list; install DOCA-OFED first) before we ever
+    need to run it under time pressure. (g) `mods/exp-w4a16` applies vLLM PRs #42124/#42566/#42546 —
+    check whether they are merged into current builds.
+
+### Baseline Update — SKIPPED (headless run, no user present)
+
+Per run instruction, `SPARK_BASELINE.md` was **not modified**. The following changes would otherwise
+be proposed for confirmation:
+
+| Field | Current | Proposed |
+|---|---|---|
+| `arena_access_method` | LIST restricted, `{}` / 2 docs | **LIST UNBLOCKED — 229 docs at `pageSize=300`, full enumeration restored** |
+| `arena_top_fp8_qwen35_tok_s` | 80.27 | 80.27 (unchanged, 0.00%) — **annotate ±22.89 / 28.5% CV** |
+| *(new)* `arena_top_nvfp4_moe_stock_image_tok_s` | — | **125.13** (Pathak, Nemotron-3.5-Lightning-30B-A3B-NVFP4, **stock `vllm/vllm-openai:v0.27.1`**, DSpark n=3, 2026-08-19) |
+| *(new)* `arena_top_nvfp4_qwen36_vllm_tok_s` | — | **103.96** (`unsloth/Qwen3.6-35B-A3B-NVFP4-Fast`, Sawotin, 2026-08-11) |
+| `arena` recipe note (sub1779297106805) | ambiguous | **CLOSED** — both true; `recipe.fullRecipe.env` vs `.metadata.description` |
+| `vllm_last_checked_version` | v0.27.1 | v0.27.1 (2026-08-11) confirmed; **v0.28.0rc1/rc2 tags exist and are DISQUALIFIED** (#51987) |
+| `svd_last_checked_date` | 2026-08-22 (Entry 148) | 2026-08-22; **`prebuilt-vllm-current` = `0.26.1rc1.dev1105+g040700aaa.d20260822`** (live-verified; conflicts with Entry 148's dev360 — flag) |
+| `forum_last_checked_date` | 2026-08-22 (Entry 148) | 2026-08-22; **ceiling /t/379577 → /t/380957**, 87 new threads |
+| Recon Triggers | — | rewrite the Qwen3.7/Qwen4 row and the #37754 row (see Rec 10c); **add** `vllm_release \| XQA AND SM12x` → ACTION: confirm #51987 merged before adopting any build containing #49718 |
+
+New Watch Items proposed: EC fan curve gated on **power draw** (~4–4.5 W threshold) with our unit in
+the envelope; **/t/380503** bricked-at-capsule-prompt from our exact EC; **/t/380889** MTP +
+CUDA-graph corruption requiring #51318/#52836/#52492 (v0.27.0/0.27.1 affected); **#52708** stock
+wheels do not cover `CutlassFp8BlockScaledMMKernel`; **#53390** 61,681-token cliff; **#52877**
+EngineCore fatals on GB10 after 1.5–3 days on stock v0.27.1 at our exact host config;
+`poolside/Laguna-XS-2.1-FP8` as an Arm C comparator; DFlash2 re-open.

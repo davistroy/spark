@@ -11337,3 +11337,75 @@ Arena subagent returned additional findings after Entry 142 was already committe
 5. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~14 weeks OPEN. Fire hazard confirmed for headless inference (/t/378945). Verify production is on EC 0x03000302. Do NOT run `fwupdmgr update`. Do NOT `apt upgrade` without verifying driver pin.
 
 6. **[CARRY-FORWARD] PR #40099 (Gemma4 repetition) OPEN ~44 days.** Schedule Gemma4 structured output experiment immediately on merge.
+
+## Entry 148 - DGX Spark Recon (2026-08-22)
+
+**Overall: WORTH WATCHING** — spark-vllm-docker advanced to `dev360` (+42 commits over dev318, Aug 21 11:50 UTC). vLLM v0.28.0rc2 pre-release appeared Aug 21 — not stable, no SM121 content confirmed yet, but watch for v0.28.0 stable. Arena FP8 frontier static 88+ days (recipyCopyCounts ticking up, no new submissions). Qwen3.8-35B-A3B confirmed does not exist (Qwen3.7 never shipped; Qwen3.8 is 27B dense or 2.4T). No new threads above /t/380746. EC fan regression ~15 weeks unresolved.
+
+**Check 1 — Arena Firestore (direct sub reads):**
+- sub1779297106805 (Stojanovic FP8 vLLM baseline): recipeCopyCount **217** (+3 from 214, Entry 147). Firestore returned a field value of 76.61 tok/s (possible d8192 variant); established tg128 c1 baseline remains **80.27 tok/s**.
+- sub1782803609803 (Poveda NVFP4 118.91 tok/s): recipeCopyCount **106** (+2 from 104). Last updated Aug 21 15:06 UTC. No performance change.
+- sub1779495971526 (Atlas/Rawat 218.85 tok/s): recipeCopyCount **145** (+0). Record touched today at 02:42 UTC (minor internal update only).
+- Firestore listing still returns `{}` — consistent with security-rule restriction on list ops; direct reads operational.
+- No new submission IDs above Jul-25 detected. FP8 vLLM frontier static 88+ days (last submission 2026-05-26).
+- 10% FP8 alert gate (>88.30 tok/s): **NOT FIRED**.
+- Classification: NO ACTION
+
+**Check 2 — vLLM releases:**
+- Latest stable: **v0.27.1** (2026-08-11) — no v0.27.2 stable released.
+- **NEW: v0.28.0rc1 (Aug 20) and v0.28.0rc2 (Aug 21)** — RC cycle started. Only pre-release content found in search: OpenVINO processor security guard; no SM121/GB10/DGX Spark-specific changes confirmed.
+- PR #40099 (Gemma4 repetition detection): **OPEN**, ~45 days stalled.
+- Issue #41063 (DeepGEMM SM12.x): **OPEN**, ~4 months dormant.
+- Classification: WORTH WATCHING (v0.28 RC cycle is new since Entry 147; no stable upgrade needed)
+
+**Check 3 — spark-vllm-docker:**
+- **NEW BUILD: `0.27.2rc1.dev360+ge85d1b69c.d20260821`** (`prebuilt-vllm-current`, Aug 21 11:50 UTC, +42 commits over dev318/44774ef). Marked "New stable build."
+- vLLM base: 0.27.2rc1 (same series). FlashInfer: assumed unchanged at 0.6.18 (no update mentioned).
+- No new recipes in this check (GLM-5.2-NVFP4 and `--apply-vllm-pr` were from Entry 147).
+- Classification: WORTH WATCHING (updated eval target)
+
+**Check 4 — Qwen/HuggingFace:**
+- **Qwen3.7-35B/27B: CONFIRMED NEVER SHIPPED** (closed frontier; skipped generation; Qwen3.8 released instead).
+- Qwen3.8-27B dense (CLOSED Entry 141) and Qwen3.8-Max 2.4T-A95B (too large) already tracked; no new A3B-class MoE from Qwen.
+- No new 30-40B MoE/~3B active models from other labs detected.
+- Classification: NO ACTION
+
+**Check 5 — NVIDIA Forum (WebSearch fallback; 719/721 blocked):**
+- No new threads above /t/380746 (Entry 147 ceiling) detected.
+- /t/380676 "DGX Spark GB10 Setup" surfaced in search — thread ID 380676 < 380746 threshold; below ceiling.
+- EC 0x03000508 fan regression: **STILL UNRESOLVED** (~15 weeks, case 260716-000029 OPEN).
+- OTA2608: **NOT ANNOUNCED**.
+- No new driver/firmware/perf findings.
+- Classification: NO ACTION
+
+**Cross-Correlated Findings:**
+
+1. **v0.28.0rc2 (Check 2) × dev360 on 0.27.2rc1 (Check 3):** eugr is tracking the 0.27.2rc1 dev series; v0.28.0rc2 has not influenced the eval target yet. Watch for a dev build rebased onto v0.28 when that stabilizes — could bring additional SM121 content from the v0.27 series that didn't make it into 0.27.2rc1.
+
+2. **Arena static 88+ days (Check 1) × No new A3B MoE model (Check 4):** With Qwen3.8-35B-A3B not materializing and the production model holding at Qwen3.6-35B-A3B-FP8, there is no community pressure to submit new Arena FP8 vLLM entries. Frontier is structurally stable until an NVFP4 submission arrives (confirmed Arm C/D eval path).
+
+3. **dev360 +42 commits (Check 3) × v0.28.0rc2 (Check 2):** The v0.28 RC cycle means the 0.27.2rc1 dev series may freeze soon as vLLM project attention shifts to v0.28. Timing the Arm C/D eval before the dev series pivots is more relevant now.
+
+**Triggered Alerts:**
+
+| Trigger | Status |
+|---------|--------|
+| Arena FP8 vLLM >88.30 tok/s (tg128 c1) | NOT FIRED — 80.27 confirmed, 88+ days static |
+| eugr new stable build | **FIRED** — dev360 (Aug 21 11:50 UTC, +42 commits over dev318) |
+| vLLM new stable release >v0.27.1 | NOT FIRED — v0.28.0rc2 is pre-release only |
+| vLLM v0.28 RC cycle started | **NEW** — v0.28.0rc2 as of Aug 21; watch for SM121 in stable |
+| PR #40099 (Gemma4 repetition) merged | NOT FIRED — OPEN, ~45 days stalled |
+| Issue #41063 (DeepGEMM SM12.x) resolved | NOT FIRED |
+| OTA2608 announced | NOT FIRED |
+| EC fan fix (0x03000508 → patched) | NOT FIRED — ~15 weeks OPEN |
+| Qwen3.7/Qwen4 or new A3B MoE on HF | NOT FIRED — Qwen3.7 confirmed never shipped |
+
+**Recommendations:**
+
+1. **[UPDATED ACTION — EVAL TARGET] Arm C/D eval target is now `0.27.2rc1.dev360+ge85d1b69c.d20260821`** (prebuilt-vllm-current, Aug 21 11:50 UTC). Eval plan unchanged: (a) B12x MoE probe on Qwen3.6-35B-A3B-FP8; (b) NVFP4 B1 probe — highest priority; (c) DSpark Markov head probe; (d) Nemotron 3.5 Lightning NVFP4 probe; (e) Ornith-1.5-35B-A3B NVFP4 probe; (f) full throughput suite if probes pass.
+
+2. **[NEW] Watch vLLM v0.28.0 stable.** v0.28.0rc2 released Aug 21 — stable likely within 1-2 weeks. Check release notes specifically for SM121 arch-detection improvements beyond v0.27.0's #49904, DSpark Markov suite completions, and new MoE backend changes. eugr will likely update eval target to v0.28 base once stable.
+
+3. **[CARRY-FORWARD — SAFETY] Do NOT apply July 2026 OTA.** EC 0x03000508 fan regression ~15 weeks OPEN. Production must stay on EC 0x03000302. Do NOT run `fwupdmgr update`. Maintain driver pin before any apt operation.
+
+4. **[CARRY-FORWARD] PR #40099 (Gemma4 repetition) OPEN ~45 days.** Schedule Gemma4 structured output experiment immediately on merge.

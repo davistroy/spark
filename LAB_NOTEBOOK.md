@@ -11999,3 +11999,110 @@ CUDA-graph corruption requiring #51318/#52836/#52492 (v0.27.0/0.27.1 affected); 
 wheels do not cover `CutlassFp8BlockScaledMMKernel`; **#53390** 61,681-token cliff; **#52877**
 EngineCore fatals on GB10 after 1.5–3 days on stock v0.27.1 at our exact host config;
 `poolside/Laguna-XS-2.1-FP8` as an Arm C comparator; DFlash2 re-open.
+
+---
+
+## Entry 150 - DGX Spark Recon (2026-08-23)
+
+**Date:** 2026-08-23 UTC
+**Operator:** Claude Code (spark-recon skill) — headless run, no user present
+**Status:** RECON — no changes made to the Spark system
+
+**Overall: WORTH WATCHING**
+
+No material new developments since Entry 149 (2026-08-22, ACTION NEEDED). All five data
+sources checked. Production baseline stable. Eval window remains open on Entry 149 actions.
+
+### Check 1 — Arena: NO ACTION (LIST restricted again; baselines unchanged)
+
+- **Firestore LIST returned `{}`** (restricted again). Entry 149's full unblocked enumeration
+  (229 docs, HTTP 200) was temporary — LIST access continues to fluctuate. Direct reads used.
+- **sub1779297106805** (Stojanovic, FP8 vLLM, 2026-05-20): **80.27 tok/s** — unchanged.
+  10% ACTION gate (>88.30) not approached. FP8 vLLM frontier static (last submission 2026-05-26).
+- **sub1782803609803** (Poveda, NVFP4 vLLM, 2026-06-30): 118.91 tok/s — unchanged.
+  **recipeCopyCount 107** (+1 from 106 in Entry 148; +1 from 104 in Entry 147).
+- Entry 149's 40 new submissions (through 2026-08-19) stand: top new single-node vLLM =
+  Pathak Nemotron 125.13 tok/s on stock `vllm/vllm-openai:v0.27.1`; Sawotin
+  `unsloth/Qwen3.6-35B-A3B-NVFP4-Fast` 103.96 tok/s. Both confirmed — see Entry 149 for
+  recipe details. These entries can now be added to SPARK_BASELINE Arena Tracking.
+
+### Check 2 — vLLM: NO ACTION (v0.27.1 still latest stable)
+
+- **Latest stable: v0.27.1 (2026-08-11)** — confirmed, no new stable release today.
+- v0.28.0rc1 (2026-08-20) and v0.28.0rc2 (2026-08-21): tags exist but not Release objects.
+  PR #51987 (revert of #49718 FlashInfer XQA SM12x hazard): status unconfirmed from search —
+  was OPEN in Entry 149. v0.27.1 predates #49718 merge by ~13h; safe window unchanged.
+- PR #40099 (Gemma4 repetition detection): no new merge found; still OPEN.
+- Issue #41063 (DeepGEMM SM12x): no change found.
+- No SM121-specific content in v0.28.0rc pre-releases beyond what Entry 149 recorded.
+
+### Check 3 — spark-vllm-docker: WORTH WATCHING (Aug 22 build + FlashInfer hash update)
+
+- **Resolves Entry 148/149 discrepancy:** Entry 148 reported `0.27.2rc1.dev360` as
+  `prebuilt-vllm-current`; Entry 149 live-verified `0.26.1rc1.dev1105`. Both true — dev360 was
+  a "Do Not Use" staging build; dev1105 is the true stable track.
+- **Current stable (Aug 22):** `prebuilt-vllm-current` = `0.26.1rc1.dev1105+g040700aaa.d20260822`.
+- **FlashInfer updated Aug 22:** `0.6.18-8cd56793-d20260822`
+  (was `0.6.18-e77a4a0d-d20260817` from Entry 148). Same 0.6.18 version, new build commit. Minor.
+- Staging builds (v0.27.2rc1.dev360, Aug 18-21): still "Do Not Use" — not promoted to stable.
+- Eval target remains the `0.27.2rc1.dev360+ge85d1b69c.d20260821` staging build (DSpark Markov
+  suite + SM121 arch-fix); FlashInfer for that track unconfirmed (stable track now 8cd56793).
+- No new recipes observed.
+- PR #279 (DFlash+FP8 KV): dormant ~25 weeks.
+
+### Check 4 — Qwen/Models: NO ACTION (trigger not fired)
+
+- **No new A3B-class 35B/30B MoE models** from Qwen or other labs.
+- Qwen3.8-27B: dense 27B, CLOSED Watch Item (bandwidth-limited, not production path).
+- Qwen3.8-2.4T: open weights released 2026-08-12, 2.4T params — not Spark-viable.
+- Qwen3.7 27B/35B open weights: confirmed closed-frontier; generation skipped.
+- Qwen4: no announcement.
+- HuggingFace EGRESS_BLOCKED in remote env; WebSearch corroborates no new A3B MoE releases.
+
+### Check 5 — NVIDIA Forum: NO ACTION (no new threads above Entry 149 ceiling)
+
+- 719.json + 721.json: EGRESS_BLOCKED (same as Entry 148). WebSearch fallback used.
+- **No new threads above /t/380957** (Entry 149 ceiling) detected via WebSearch.
+- OTA2608 / EC 0x03000509: **NOT announced**. Firmware search confirms EC 0x03000508 remains
+  latest from July OTA; no new patch issued.
+- EC 0x03000508 fan regression: **STILL UNRESOLVED** (~16 weeks, case 260716-000029 OPEN).
+  Production unit on EC 0x03000302 unaffected. HOLD maintained.
+- /t/380676 "DGX Spark GB10 Setup" surfaced in search: below Entry 149 ceiling — already known.
+- Entry 149 Watch Items (#52877 EngineCore fatals, #51318/#52836/#52492 MTP+graph corruption,
+  #52708 CutlassFp8, #53390 61K-token cliff): no new forum activity found on any of these.
+
+### Cross-Correlated Findings
+
+None across 2+ checks today. No single finding appeared independently in multiple sources.
+
+### Triggered Alerts
+
+- None fired. Recon Triggers table conditions unmet.
+
+### Recommendations
+
+1. **Execute Arm C/D eval plan.** Entry 149 confirms NVFP4 functional on stock
+   `vllm/vllm-openai:v0.27.1`: Pathak Nemotron 3.5 Lightning at **125.13 tok/s c1** (+87% vs
+   prod 66.9), Sawotin `unsloth/Qwen3.6-35B-A3B-NVFP4-Fast` at **103.96 tok/s c1** (+55%).
+   Both on unmodified upstream vLLM. Entry 149 ACTION NEEDED classification stands.
+   Eval order: (a) B12x MoE probe on Qwen3.6-FP8, (b) NVFP4 B1 probe on Qwen3.6-NVFP4,
+   (c) DSpark Markov head probe, (d) Nemotron 3.5 Lightning NVFP4 probe (gate: c1 ≥80 AND
+   c8 ≥380), (e) Ornith-1.5-35B-A3B NVFP4 probe.
+2. **Hold fwupdmgr update.** EC 0x03000508 fan regression unresolved (~16 weeks). OTA2608 not
+   announced. Production EC 0x03000302 is safe.
+3. **Confirm PR #51987 merged before adopting v0.28.0 or builds containing #49718** (FlashInfer
+   XQA SM12x). v0.27.1 is the current safe window.
+4. **svd tag discrepancy now resolved:** stable track = `0.26.1rc1.dev1105`; dev360 staging is
+   "Do Not Use." Pin dated wheel filename, not rolling tag, for eval sessions.
+
+### Baseline Updates Applied (tracking fields only; Current Config reserved for user)
+
+| Field | Old | New |
+|---|---|---|
+| `svd_last_checked_date` | 2026-08-22 (Entry 148) | **2026-08-23 (Entry 150)**; stable = `0.26.1rc1.dev1105+g040700aaa.d20260822`; FlashInfer = `0.6.18-8cd56793-d20260822` |
+| `forum_last_checked_date` | 2026-08-22 (Entry 148) | **2026-08-23 (Entry 150)** |
+| `forum_posts_since_150` | — | **(new row)** No new threads above /t/380957 (Entry 149 ceiling). EC 0x03000508 fan regression: STILL UNRESOLVED (~16 weeks, case 260716-000029 OPEN). OTA2608: NOT ANNOUNCED. Classification: NO ACTION. |
+| `arena_top_fp8_qwen35_tok_s` | recipeCopyCount sub1782803609803 = **106** (Entry 148) | **107** (+1); LIST restricted again in Entry 150 (Entry 149 unblocked was temporary); new entries from Entry 149: Nemotron 125.13, Qwen3.6-NVFP4-Fast 103.96 |
+| `arena_access_method` | restricted (2 docs) | **FLUCTUATING** — 229 docs in Entry 149 (2026-08-22), restricted `{}` again in Entry 150 (2026-08-23). Use direct-read method for baselines. |
+| *(new)* `arena_top_nvfp4_moe_stock_image_tok_s` | — | **125.13** (Pathak, `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`, stock `vllm/vllm-openai:v0.27.1`, 2026-08-19; confirmed Entry 149) |
+| *(new)* `arena_top_nvfp4_qwen36_vllm_tok_s` | — | **103.96** (`unsloth/Qwen3.6-35B-A3B-NVFP4-Fast`, Sawotin, 2026-08-11; confirmed Entry 149) |

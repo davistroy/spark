@@ -12106,3 +12106,86 @@ None across 2+ checks today. No single finding appeared independently in multipl
 | `arena_access_method` | restricted (2 docs) | **FLUCTUATING** — 229 docs in Entry 149 (2026-08-22), restricted `{}` again in Entry 150 (2026-08-23). Use direct-read method for baselines. |
 | *(new)* `arena_top_nvfp4_moe_stock_image_tok_s` | — | **125.13** (Pathak, `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`, stock `vllm/vllm-openai:v0.27.1`, 2026-08-19; confirmed Entry 149) |
 | *(new)* `arena_top_nvfp4_qwen36_vllm_tok_s` | — | **103.96** (`unsloth/Qwen3.6-35B-A3B-NVFP4-Fast`, Sawotin, 2026-08-11; confirmed Entry 149) |
+
+
+## Entry 151 - DGX Spark Recon (2026-08-24)
+
+**Date:** 2026-08-24 UTC
+**Operator:** Claude Code (spark-recon skill) — headless run, no user present
+**Status:** RECON — no changes made to the Spark system
+
+**Overall: WORTH WATCHING**
+
+No material new developments since Entry 150 (2026-08-23). All five data sources checked.
+Production baseline stable. Eval window remains open on Entry 149 actions.
+
+### Check 1 — Arena: NO ACTION (LIST restricted; FP8 baseline unchanged; recipyCopyCount +3)
+
+- **Firestore LIST returned 2 docs** (restricted again — same as Entry 150). Entry 149's 229-doc unblocked window did not reopen.
+- **sub1779297106805** (Stojanovic, FP8 vLLM, 2026-05-20): **80.272 tok/s** — confirmed unchanged. recipeCopyCount **220** (+3 from 217 in Entry 148). 10% ACTION gate (>88.30) NOT FIRED. FP8 vLLM frontier static (last submission 2026-05-26).
+- **sub1782803609803** (Poveda, NVFP4 vLLM, 2026-06-30): 118.91 tok/s — unchanged. recipeCopyCount **108** (+1 from 107 in Entry 150).
+- **sub1779495971526** (Rawat/Atlas top overall, 2026-05-23): 218.85 tok/s — unchanged. recipeCopyCount **145** (first direct read of this value).
+- **LIST-visible docs**: two `gpt-oss-120b` MXFP4 entries (sub1770622524960: 58.82 tok/s 1-node; sub1770681883769: 75.96 tok/s 2-node) — both well below 80.27 bar. MXFP4 on SM121 is watch-only.
+- No new FP8 vLLM entries above 80.27 tok/s confirmed (LIST scope too limited to rule out unknown docs).
+
+### Check 2 — vLLM: NO ACTION (v0.27.1 still latest; PR #52148 merged for FlashInfer SM12x sinks)
+
+- **Latest stable: v0.27.1 (2026-08-11)** — confirmed, no new stable release.
+- **Latest pre-release: v0.28.0rc2 (2026-08-21)** — unchanged. rc2 notes mention "DFlash2: local convolution + candidate selector"; no SM121/GB10/NVFP4 content confirmed in rc2.
+- **PR #52148 ("Fix FlashInfer SM12x prefill with sinks") MERGED 2026-08-13**: resolves the FlashInfer XQA SM12x hazard (preserving ~2.90× XQA decode gain). Our production config uses FLASH_ATTN not FlashInfer attention — not directly impacted today, but relevant for future FlashInfer attention eval. PR #51987 (the revert) is now draft/superseded.
+- PR #40099 (Gemma4 repetition detection): **still OPEN**, no progress.
+- Issue #41063 (DeepGEMM SM12.x): **still OPEN**, dormant.
+- No SM121-specific content in new releases.
+
+### Check 3 — spark-vllm-docker: WORTH WATCHING (stable bumped dev1105→dev1123; FlashInfer hash update)
+
+- **Stable vLLM bumped (Aug 23):** `prebuilt-vllm-current` = `0.26.1rc1.dev1123+gb26039b09.d20260823` (was dev1105+g040700aaa.d20260822; +18 upstream commits, still 0.26.1rc1 branch). Safe incremental drop-in.
+- **FlashInfer updated (Aug 23):** `0.6.18-2f519edc-d20260823` (was `0.6.18-8cd56793-d20260822`; same 0.6.18 version, new build commit — patch-level only).
+- **Staging dev360 (`0.27.2rc1.dev360`, Aug 21) still "Do Not Use"** — not promoted to stable.
+- No new recipes since Aug 19 commit. No repo commits since Aug 19.
+- PR #279 (DFlash+FP8 KV): dormant ~26 weeks. Eval target remains dev360 staging build.
+
+### Check 4 — Qwen/Models: NO ACTION (no new A3B-class models)
+
+- No new A3B-class MoE models from Qwen or other labs since Entry 150.
+- Qwen3.7 27B/35B: still API-only (confirmed closed-frontier).
+- Qwen4: no announcement.
+- Qwen3.8-27B + 2.4T-A95B: open weights released 2026-08-12 — already tracked in Entry 141. Dense/multi-node; not production-relevant.
+- Qwen-AgentWorld-35B-A3B: already tracked (Entry 123, Jun 23). Specialized world-model, not a general LLM replacement.
+- Community HF thread "Qwen3.8 35B A3B model, please…" exists — demand signal, no supply.
+
+### Check 5 — NVIDIA Forum: WORTH WATCHING (new /t/380995 — community fan override workaround)
+
+- 719.json + 721.json: EGRESS_BLOCKED (same as Entries 148–150). WebSearch fallback used.
+- **NEW THREAD: /t/380995** "DGX Spark fan control" (~2026-08-23/24) — community developer found software fan speed override by invoking **EC command 5 via SoC FF-A eSPI service**. Solution on GitHub, tested, forces fans to 100%. **First OS-level workaround for EC 0x03000508 fan regression** (prior workaround: EC firmware rollback only). Production impact LOW (EC 0x03000302 unaffected); informational for future OTA risk calculus.
+- **New ceiling: /t/380995** (was /t/380957 from Entry 149/150).
+- EC 0x03000508 fan regression: **STILL UNRESOLVED** (~17 weeks, case 260716-000029 OPEN). No NVIDIA response.
+- OTA2608 / EC 0x03000509: **NOT ANNOUNCED**. Hold maintained.
+- vLLM issues (#52877, #51318/#52836/#52492, #52708, #53390): no new forum activity.
+
+### Cross-Correlated Findings
+
+- svd stable bumped (dev1105→dev1123) + vLLM v0.28.0rc2 activity both confirm continued upstream build churn — mild corroboration that build pipeline is active, but no SM121-specific content cross-confirmed across two sources.
+
+### Triggered Alerts
+
+- None fired. Recon Triggers table conditions unmet.
+
+### Recommendations
+
+1. **Execute Arm C/D eval plan.** Entry 149 ACTION NEEDED classification stands: NVFP4 functional on stock vLLM 0.27.1 (Pathak Nemotron 125.13 tok/s, Sawotin Qwen3.6-NVFP4-Fast 103.96 tok/s). Eval order: (a) B12x MoE probe, (b) NVFP4 B1 probe, (c) DSpark Markov head, (d) Nemotron 3.5 Lightning, (e) Ornith-1.5.
+2. **Read /t/380995 and retrieve the GitHub repo.** The FF-A eSPI fan command-5 override is the first OS-level fan control workaround for GB10 — bookmark for insurance if OTA2608 ships a regressed EC.
+3. **Hold fwupdmgr update.** EC 0x03000508 fan regression unresolved (~17 weeks). OTA2608 not announced.
+4. **svd dev1123 is a safe drop-in from dev1105** when ready for eval session setup.
+5. **PR #52148 context:** FlashInfer XQA SM12x sinks hazard resolved in vLLM main. v0.27.1 (predates the root PR) remains the safe window for production.
+
+### Baseline Updates Applied (tracking fields only; Current Config reserved for user)
+
+| Field | Old | New |
+|---|---|---|
+| `svd_last_checked_date` | 2026-08-23 (Entry 150) | **2026-08-24 (Entry 151)**; stable = `0.26.1rc1.dev1123+gb26039b09.d20260823`; FlashInfer = `0.6.18-2f519edc-d20260823` |
+| `forum_last_checked_date` | 2026-08-23 (Entry 150) | **2026-08-24 (Entry 151)** |
+| `forum_posts_since_151` | — | **(new row)** New thread: **/t/380995** "DGX Spark fan control" (~Aug 23-24); community FF-A eSPI fan override (first OS-level workaround for EC 0x03000508); new ceiling /t/380995. EC 0x03000508: STILL UNRESOLVED (~17 weeks). OTA2608: NOT ANNOUNCED. Classification: INFO / WORTH WATCHING. |
+| `arena_top_fp8_qwen35_tok_s` | recipyCopyCount sub1779297106805 = 217 (Entry 148) | **220** (+3); sub1782803609803 = **108** (+1 from Entry 150); sub1779495971526 (Atlas) recipeCopyCount first-read = **145** |
+| `vllm_last_checked_version` | v0.27.1 (Entry 150) | **v0.27.1 (2026-08-24 re-confirmed, Entry 151)** — no new stable; v0.28.0rc2 DFlash2 mention noted; PR #52148 (FlashInfer XQA SM12x sinks fix) MERGED 2026-08-13 |
+

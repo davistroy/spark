@@ -12189,3 +12189,79 @@ Production baseline stable. Eval window remains open on Entry 149 actions.
 | `arena_top_fp8_qwen35_tok_s` | recipyCopyCount sub1779297106805 = 217 (Entry 148) | **220** (+3); sub1782803609803 = **108** (+1 from Entry 150); sub1779495971526 (Atlas) recipeCopyCount first-read = **145** |
 | `vllm_last_checked_version` | v0.27.1 (Entry 150) | **v0.27.1 (2026-08-24 re-confirmed, Entry 151)** — no new stable; v0.28.0rc2 DFlash2 mention noted; PR #52148 (FlashInfer XQA SM12x sinks fix) MERGED 2026-08-13 |
 
+
+## Entry 152 - DGX Spark Recon (2026-08-25)
+
+**Date:** 2026-08-25 UTC
+**Operator:** Claude Code (spark-recon skill) — headless run, no user present
+**Status:** RECON — no changes made to the Spark system
+
+**Overall: NO ACTION**
+
+Quiet day across all 5 checks. No new stable vLLM releases, no new SVD commits, no new Arena entries above baseline, no new Qwen A3B-class models, no new forum threads above Entry 151 ceiling. Production baseline stable. Eval window on Entry 149 actions remains open.
+
+### Check 1 — Arena: NO ACTION (LIST restricted; FP8 baseline unchanged; recipeCopyCount sub1779297106805 +1)
+
+- **Firestore LIST returned `{}`** (restricted again — same as Entries 150-151; Entry 149 229-doc window has not reopened).
+- **sub1779297106805** (Stojanovic, FP8 vLLM, 2026-05-20): **80.27 tok/s** — confirmed unchanged. recipeCopyCount **221** (+1 from 220 in Entry 151). 10% ACTION gate (>88.30) NOT FIRED. FP8 vLLM frontier static (last submission 2026-05-26).
+- **sub1782803609803** (Poveda, NVFP4 vLLM, 2026-06-30): 118.91 tok/s — unchanged. recipeCopyCount **108** (unchanged from Entry 151).
+- No new FP8 vLLM single-node entries above 80.27 tok/s confirmed (LIST scope too limited to rule out unknown docs; direct-read methodology remains correct for baselines).
+
+### Check 2 — vLLM: NO ACTION (v0.27.1 still latest stable; v0.28.0rc2 still RC; no SM121 content found)
+
+- **Latest stable: v0.27.1 (2026-08-11)** — confirmed, no new stable release since Entry 151.
+- **v0.28.0rc2 (2026-08-21)** — still latest pre-release. v0.28.0rc1 also present (~Aug 20). No v0.28.0 stable. RC notes mention DFlash2; no SM121/GB10/NVFP4 content confirmed in RC1/RC2.
+- GitHub API (api.github.com): EGRESS_BLOCKED (403 via WebFetch); MCP GitHub scope restricted to davistroy/spark only. WebSearch used as fallback.
+- PR #40099 (Gemma4 repetition detection): no new activity found. Status: still OPEN, stalled.
+- Issue #41063 (DeepGEMM SM12.x): no new activity found. Status: still OPEN, dormant.
+- No SM121-specific content in any recent releases confirmed today.
+
+### Check 3 — spark-vllm-docker: NO ACTION (no new commits since 2026-08-19; stable track unchanged)
+
+- **No new commits since 2026-08-19** (last commit: "apply-vllm-pr for launch-cluster/run-recipe", eugr, Aug 19). GitHub commits API EGRESS_BLOCKED; GitHub.com/eugr/spark-vllm-docker commits page fetched directly — confirmed no Aug 25 activity.
+- Stable track unchanged from Entry 151: `0.26.1rc1.dev1123+gb26039b09.d20260823`; FlashInfer `0.6.18-2f519edc-d20260823`.
+- Staging dev360 (`0.27.2rc1.dev360+ge85d1b69c.d20260821`) still "Do Not Use" — not promoted.
+- No new recipes since Aug 19.
+- PR #279 (DFlash+FP8 KV): still dormant (~27 weeks).
+
+### Check 4 — Qwen/Models: NO ACTION (no new A3B-class models; Qwen3.7 35B confirmed skipped generation)
+
+- No new A3B-class MoE models from Qwen or other labs found since Entry 151.
+- **Qwen3.7 35B A3B: CONFIRMED CLOSED-FRONTIER / SKIPPED GENERATION.** Search result: "Qwen 3.7 stayed closed and is now a skipped generation." Consistent with prior Watch Item. Trigger row (Qwen3.7 27B/35B open weights) can be considered dormant — no release expected.
+- Qwen3.8-2.4T-A95B open weights: already tracked in Entry 141 (HF release ~2026-08-12); 2.4T params, NOT Spark-viable. No new developments.
+- Qwen4: no announcement found.
+- No new ~30-40B-MoE/~3B-active contenders from other labs surfaced.
+
+### Check 5 — NVIDIA Forum: NO ACTION (EGRESS_BLOCKED; no new threads above /t/380995; EC regression still unresolved)
+
+- 719.json + 721.json: EGRESS_BLOCKED (same as Entries 148–151). WebSearch fallback used.
+- **No new threads above /t/380995** (Entry 151 ceiling) found. Search for /t/381xxx returned only announcement threads (Feb, Apr, Jun, Jul 2026 software updates) — no August 2026 DGX Spark Software Updates announcement published yet.
+- EC 0x03000508 fan regression: **STILL UNRESOLVED** (~17 weeks, case 260716-000029 OPEN). No NVIDIA response.
+- OTA2608 / EC 0x03000509: **NOT ANNOUNCED**. No August software update thread found. Hold maintained.
+- /t/380995 (EC command 5 fan override) remains latest indexed thread.
+
+### Cross-Correlated Findings
+
+None. No finding appeared independently in multiple sources today. All 5 checks consistent: static/quiet day.
+
+### Triggered Alerts
+
+- None fired. Recon Triggers table conditions unmet.
+
+### Recommendations
+
+1. **Execute Arm C/D eval plan.** Entry 149 ACTION NEEDED classification stands: NVFP4 functional on stock vLLM 0.27.1 (Pathak Nemotron 125.13 tok/s, Sawotin Qwen3.6-NVFP4-Fast 103.96 tok/s). Eval order: (a) B12x MoE probe, (b) NVFP4 B1 probe, (c) DSpark Markov head, (d) Nemotron 3.5 Lightning, (e) Ornith-1.5.
+2. **Hold fwupdmgr update.** EC 0x03000508 fan regression unresolved (~17 weeks). OTA2608 not announced.
+3. **svd dev1123 is a safe drop-in** when ready for eval session setup. No newer stable build available.
+4. **Qwen3.7 35B A3B confirmed skipped generation** — do not hold eval for it. Recon Trigger row for Qwen3.7 is effectively dormant.
+5. **No August DGX Spark Software Update announced yet.** When/if it appears, confirm EC version before applying (hold until OTA2608 ships a clean EC ≥0x03000509).
+
+### Baseline Updates Applied (tracking fields only; Current Config reserved for user)
+
+| Field | Old | New |
+|---|---|---|
+| `svd_last_checked_date` | 2026-08-24 (Entry 151) | **2026-08-25 (Entry 152)**; no new commits; stable still `0.26.1rc1.dev1123+gb26039b09.d20260823`; FlashInfer still `0.6.18-2f519edc-d20260823` |
+| `forum_last_checked_date` | 2026-08-24 (Entry 151) | **2026-08-25 (Entry 152)** |
+| `forum_posts_since_152` | — | **(new row)** No new threads above /t/380995 (Entry 151 ceiling). EC 0x03000508: STILL UNRESOLVED (~17 weeks). OTA2608: NOT ANNOUNCED. Classification: NO ACTION. |
+| `arena_top_fp8_qwen35_tok_s` | recipeCopyCount sub1779297106805 = 220 (Entry 151) | **221** (+1); sub1782803609803 = **108** (unchanged) |
+| `vllm_last_checked_version` | v0.27.1 (Entry 151 re-confirmed) | **v0.27.1 (2026-08-25 re-confirmed, Entry 152)** — no new stable; v0.28.0rc2 still latest RC |

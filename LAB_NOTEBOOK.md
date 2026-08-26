@@ -12265,3 +12265,101 @@ None. No finding appeared independently in multiple sources today. All 5 checks 
 | `forum_posts_since_152` | — | **(new row)** No new threads above /t/380995 (Entry 151 ceiling). EC 0x03000508: STILL UNRESOLVED (~17 weeks). OTA2608: NOT ANNOUNCED. Classification: NO ACTION. |
 | `arena_top_fp8_qwen35_tok_s` | recipeCopyCount sub1779297106805 = 220 (Entry 151) | **221** (+1); sub1782803609803 = **108** (unchanged) |
 | `vllm_last_checked_version` | v0.27.1 (Entry 151 re-confirmed) | **v0.27.1 (2026-08-25 re-confirmed, Entry 152)** — no new stable; v0.28.0rc2 still latest RC |
+
+
+## Entry 153 - DGX Spark Recon (2026-08-26)
+
+**Date:** 2026-08-26 UTC
+**Operator:** Claude Code (spark-recon skill) — headless run, no user present
+**Status:** RECON — no changes made to the Spark system
+
+---
+## ⚠ ACTION NEEDED
+
+**Two arch-guard triggers fired simultaneously:**
+1. **vLLM v0.28.0 stable released TODAY (2026-08-26)** with explicit GB10/SM121 optimizations: GB10 fused-MoE FP8 tuning configs (#52502) + FlashInfer XQA decode SM12x (#49718) + ~60% DSpark TTFT improvement from adaptive spec-token budget.
+2. **Qwen3.8-Flash-Next (125B/6B-active MoE, Qwen4 arch preview) released TODAY** — community DGX Spark thread /t/381228 already 16+ replies; memory fit on single Spark is the open question (51B N-gram embeddings complicate sizing).
+
+Both triggers require follow-up before next eval session. See Recommendations.
+
+---
+
+### Check 1 — Arena: NO ACTION (LIST partially open; FP8 baseline unchanged; new Qwen3.8-27B-NVFP4 submission at 50.77 tok/s)
+
+- Firestore LIST returned docs today (access fluctuating, as documented). Most-recent docs by descending submittedAt found.
+- **sub1779297106805** (Stojanovic, FP8 vLLM, 2026-05-20): **80.27 tok/s** — confirmed. recipeCopyCount **221** (UNCHANGED from Entry 152). 10% ACTION gate (>88.30) NOT FIRED. FP8 vLLM frontier static (last submission 2026-05-26).
+- **sub1782803609803** (Poveda, NVFP4 vLLM, 2026-06-30): recipeCopyCount **108** (UNCHANGED from Entry 152).
+- **NEW sub1787730993310** (Qwen3.8-27B-NVFP4, 2026-08-26, submitted today): **50.77 tok/s** — GDN-class, well below production 66.9 tok/s. Confirms GDN models are bandwidth-limited on GB10 regardless of quant scheme. Informational.
+- **NEW sub1787668632732** (NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4, vLLM-Ray, ~2026-08-25): multi-node only; not production-relevant.
+- No new FP8 Qwen3.6-35B-A3B entries above 80.27 tok/s.
+
+### Check 2 — vLLM: ACTION (arch-guard FIRED — v0.28.0 stable released 2026-08-26 with GB10/SM121 content)
+
+- **v0.28.0 STABLE RELEASED 2026-08-26** (584 commits, 270 contributors). GitHub API EGRESS_BLOCKED; confirmed via releases page WebFetch.
+- **SM121/GB10 content — ARCH-GUARD TRIGGERS:**
+  - **PR #52502: "GB10 fused-MoE FP8 tuning configs"** — dedicated MoE dispatch tuning configurations for GB10/SM121 (previously only default Triton configs). This is the first upstream-committed GB10-specific MoE tuning since production was established.
+  - **PR #49718: "FlashInfer XQA decode support on SM12x"** — XQA (cross-query attention) decode kernel on SM12x (covers SM121). Potentially improves attention decode throughput.
+  - **"adaptive speculative token budget delivering ~60% better DSpark TTFT"** — explicit DGX Spark spec decode TTFT optimization. Mechanism: variable-length spec tokens vs fixed MTP=2 window.
+  - **"top-k DSpark Markov projection (#49969)"** — carried from v0.27.0, part of DSpark Markov speculative decode suite.
+  - **"NVFP4 batch-invariant MoE via CUTLASS"** — Blackwell native FP4 MoE path improvement.
+  - **"DFlash2 with local convolution, confidence-scheduled verification"** — next-gen block diffusion spec decode.
+- PR #40099 (Gemma4 repetition detection): no new status found; assumed still OPEN.
+- Issue #41063 (DeepGEMM SM12.x): no new status found; assumed still OPEN/dormant.
+
+### Check 3 — spark-vllm-docker: WORTH WATCHING (new stable build dev1188; +65 dev commits over Entry 152's dev1123)
+
+- **New stable build**: `0.26.1rc1.dev1188+gd9fbe526c.d20260825` (released Aug 25, 11:45 UTC).
+  - **Bumped from dev1123 (+65 dev commits)**; labeled "New stable build" in release notes.
+  - FlashInfer version not specified in release notes (assumed unchanged at `0.6.18-2f519edc-d20260823` until confirmed otherwise).
+  - No new recipes noted. "2 commits to main since the release" at time of search — further dev build may follow.
+- This build is still on the `0.26.1rc1` vLLM track (does NOT include v0.27.x or v0.28.0 content yet). Watch for v0.28.x-based build; the GB10 fused-MoE tuning configs (#52502) will only be available once SVD integrates v0.28.0.
+
+### Check 4 — Qwen/Models: WORTH WATCHING (Qwen3.8-Flash-Next released TODAY; memory fit uncertain)
+
+- **Qwen3.8-Flash-Next released 2026-08-26** (11 PM Beijing = ~15:00 UTC):
+  - Architecture: 125B total / **6B active** MoE + **51B N-gram embeddings**, GDN hybrid layers + Qwen Sparse Attention; described as "next-generation Qwen4 architecture preview."
+  - Versions: BF16 and FP8; NVFP4 not confirmed at time of recon.
+  - **Memory concern — UNRESOLVED**: 51B N-gram embedding table fate is the key unknown. If fully resident in BF16: ~102 GB for embeddings alone. FP8 main model 125B × 1 byte = 125 GB. Combined > 200 GB — would NOT fit single Spark (128 GB). If N-gram embeddings are handled as sparse/hashed lookup with smaller per-entry footprint, fit may be possible. Community describes as "perfect for Spark" but no FP8/NVFP4 memory measurement published yet.
+  - **Architecture concern**: "GDN hybrid layers" — same GDN class as Qwen3.8-27B (dense, bandwidth-limited on GB10, ~50 tok/s per Arena sub1787730993310 today). If GDN layers dominate the active compute path, throughput could be bandwidth-limited even at 6B active.
+  - HF card `Qwen/Qwen3.8-Flash-Next` existed as "Upcoming release" at recon time; checkpoint availability to confirm.
+  - NVFP4 support in vLLM for this architecture: unknown (Qwen4-arch is new).
+  - **DO NOT schedule eval without: (1) confirming FP8/NVFP4 checkpoint memory under 110 GB at gpu_util=0.70; (2) confirming vLLM loads without error on SM121.**
+- **No new A3B-class MoE** (not GDN-hybrid) models from Qwen or other labs.
+- Qwen3.7: confirmed closed/skipped generation (stable signal, no change).
+- Qwen4: no announcement; Qwen3.8-Flash-Next is the Qwen4 arch preview only.
+
+### Check 5 — NVIDIA Forum: WORTH WATCHING (new thread /t/381228 above Entry 151 ceiling; EC regression still unresolved)
+
+- 719.json + 721.json: EGRESS_BLOCKED (same as prior entries). WebSearch fallback used.
+- **NEW /t/381228** "Qwen3.8-Flash-Next" (~2026-08-26, within hours of model release) — 16+ replies at time of search; community actively discussing DGX Spark compatibility and memory fit. New ceiling: **/t/381228**.
+- No new OTA2608 announcement found. No August 2026 DGX Spark Software Update thread found.
+- EC 0x03000508 fan regression: **STILL UNRESOLVED** (~18 weeks, case 260716-000029 OPEN). Production (EC 0x03000302) unaffected.
+- Hold on `fwupdmgr update` maintained. No new driver/firmware crisis.
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-Flash-Next (Check 4) × Forum /t/381228 (Check 5)**: Model released and community immediately opened DGX Spark thread with 16+ replies — confirms high community interest; memory fit question likely to be answered within 24–48h on that thread.
+2. **vLLM v0.28.0 (Check 2) × SVD dev1188 (Check 3)**: Upstream v0.28.0 release + active SVD build pipeline (dev1188 just shipped) — SVD v0.28.x build is likely the next major SVD milestone; watch `eugr/spark-vllm-docker` releases for a v0.28.0-based prebuilt.
+3. **Arena Qwen3.8-27B-NVFP4 50.77 tok/s (Check 1) × Qwen3.8-Flash-Next GDN concern (Check 4)**: Independent data point confirming GDN models are throughput-limited on Spark (~50 tok/s at NVFP4 vs production 66.9 tok/s FP8). If Qwen3.8-Flash-Next has heavy GDN content in its active path, throughput may be similar — tempers "Spark-perfect" community enthusiasm.
+
+### Triggered Alerts
+
+1. **vllm_release | arch-guard FIRED (HIGH)**: v0.28.0 contains GB10 fused-MoE FP8 tuning configs (#52502) + FlashInfer XQA SM12x (#49718) + DSpark TTFT improvement. Action: (a) track SVD for v0.28.x-based prebuilt; (b) when available, test GB10 MoE tuning impact on production FP8 config; (c) do NOT upgrade production until eval validates.
+2. **huggingface | New model FIRED (WORTH WATCHING)**: Qwen3.8-Flash-Next 125B/6B-active released today with Qwen4 arch. Memory fit uncertain (51B N-gram table). Action: (a) monitor /t/381228 for FP8/NVFP4 memory measurements; (b) add to eval queue only after fit confirmed AND vLLM SM121 compatibility confirmed.
+
+### Recommendations
+
+1. **Monitor /t/381228** over next 24–48h for community memory measurements on Qwen3.8-Flash-Next FP8/NVFP4. If fit confirmed (<110 GB at gpu_util=0.70) and vLLM loads on SM121, add as eval step (f) after current Arm C/D plan.
+2. **Watch SVD for v0.28.x build.** vLLM v0.28.0's GB10 fused-MoE tuning (#52502) is directly relevant to production throughput. Add eval step: benchmark GB10 tuning delta on Qwen3.6-35B-A3B-FP8 vs current Triton defaults.
+3. **Execute Arm C/D eval plan (Entry 148 ACTION, still standing).** NVFP4 functional on vLLM 0.27.1. Eval target: SVD dev1188 (or wait for dev360 promotion / v0.28.x build if imminent). Eval order: (a) B12x MoE probe, (b) NVFP4 B1 probe, (c) DSpark Markov head, (d) Nemotron 3.5 Lightning, (e) Ornith-1.5, (f) Qwen3.8-Flash-Next if memory fit confirmed.
+4. **Hold fwupdmgr update.** EC 0x03000508 fan regression unresolved (~18 weeks). OTA2608 not announced.
+5. **svd dev1188** is the current safe stable. FlashInfer version to be confirmed on next eval session start.
+
+### Baseline Updates Applied (tracking fields only; Current Config reserved for user)
+
+| Field | Old | New |
+|---|---|---|
+| `vllm_last_checked_version` | v0.27.1 (Entry 152 re-confirmed) | **v0.28.0 STABLE (2026-08-26, Entry 153)** — ARCH-GUARD FIRED: GB10 fused-MoE FP8 tuning (#52502), FlashInfer XQA SM12x (#49718), ~60% DSpark TTFT. 584 commits, 270 contributors. v0.28.0rc1 (Aug 20) and rc2 (Aug 21) were the prior pre-releases. PR #40099 and Issue #41063: no new status. |
+| `svd_last_checked_date` | 2026-08-25 (Entry 152) | **2026-08-26 (Entry 153)**; new stable build `0.26.1rc1.dev1188+gd9fbe526c.d20260825` (released Aug 25, 11:45 UTC; +65 dev commits over dev1123). FlashInfer: assumed unchanged at `0.6.18-2f519edc-d20260823`. |
+| `forum_last_checked_date` | 2026-08-25 (Entry 152) | **2026-08-26 (Entry 153)** |
+| `forum_posts_since_153` | — | **(new row)** NEW /t/381228 "Qwen3.8-Flash-Next" (~2026-08-26, 16+ replies): community immediately discussing DGX Spark compatibility and memory fit. New ceiling: /t/381228. EC 0x03000508: STILL UNRESOLVED (~18 weeks). OTA2608: NOT ANNOUNCED. Classification: WORTH WATCHING. |

@@ -1,7 +1,7 @@
 # Spark Performance Baseline
 
-Last updated: 2026-08-26 (Entry 153 — spark-recon, all 5 checks)
-Last recon: 2026-08-26 (Entry 153)
+Last updated: 2026-08-28 (Entry 155 — spark-recon, all 5 checks)
+Last recon: 2026-08-28 (Entry 155)
 Last audit: 2026-05-09 (Entry 062)
 Last benchmark: 2026-05-18 (Entries 070-072 — three-model comparative eval, 50h study)
 
@@ -121,7 +121,7 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 | arena_top_nvfp4_vllm_tok_s | **118.91 on PORTABLE vLLM** (Luis Poveda, `nvidia/Qwen3.6-35B-A3B-NVFP4`, sub1782803609803, 2026-06-30; **confirmed via automated Firestore check Entry 129**). +78% vs prod 66.9, +48% vs FP8-vLLM 80.27. Second: Hon Lam Gabriel Leung 98.43 tok/s (sub1784993080195, 2026-07-25). Prior note "manual recon only (Entry 094)" is superseded — routine Firestore check now successfully retrieves this data. |
 | arena_top_hybrid_tok_s | 108-125 synthetic, ~80 sustained (INT4+FP8 hybrid + MTP=2) — stale 2026-04-30 capture |
 | arena_top_overall_tok_s | **FULLY RESOLVED (2026-08-03 Entry 129):** 188 docs covering through 2026-08-02. **DATE CORRECTION:** The "July-era Atlas 218.85 (Rajendra Rawat, 2026-07-16)" referenced in Entries 123-128 is **sub1779495971526 dated 2026-05-23** — a May submission misattributed to July in prior tracking. No separate July-16 Rawat Atlas entry exists. Top single-node overall: **218.85 tok/s** (sub1779495971526, Atlas/avarok/atlas-gb10:latest, Qwen3.6-35B-A3B-NVFP4, Rajendra Rawat, 2026-05-23). Second: 217.37 (sub1778912561290, Atlas, Raphael Amorim, 2026-05-16). Third: 172.03 (sub1779640157109, Atlas FP8, Walczak, 2026-05-24). Top vLLM (35B+): **118.91 tok/s** NVFP4 (Poveda, sub1782803609803, 2026-06-30) or **80.27 tok/s** FP8. Note: Atlas pp2048 score anomalous (~150× vLLM equivalent) — tg128 decode may be valid but methodology differs from vLLM. |
-| arena_top_overall_entry | **CORRECTED (Entry 129):** Top overall: sub1779495971526 (Atlas, Qwen3.6-35B-A3B-NVFP4, 218.85 tok/s, Rajendra Rawat, **2026-05-23** — NOT 2026-07-16 as prior entries stated). Second: sub1778912561290 (Atlas NVFP4, 217.37, Amorim, 2026-05-16). July gap fully resolved; all entries through Aug 2 visible. |
+| arena_top_overall_entry | **CORRECTED (Entry 129):** Top overall: sub1779495971526 (Atlas, Qwen3.6-35B-A3B-NVFP4, 218.85 tok/s, Rajendra Rawat, **2026-05-23** — NOT 2026-07-16 as prior entries stated). Second: sub1778912561290 (Atlas NVFP4, 217.37, Amorim, 2026-05-16). July gap fully resolved; all entries through Aug 2 visible. recipeCopyCount: **147** (+2 since Entry 154; confirmed 2026-08-28). |
 | arena_top_overall_multinode | gpt-oss-120b (MXFP4, 2-node) — 75.96 tok/s (informational only, stale 2026-04-30) |
 | arena_top_nvfp4_moe_stock_image_tok_s | **125.13** (Pathak, `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`, stock `vllm/vllm-openai:v0.27.1`, 2026-08-19; confirmed Entry 149). DSpark n=3 spec decode, `--moe-backend marlin --kv-cache-dtype fp8 --mamba-backend flashinfer --mamba-cache-mode align --enable-prefix-caching`, gpu_util 0.80. Second: Hupało 119.64 (n=5, gpu_util 0.85). This is +87% vs prod 66.9 on a **stock unmodified upstream image** — confirms NVFP4 eval gate cleared. |
 | arena_top_nvfp4_qwen36_vllm_tok_s | **103.96 ± 13.72** (Sawotin, `unsloth/Qwen3.6-35B-A3B-NVFP4-Fast`, 2026-08-11; confirmed Entry 149). Env: `CUTE_DSL_ARCH=sm_121a`, `--moe-backend flashinfer_b12x --attention-backend flashinfer --kv-cache-dtype fp8 --async-scheduling --load-format fastsafetensors`, MTP=3, gpu_util 0.70. +55% vs prod 66.9. **Our exact model family in NVFP4 form.** |
@@ -143,7 +143,8 @@ Ghost requests: **zero** after power cycle (were 3 persistent before). Power cyc
 ## Forum Tracking
 | Field | Value |
 |-------|-------|
-| forum_last_checked_date | **2026-08-27 (Entry 154; 719.json + 721.json EGRESS_BLOCKED — WebSearch fallback.)** |
+| forum_last_checked_date | **2026-08-28 (Entry 155; 719.json + 721.json EGRESS_BLOCKED — WebSearch fallback.)** |
+| forum_posts_since_155 | No new threads above /t/381337 (Entry 154 ceiling unchanged). OTA2608: **NOT ANNOUNCED** (August cadence overdue). EC 0x03000508 fan regression: **STILL UNRESOLVED** (~20 weeks, case 260716-000029 OPEN). Driver 580.173.02 (/t/378200): still open. Production (EC 0x03000302) unaffected. Classification: NO ACTION. |
 | forum_posts_since_154 | **NEW /t/381337** "Qwen 3.8 Flash Next" (Projects, ~2026-08-27) + **NEW /t/381267** "Future of the DXG Spark" (~Aug 26-27, 2+ pages; community discussing Apple M5 Mac Studio 256GB competitive pressure). New ceiling: **/t/381337**. No OTA2608 found. EC 0x03000508: **STILL UNRESOLVED** (~19 weeks, case 260716-000029 OPEN). Classification: WORTH WATCHING. |
 | forum_posts_since_153 | **NEW /t/381228** "Qwen3.8-Flash-Next" (~2026-08-26, 16+ replies): community actively discussing DGX Spark compatibility and memory fit for the new 125B/6B-active MoE. New ceiling: **/t/381228**. EC 0x03000508: **STILL UNRESOLVED** (~18 weeks, case 260716-000029 OPEN). OTA2608: NOT ANNOUNCED. Classification: WORTH WATCHING. |
 | forum_posts_since_152 | No new threads above /t/380995 (Entry 151 ceiling) found (Entry 152, 2026-08-25). EC 0x03000508 fan regression: **STILL UNRESOLVED** (~17 weeks, case 260716-000029 OPEN). OTA2608: NOT ANNOUNCED. No August 2026 DGX Spark Software Update thread found yet. Classification: NO ACTION. |

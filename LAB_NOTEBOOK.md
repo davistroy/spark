@@ -12430,3 +12430,79 @@ Both triggers require follow-up before next eval session. See Recommendations.
 | `svd_last_checked_date` | 2026-08-26 (Entry 153) | **2026-08-27 (Entry 154)**; new stable `0.26.1rc1.dev1231+g7a9993878.d20260826` (Aug 26 12:10 UTC, +43 dev commits). FlashInfer: `0.6.18-083012d6-d20260825` (hash confirmed; Entry 153 had assumed `0.6.18-2f519edc-d20260823`). |
 | `forum_last_checked_date` | 2026-08-26 (Entry 153) | **2026-08-27 (Entry 154)** |
 | `forum_posts_since_154` | — | **(new row)** NEW /t/381337 "Qwen 3.8 Flash Next" (Projects, ~Aug 27) + /t/381267 "Future of DXG Spark" (community discussion, ~Aug 26-27, 2+ pages). New ceiling: /t/381337. No OTA2608. EC fan regression STILL UNRESOLVED (~19 weeks). Classification: WORTH WATCHING. |
+
+---
+
+## Entry 155 - DGX Spark Recon (2026-08-28)
+
+**Date:** 2026-08-28 UTC
+**Operator:** Claude Code (spark-recon skill, automated)
+**Status:** RECON — no changes made to production system
+
+### Check 1 — Arena: NO ACTION (baseline static; LIST paginated; +2 Atlas copy count)
+
+- LIST returned 2 documents (old Feb-2026 gpt-oss-120b MXFP4 entries; paginated, limited view).
+- Direct reads: sub1779297106805 (Stojanovic, FP8 80.27 tok/s) recipeCopyCount = **221** (unchanged). sub1782803609803 (Poveda, NVFP4 118.91) = **108** (unchanged). sub1779495971526 (Rawat, Atlas NVFP4 218.85) = **147** (+2 from 145 — minor organic interest).
+- Stojanovic doc `lastUpdated: 2026-08-27` (metadata touch, no content change).
+- 10% trigger (>88.30 tok/s FP8 single-node vLLM): **NOT fired**. No new FP8 Qwen3.6-35B-A3B single-node entries visible.
+- Top overall: Atlas NVFP4 218.85 tok/s (Rawat) — confirmed unchanged.
+
+### Check 2 — vLLM Releases: NO NEW RELEASE (v0.28.0 remains latest; already arch-guard-fired in Entry 153)
+
+- Latest stable: **v0.28.0** (2026-08-26) — same as baseline captured in Entry 153. No new release.
+- PR #40099 (Gemma4 repetition detection): **OPEN**, ~51 days stale (last activity July 8). Still blocks Gemma4 structured-output experiment.
+- Issue #41063 (DeepGEMM SM12.x): **OPEN**, last updated 2026-08-14.
+- No new HIGH-priority items beyond what Entry 153 already documented.
+
+### Check 3 — spark-vllm-docker: NO ACTION (no new builds or commits since Aug 27)
+
+- Stable `prebuilt-vllm-current` unchanged: `0.26.1rc1.dev1231+g7a9993878.d20260826` (Aug 26 12:10 UTC).
+- No new commits since e9cf359 "adjust cudagraph patch for newer vLLM" (Aug 27 02:11 UTC).
+- Still on 0.26.1rc1 track. v0.28.x-based prebuilt has NOT appeared.
+- FlashInfer: `0.6.18-083012d6-d20260825` — unchanged.
+
+### Check 4 — Qwen Model Check: NO NEW MODELS (Qwen4 still pre-announcement; Qwen3.7 permanently dead)
+
+- **No new Spark-actionable models.**
+- Qwen4: NOT released. Qwen3.8-Flash-Next (Aug 26, already tracked/CLOSED) confirmed as Qwen4 architecture preview. Full Qwen4 expected September 2026 Apsara Conference.
+- Qwen3.7 open weights: **permanently dead** — Alibaba skipped Qwen3.7 entirely; generation will never receive open weights.
+- Qwen3.8-Max: open weights confirmed at 2.4T total / 95B active params — unrunnable on single Spark.
+- Soofi S 30B-A3B (Soofi Consortium, July 15): hybrid Mamba-Transformer MoE, German/English bilingual, research model — not a production candidate; no SM121 validation.
+
+### Check 5 — NVIDIA Forum: NO ACTION (no new threads; OTA2608 still not announced; ~20 weeks EC regression open)
+
+- Both 719.json + 721.json EGRESS_BLOCKED. WebSearch fallback used.
+- **No new threads above /t/381337** (Entry 154 ceiling unchanged).
+- OTA2608 (August 2026 DGX Spark Software Update): **NOT announced**. Monthly cadence (Feb, Mar, Apr, Jun, Jul) makes August overdue.
+- EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED** (~20 weeks). Community workaround (EC command 5 / FF-A eSPI software fan override, /t/380995) still the only mitigation. Production (EC 0x03000302) unaffected.
+- Driver 580.173.02 (/t/378200): still open, no resolution.
+- /t/381271 "FE firmware staging issue — USB-C PD capsule never attempted since Feb" surfaced (below ceiling; informational for FE hardware SKU owners).
+- New ceiling: **/t/381337** (unchanged).
+
+### Cross-Correlated Findings
+
+1. **vLLM v0.28.0 already-known arch-guard (Check 2) × SVD quiet (Check 3)**: No new SVD prebuilt and no new vLLM release = the path to GB10 MoE tuning (#52502) remains blocked on the SVD v0.28.x build. Consistent picture: watch item standing, no action today.
+2. **Qwen4 September timeline (Check 4) × Forum quiet (Check 5)**: Forum shows no early Qwen4 community activity; consistent with pre-announcement quiet period. Next model watch event is the Apsara Conference (~September 2026).
+3. **Arena LIST paginated (Check 1)**: Only 2 of potentially 230+ docs surfaced via LIST — confirms the LIST access methodology remains unreliable for coverage; direct-read methodology on known sub IDs continues to be the correct approach for baseline tracking.
+
+### Triggered Alerts
+
+None. All 5 checks quiet. No new releases, no new models, no forum escalations. Previously-fired arch-guard (v0.28.0, Entry 153) remains standing — no escalation or de-escalation.
+
+### Overall: NO ACTION
+
+### Recommendations
+
+1. **No operational changes needed today.** Landscape unchanged from Entry 154. Standing recommendations carry forward.
+2. **Watch SVD for v0.28.x-based prebuilt** — the cudagraph patch (e9cf359, Aug 27) signals active work; next stable build is the vehicle for GB10 fused-MoE tuning (#52502).
+3. **Execute Arm C/D eval plan when window opens.** Target: dev1231 (current stable) or v0.28.x build if it drops before the eval window. Order: (a) B12x MoE probe, (b) NVFP4 B1 probe, (c) DSpark Markov head, (d) Nemotron 3.5 Lightning, (e) Ornith-1.5.
+4. **Hold `fwupdmgr update`.** EC fan regression (~20 weeks open). OTA2608 not yet announced despite being overdue.
+5. **Watch for Qwen4 open-weight announcement** at September 2026 Apsara Conference — if A3B-class MoE variant exists, it becomes the primary eval candidate.
+
+### Baseline Updates Applied (tracking fields only; Current Config reserved for user)
+
+| Field | Old | New |
+|---|---|---|
+| `forum_last_checked_date` | 2026-08-27 (Entry 154) | **2026-08-28 (Entry 155)** |
+| `forum_posts_since_155` | — | **(new row)** No new threads above /t/381337 (Entry 154 ceiling unchanged). OTA2608 NOT announced (overdue). EC 0x03000508 fan regression STILL UNRESOLVED (~20 weeks). Classification: NO ACTION. |
+| `arena_top_overall_entry` (copy count) | sub1779495971526 recipeCopyCount 145 | **147** (+2; minor organic interest; metadata-only update) |

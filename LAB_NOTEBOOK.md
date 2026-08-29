@@ -12592,3 +12592,252 @@ Primary reason: Qwen3.8-35B-A3B imminent (ms-swift commit found; HF weights expe
 | `forum_posts_since_155` | — | **(new row)** NEW /t/381429 "GLM-5.3-Flash on 2x DGX Spark 43.4 tok/s" + /t/381541 "GLM-5.3-Flash-NVFP4 on 2x dgx-spark TP=2 docker compose" — both 2-node only, NOT single-node candidates. New ceiling: /t/381541. OTA2608 NOT announced (~21 weeks). EC 0x03000508 fan regression STILL UNRESOLVED (~21 weeks). Classification: WORTH WATCHING. |
 | `arena_top_fp8_qwen35_tok_s` (copy count) | sub1779297106805 recipeCopyCount 221 | **226** (+5; no performance change; metadata-only update) |
 | `arena_top_overall_entry` (copy count) | sub1779495971526 recipeCopyCount 147 | **148** (+1; Atlas NVFP4 218.85 unchanged) |
+
+---
+
+## Entry 157 - DGX Spark Recon (2026-08-29, weekly)
+
+**Date:** 2026-08-29 UTC
+**Operator:** Claude Code (spark-recon skill) — headless weekly run, no user present
+**Status:** RECON — no changes made to the Spark system
+
+Weekly run, following the daily Entry 156 earlier the same day. Entry 156 ran with the GitHub
+API, Firestore LIST, and both forum JSON endpoints blocked, and fell back to WebSearch. **This
+run got HTTP 200 on all of them**, so several Entry 156 conclusions are now confirmed from
+primary sources and two are corrected.
+
+### Check 1 — Arena: NO ACTION (FP8 frontier static ~14 weeks; one new non-competitive submission)
+
+Direct Firestore reads, all three tracked baselines HTTP 200:
+
+| Doc ID | Submitter | Model | Runtime | tg128 c1 | copyCount | Δ vs E156 |
+|---|---|---|---|---|---|---|
+| sub1779297106805 | Stojanovic | Qwen3.6-35B-A3B-FP8 | vLLM | **80.27 ± 22.89** | 226 | unchanged |
+| sub1782803609803 | Poveda | nvidia/Qwen3.6-35B-A3B-NVFP4 | vLLM | **118.91 ± 6.54** | 108 | unchanged |
+| sub1779495971526 | Rawat | RedHatAI/Qwen3.6-35B-A3B-NVFP4 | Atlas | **218.85 ± 13.63** | **149** | **+1** |
+
+- **10% trigger (>88.30 tok/s single-node vLLM FP8): NOT FIRED.** FP8 vLLM c1 frontier static
+  since 2026-05-26 — now ~14 weeks.
+- **[RESOLVED] Entry 135 recipe-description discrepancy.** Full recipe blob read back:
+  name `Qwen3.6-35B-A3B-FP8-DFLASH-FlashQLA`, quant FP8, spec method **DFlash n=8**, attention
+  backend flash_attn, max ctx 262,144, env `VLLM_MARLIN_USE_ATOMIC_ADD=1`. Both the baseline
+  note ("DFlash + MARLIN_ATOMIC_ADD=1") and the `description` field ("DFlash n8 + FlashQLA")
+  were correct — they quote different fields of the same document. No drift. Close this item.
+- **Firestore LIST partially unblocked** (1 doc at `pageSize=50&orderBy=submittedAt desc`; not
+  the 229-doc full window of Entry 149). Returned one previously untracked submission:
+  **sub1788015768553 — Juan El Grande, `Qwen3.8-Flash-Next-NVFP4`, SGLang, tg128 c1 = 34.47 ±
+  1.08 tok/s.** Below production (66.9) and far below the FP8 vLLM frontier (80.27). Not a
+  contender; recorded for the Flash-Next cross-correlation below.
+- No new FP8 Qwen3.6-35B-A3B single-node vLLM submissions. Top overall unchanged (Atlas NVFP4).
+
+### Check 2 — vLLM Releases: NO NEW RELEASE (v0.28.0 latest; arch-guard content now verified first-hand)
+
+GitHub releases API returned HTTP 200 this run (Entry 156 got 403 and used WebSearch). Latest
+stable remains **v0.28.0, published 2026-08-26T09:46:30Z**. No v0.29.x.
+
+Entry 153's arch-guard items are now confirmed verbatim from the release notes, plus three the
+WebSearch fallback had missed:
+
+| PR | Item | Relevance |
+|---|---|---|
+| #52502 | GB10 fused-MoE FP8 tuning configs | **HIGH** — our exact SoC + quant + MoE path |
+| #49718 | FlashInfer XQA decode support on SM12x | **HIGH** — our arch |
+| #49390 | Blackwell CUDA graph capture default raised to 1024 | MEDIUM — new |
+| #50062 | Multi-layer MTP KV cache support | MEDIUM — our spec-decode method; new |
+| #52816 | DFlash2 with local convolution and a candidate selector | MEDIUM — new; see cross-corr 4 |
+| #50991 | Prefix caching enabled by default for Mamba models | LOW |
+| #44570 | CT WN16 Marlin/MoE methods merged | LOW |
+
+Arch-guard from Entry 153 **stands, not escalated** — it is gated on a runnable image, not on
+the release existing (Check 3).
+
+### Check 3 — spark-vllm-docker: NO ACTION (no new build; v0.28.x still blocked on cudagraph patch)
+
+- Stable `prebuilt-vllm-current` = **`0.26.1rc1.dev1231+g7a9993878.d20260826`** (2026-08-26
+  12:10 UTC). **Unchanged** — confirmed from the releases API directly, not WebSearch.
+- FlashInfer `0.6.18-083012d6-d20260825` (2026-08-25). Unchanged.
+- Latest commit still **e9cf359 (2026-08-27) "adjust cudagraph patch for newer vLLM"** — no new
+  commits in ~2 days. The v0.28.x prebuilt remains blocked on exactly this.
+- Newly noted from the commit sweep (not previously logged): **0e943a4 (2026-08-21) "add b12x to
+  regular builds"** — the b12x branch is now in regular builds, which materially lowers the cost
+  of standing eval-plan step (a). Also 04d8c94 (08-17) RadixArk DSpark checkpoint for Qwen3.8-27B,
+  and 957c47e (08-24) regression fix for vLLM PR 53306.
+
+### Check 4 — Qwen Models: WORTH WATCHING (Qwen3.8-35B-A3B still not released — day 3)
+
+Queried the HF API for the Qwen org directly (`?author=Qwen&sort=createdAt&direction=-1`),
+rather than WebSearch. Complete August 2026 release list from the Qwen org:
+
+| Model | Created |
+|---|---|
+| Qwen/Qwen3.8-Flash-Next, Qwen/Qwen3.8-Flash-Next-FP8 | 2026-08-24 |
+| Qwen/Qwen3.8-27B-FP8 | 2026-08-13 |
+| Qwen/Qwen3.8-2.4T-A95B, Qwen/Qwen3.8-2.4T-A95B-FP8 | 2026-08-08 |
+
+- **`Qwen/Qwen3.8-35B-A3B` and `-FP8` do NOT exist.** Confirmed by API enumeration, not
+  inference from search results. The ms-swift architecture commit (Entry 156) has still not been
+  followed by weights. Third consecutive day on watch. Community demand thread still open on the
+  `Qwen3.8-2.4T-A95B` page ("We are waiting for 35B A3b model qwen 3.8!").
+- Qwen4: no announcement. September 2026 Apsara Conference remains the expected trigger.
+- No new A3B-class (~30-40B MoE / ~3B active) models from other labs this week.
+
+### Check 5 — NVIDIA Forum: WORTH WATCHING (egress RESTORED; 6 new threads above ceiling; two high-value findings)
+
+`719.json` returned HTTP 200 (Entry 156: EGRESS_BLOCKED). Full topic listing retrieved.
+
+**New above the Entry 156 ceiling (/t/381541):**
+
+| Topic | Title | Created |
+|---|---|---|
+| /t/381767 | Fieldiag CX7 prerequisites connectivity issue | 2026-08-29 |
+| /t/381755 | GLM-5.3 (743B) Int4-Int8Mix on 4x DGX Spark | 2026-08-29 |
+| /t/381746 | 2x GB10 — nccl-tests won't build | 2026-08-28 |
+| /t/381733 | Is there a way to configure auto-on when power restored? | 2026-08-28 |
+| /t/381720 | Qwen3.8-Flash-Next with llama.cpp performance | 2026-08-28 |
+| /t/381703 | GLM-5.3-Flash + DFlash2 on SGLang — 2x DGX Spark | 2026-08-28 |
+
+**New ceiling: /t/381767.**
+
+**[ACTION-GRADE FINDING 1] /t/381415 "Shutdowns after prolonged inference" — root-causes our own
+2026-08-03 incident class.** Symptom: unit shuts down hard after 6-8 h of sustained inference,
+same unit repeatedly while others are fine. User Balaxxe's analysis: this is an **embedded-
+controller / USB-C-PD power-protection cut, not a kernel, thermal, or memory event** — no
+thermal trip, no kernel panic, no crash dump, and it fires *below OS-visible thresholds*, at a
+measured **150–185 W draw on a 240 W supply**. Hypothesis: "the EC or PD protection threshold is
+set too tight for units on the low end of the tolerance band, and load transients trip it."
+Affected firmware in-thread: SBIOS 5.36_1.8.0, EC 10800, USB-C PD 522. NVIDIA (Aniculescu)
+requested `nvidia-bug-report.sh` output; **no fix, no firmware update announced.**
+This is the same signature as our 2026-08-03 event (fully dead — no lights, no fans — then
+recovered on its own) and is consistent with Entry 149's fan defect being root-caused to power
+draw. See cross-correlation 1.
+
+**[ACTION-GRADE FINDING 2] /t/381733 closes our documented "no remote power-cycle" gap.**
+Auto-power-on after AC restore is a **built-in BIOS setting**, not a missing feature:
+**hold `Delete` during power-on → Advanced > Power On Behavior.** User M0l0 reports it working
+for months on a GX10; JasonW reports it is on by default on ASUS GX10; equivalents confirmed on
+MSI EdgeXpert and Acer GN100. No NVIDIA staff reply, but multiple independent confirmations.
+Alternative offered for units lacking it: GL.iNet Comet + Fingerbot. This means a plain switched
+outlet is sufficient for remote recovery — the Shelly Plug purchase (never set up, per
+`spark-outage-2026-08-03`) is no longer the blocking dependency.
+
+**[CORRECTION to Entry 154] /t/381519 + /t/381500 reopen the Qwen3.8-Flash-Next gate.**
+Entry 154 closed Flash-Next as "eval gate CLOSED (FP8 172.78 GiB > 128 GB single Spark)". That
+was correct **for FP8 only**. /t/381519 "Qwen3.8-Flash-Next 180B, Single Solo DGX Spark" (29
+posts) documents the 180B model running on **one** Spark at the full 262,144-token context using
+**HashK-PLE NVFP4 MoE-expert quantization** on **SGLang**, reportedly compressing components
+standard quantizers cannot reach. Reported: **~30–35 tok/s**, tool-eval-bench **87/100**, median
+response 4.8 s. Known issues: model-download bugs and an SGLang start-up corruption the author
+committed to fixing. Companion threads /t/381500 (NVFP4 single spark) and /t/381497 (Flash-Next
+NVFP4 vs GLM-5.3-Flash NVFP4).
+**Revised verdict: the gate is open on memory but fails on throughput** — ~30–35 tok/s is
+roughly **half** our production 66.9 tok/s, on a non-vLLM runtime, at a much larger parameter
+count. Not a production candidate. Reclassify from "closed — does not fit" to "fits, rejected on
+throughput," which is a different and more durable reason.
+
+**Other:**
+- GLM-5.3 cluster activity continues to scale (/t/381755 = 743B on 4×; /t/381703 = Flash + DFlash2
+  on 2×). All **multi-node**; none is a single-node candidate.
+- /t/380584 "DGX Spark Overheating While Idle, System Freezes" active — consistent with the
+  EC/fan/power-margin cluster.
+- **OTA2608 (August 2026 software update): still NOT announced** (~21 weeks past cadence).
+- **EC 0x03000508 fan regression (case 260716-000029): still UNRESOLVED** (~21 weeks). Production
+  is on EC 0x03000302 and unaffected.
+
+### Cross-Correlated Findings
+
+1. **Power-delivery margin is now a three-source finding, not a one-off.** Our 2026-08-03 dead-
+   Spark event (Entries 116-118) + Entry 149's fan defect root-caused to power draw + /t/381415's
+   independent EC/PD-cut analysis at 150–185 W on a 240 W supply all converge on the same failure
+   class: **the power-protection threshold trips on load transients, below anything the OS can
+   see.** Our own incident stops looking like an unexplained one-off. Practical read: sustained
+   high-concurrency inference is the trigger, which also fits Entry 118's finding that the
+   outages were concurrency-driven.
+2. **Finding 1 has a cheap mitigation from Finding 2.** /t/381733's BIOS `Power On Behavior`
+   setting turns an EC power cut from "requires a person at the machine" into "recovers by
+   itself, or with any switched outlet." Highest value-per-effort item this cycle.
+3. **Flash-Next single-node throughput is corroborated across two independent sources.**
+   Check 5 /t/381519 (SGLang, ~30–35 tok/s) and Check 1 Arena sub1788015768553 (Juan El Grande,
+   `Qwen3.8-Flash-Next-NVFP4`, SGLang, **34.47 tok/s** measured tg128 c1) agree closely. Two
+   sources, same runtime, same quant family, same number. High confidence that Flash-Next on one
+   Spark lands near ~34 tok/s — about half production. The Entry 154 correction is safe to make.
+4. **DFlash2 is landing ecosystem-wide.** vLLM v0.28.0 #52816 (DFlash2 + local convolution +
+   candidate selector, Check 2) + the Arena FP8 leader's DFlash n=8 recipe (Check 1) + /t/381703
+   GLM-5.3-Flash with DFlash2 on SGLang (Check 5). Note Entry 080 **rejected** DFlash n=8 for our
+   shared endpoint on acceptance grounds (37.2% on an 8-wide draft vs MTP's 79.8% on 2-wide,
+   c8 −16.8%, c16 −42.2%). DFlash2's **candidate selector** is precisely the mechanism that would
+   change that acceptance math. Worth a probe when a v0.28.x prebuilt lands — but as a re-test of
+   a documented rejection, not a fresh idea.
+5. **v0.28.0 payload confirmed vs. delivery still blocked.** Check 2 confirms #52502 + #49718 are
+   real and directly relevant; Check 3 confirms there is still no image to run them on
+   (e9cf359 cudagraph patch, no movement in 2 days). The gap between "worth having" and
+   "runnable" is unchanged this week.
+
+### Triggered Alerts
+
+- `arena | tok_s > baseline + 10%` → **NOT FIRED.** 80.27 tok/s vs 88.30 threshold.
+- `huggingface | Qwen3.7 (27B OR 35B) OR Qwen3.6-Plus OR Qwen4 model weights` → **PARTIAL,
+  standing.** Qwen3.8-35B-A3B architecture exists in ms-swift; weights confirmed absent from the
+  HF Qwen org by direct API enumeration. Fires on weights release, not architecture commit.
+- `vllm_release | SM121 OR Blackwell OR GB10` → **standing from Entry 153**, not re-escalated
+  (v0.28.0 is not new this cycle; no runnable image yet).
+- No other trigger rows matched.
+
+### Overall: WORTH WATCHING
+
+No ACTION trigger fired and the performance landscape is unchanged: production Qwen3.6-35B-A3B-FP8
+at 66.9 tok/s c1 remains the right single-node vLLM config, and nothing this week beats it on a
+runnable path. The week's value is in two operational findings (power-cut root cause + a free
+auto-recovery fix) and one corrected conclusion (Flash-Next fits, but is half-speed).
+
+### Recommendations
+
+1. **Set BIOS `Power On Behavior` to auto-on at the next physical-access window** (hold `Delete`
+   at power-on → Advanced > Power On Behavior; /t/381733). This is the highest value-per-effort
+   item in this cycle: it converts the 2026-08-03 failure mode from "needs a person on site" to
+   "self-recovers," and it removes the Shelly Plug from the critical path. Requires physical
+   console — do NOT attempt remotely.
+2. **Record the EC/PD power-cut root cause against our own outage history** (/t/381415). Combined
+   with Entry 118's concurrency-driven finding, the practical guard is to keep sustained
+   concurrency below the level that drives the transient — worth confirming against the
+   `spark-smoke.sh` / Prometheus power series before treating as settled.
+3. **Correct the Flash-Next disposition from "does not fit" to "fits at NVFP4, rejected on
+   throughput (~34 tok/s, ~half production, SGLang-only)."** Two-source corroborated. This closes
+   the item properly rather than leaving a memory-bound reason that has since been falsified.
+4. **Continue the daily Qwen3.8-35B-A3B watch.** Still the only genuine drop-in production
+   successor in sight. Enumerate the HF Qwen org via the API rather than WebSearch — it gives a
+   definitive answer.
+5. **Watch svd for a v0.28.x `prebuilt-vllm-current`.** Blocked on e9cf359. When it lands, the
+   probe list is: #52502 GB10 fused-MoE FP8 tuning, #49718 XQA SM12x decode, and a DFlash2
+   re-test of the Entry 080 rejection.
+6. **Note b12x is now in svd regular builds** (0e943a4) — lowers the cost of standing eval-plan
+   step (a).
+7. **Hold `fwupdmgr update`.** OTA2608 still unannounced (~21 weeks); EC fan regression still
+   unresolved. Production EC 0x03000302 is unaffected.
+
+### Baseline Updates — PROPOSED ONLY, NOT APPLIED
+
+This was a headless run with no user present. Per invocation instructions, `SPARK_BASELINE.md`
+was **not modified**. The following changes are what a confirmed run would apply:
+
+| Field | Current | Proposed |
+|---|---|---|
+| `forum_last_checked_date` | 2026-08-29 (Entry 156) | 2026-08-29 (Entry 157) — endpoints unblocked, ceiling /t/381541 → **/t/381767** |
+| `svd_last_checked_date` | 2026-08-29 (Entry 156) | 2026-08-29 (Entry 157) — dev1231 confirmed via API; note b12x in regular builds (0e943a4) |
+| `vllm_last_checked_version` | v0.28.0 | v0.28.0 (unchanged) — add verified PR list #52502/#49718/#49390/#50062/#52816 |
+| `arena_top_overall_entry` (copy count) | sub1779495971526 = 148 | **149** (+1; 218.85 tok/s unchanged) |
+| `arena_top_fp8_qwen35_entry` | note reads "DFlash + MARLIN_ATOMIC_ADD=1" | mark Entry 135 discrepancy **RESOLVED** — recipe `Qwen3.6-35B-A3B-FP8-DFLASH-FlashQLA`, DFlash n=8, flash_attn, 262K ctx, `VLLM_MARLIN_USE_ATOMIC_ADD=1`; both notes correct, different fields |
+| `arena_new_submissions` | — | **(new row)** sub1788015768553 — Juan El Grande, `Qwen3.8-Flash-Next-NVFP4`, SGLang, tg128 c1 34.47 ± 1.08 (below production; not a contender) |
+| Watch Items | Flash-Next "gate CLOSED — FP8 172.78 GiB > 128 GB" | **CORRECT to:** fits on one Spark at NVFP4 (HashK-PLE, SGLang, 262K ctx) — rejected on throughput ~30–35 tok/s vs prod 66.9. Sources /t/381519, /t/381500, Arena sub1788015768553 |
+| Watch Items | — | **ADD:** BIOS `Power On Behavior` auto-on available (/t/381733) — pending physical-access window |
+| Watch Items | — | **ADD:** EC/USB-C-PD power-protection cut at 150–185 W on 240 W supply (/t/381415) — matches our 2026-08-03 event; no NVIDIA fix |
+
+### Repository Note — pre-existing, not caused by this run
+
+The primary checkout at `~/dev/personal/spark` is **stuck mid-`git rebase`** (`spark-audit-2026-08-04`
+onto b06b996, step 1 of 7) with unresolved conflict markers in `LAB_NOTEBOOK.md`, and local `main`
+is 40+ commits behind `origin/main`. This entry was therefore written in a clean, separate
+`git worktree` off `origin/main`; the stuck rebase was **not touched**. Verified: all seven commits
+in the rebase todo (Entries 114-119) and the orphaned `PENDING_ENTRY_135_recon_2026-08-08.md`
+content (Entry 135) are **already present on `origin/main`** — the rebase is redundant and can be
+aborted, and the pending file deleted, without losing work. Left for the user to action.
+

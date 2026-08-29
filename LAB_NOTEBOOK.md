@@ -12506,3 +12506,89 @@ None. All 5 checks quiet. No new releases, no new models, no forum escalations. 
 | `forum_last_checked_date` | 2026-08-27 (Entry 154) | **2026-08-28 (Entry 155)** |
 | `forum_posts_since_155` | — | **(new row)** No new threads above /t/381337 (Entry 154 ceiling unchanged). OTA2608 NOT announced (overdue). EC 0x03000508 fan regression STILL UNRESOLVED (~20 weeks). Classification: NO ACTION. |
 | `arena_top_overall_entry` (copy count) | sub1779495971526 recipeCopyCount 145 | **147** (+2; minor organic interest; metadata-only update) |
+
+---
+
+## Entry 156 - DGX Spark Recon (2026-08-29)
+
+**Date:** 2026-08-29 UTC
+**Operator:** Claude Code (spark-recon skill, automated)
+**Status:** RECON — no changes made to production system
+
+### Check 1 — Arena: NO ACTION (baseline static; FP8 frontier unchanged; minor copy-count uptick)
+
+- Direct reads: sub1779297106805 (Stojanovic, FP8 80.27 tok/s) recipeCopyCount = **226** (+5 from 221 in Entry 155). `lastUpdated: 2026-08-28` (metadata touch, no performance change). sub1782803609803 (Poveda, NVFP4 118.91 tok/s) = **108** (unchanged). sub1779495971526 (Rawat, Atlas NVFP4 218.85 tok/s) = **148** (+1 from 147).
+- 10% FP8 trigger (>88.30 tok/s single-node vLLM): **NOT fired**. No new FP8 Qwen3.6-35B-A3B single-node submissions visible.
+- Top overall: Atlas NVFP4 218.85 tok/s (Rawat) — confirmed unchanged.
+- LIST methodology not attempted (direct-read-only per established practice).
+
+### Check 2 — vLLM Releases: NO NEW RELEASE (v0.28.0 remains latest; arch-guard standing from Entry 153)
+
+- GitHub API returned HTTP 403. WebSearch fallback used.
+- Latest stable: **v0.28.0** (released ~Aug 24-26). No v0.29.x yet.
+- Arch-guard from Entry 153 remains standing (PR #52502 GB10 MoE tuning + PR #49718 XQA SM12x). No escalation or de-escalation today.
+- PR #40099 (Gemma4 repetition detection): **OPEN**, ~52 days stale. Still blocks Gemma4 experiment.
+- Issue #41063 (DeepGEMM SM12.x): WebSearch suggests "vLLM now uses NVIDIA branch for DeepGEMM with sm12x support" — this likely refers to PR #50458 (Kimi K3 / DeepGEMM, merged v0.27.0) rather than a fresh fix. Issue may still be tracking open kernel-coverage gaps. Confirm next check.
+
+### Check 3 — spark-vllm-docker: NO ACTION (no new builds since Aug 26; v0.28.x work active)
+
+- GitHub API returned HTTP 403. WebSearch + direct WebFetch of releases page used.
+- **Confirmed:** stable `prebuilt-vllm-current` unchanged = `0.26.1rc1.dev1231+g7a9993878.d20260826` (Aug 26 12:10 UTC). No new release after Aug 26.
+- FlashInfer: `0.6.18-083012d6-d20260825` (confirmed unchanged).
+- v0.28.x-based prebuilt has NOT appeared. e9cf359 "adjust cudagraph patch for newer vLLM" (Aug 27 02:11 UTC) confirmed as the active compatibility work — still in progress.
+- Staging builds Aug 20-21 are marked "Do Not Use". No staging-current update since Aug 26.
+
+### Check 4 — Qwen Models: WORTH WATCHING (Qwen3.8-35B-A3B arch discovered in ms-swift; HF weights imminent)
+
+- **NEW — HIGHEST PRIORITY WATCH:** `Qwen3.8-35B-A3B` MoE model — arch committed to Alibaba's ModelScope ms-swift repository mid-August 2026. Specs: 35B total / ~3B active (A3B), uses Qwen3_5MoeLoader engine. **NO official HuggingFace release from Qwen org as of 2026-08-29.** Community demand high (active HF discussion thread on Qwen3.8-27B page: "The community needs Qwen 3.8 35B-A3B models"). `QwenLM/Qwen3.8` GitHub repo now exists. Historical pattern: weights follow within days-to-weeks of ms-swift architecture commits. **This is a near-drop-in production successor to Qwen/Qwen3.6-35B-A3B-FP8.** Monitor Qwen HF org daily.
+- Qwen3.8-27B (Aug 14): Dense 28B GDN hybrid — NOT A3B MoE, NOT a production upgrade path (bandwidth-limited, same architecture class as Qwen3.6-27B).
+- Qwen3.8-2.4T-A95B (Aug 12): Too large for single Spark.
+- Qwen3.8-Flash-Next (125B-A6B, Aug 26): Closed as out-of-memory for single Spark (Entry 154).
+- Qwen4: No official announcement yet. September 2026 Apsara Conference still expected trigger.
+- No other new A3B-class models from other labs found today.
+
+### Check 5 — NVIDIA Forum: WORTH WATCHING (2 new threads above ceiling; GLM-5.3 2-node community active)
+
+- Both 719.json and 721.json EGRESS_BLOCKED. WebSearch fallback used.
+- **NEW THREADS ABOVE CEILING (/t/381337):**
+  - **/t/381429** "GLM-5.3-Flash on 2x NVIDIA DGX Spark 43.4 tok/s PEAK [Checkpoint]" — 2-node TP=2 deployment (GLM-5.3-Flash 320B total / 18B active MoE, released ~Aug 26). Multiple GitHub repos documenting recipe (tonyd2wild, MiaAI-Lab, barrydeen). 7 day-0 bugs found and fixed across vLLM + FlashInfer for SM121. 43.4 tok/s at c=1 on 2-node.
+  - **/t/381541** "GLM-5.3-Flash-NVFP4 on 2x dgx-spark vLLM TP=2 -- docker compose" — Projects category companion thread.
+  - **GLM-5.3-Flash is 2-node minimum (TP=2, 320B weights) — NOT a single-node production candidate.** Informational: day-0 bug fixes benefit SM121 ecosystem broadly.
+- New ceiling: **/t/381541**.
+- OTA2608 (August 2026 Software Update): **NOT announced**. ~21 weeks overdue relative to regular monthly cadence. Production (EC 0x03000302) unaffected.
+- EC 0x03000508 fan regression (case 260716-000029): **STILL UNRESOLVED** (~21 weeks). Community FF-A eSPI workaround from /t/380995 remains the only mitigation.
+- Driver 580.173.02 (/t/378200): still open, no NVIDIA resolution.
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-35B-A3B preparation (Check 4) × Arena FP8 frontier static (Check 1)**: The FP8 vLLM frontier has been static since May 2026 (Stojanovic 80.27 tok/s, no new submissions). When Qwen3.8-35B-A3B releases with an official FP8 checkpoint, it is highly likely to generate new Arena activity and could push the FP8 single-node frontier significantly. Reciprocal: monitor Arena on day of Qwen3.8-35B-A3B HF release.
+2. **SVD v0.28.x cudagraph patch active (Check 3) × vLLM v0.28.0 arch-guard (Check 2)**: The outstanding blocker for a v0.28.x prebuilt is the cudagraph compatibility patch (e9cf359, Aug 27). When it's ready, GB10 fused-MoE FP8 tuning (#52502) and XQA SM12x decode (#49718) become available for eval. Active work = expected within days-to-weeks.
+3. **Forum GLM-5.3 2-node community activity (Check 5) × vLLM SM121 ecosystem (Check 2/3)**: The 7 day-0 SM121 bugs found and fixed for GLM-5.3-Flash deployment suggest continuing maturation of the vLLM SM121 stack. Some fixes may land upstream and benefit single-node configs indirectly.
+
+### Triggered Alerts
+
+- **PARTIAL TRIGGER** — `huggingface | Qwen3.7 (27B OR 35B) OR Qwen3.6-Plus OR Qwen4 model weights | ACTION: benchmark day`: Qwen3.8-35B-A3B (A3B MoE, near-drop-in successor) architecture committed to ms-swift but **HF weights not yet released**. Full trigger fires on official HF Qwen org release. Standing watch — not a benchmark-day yet.
+- All other Recon Trigger table rows: not fired.
+
+### Overall: WORTH WATCHING
+
+Primary reason: Qwen3.8-35B-A3B imminent (ms-swift commit found; HF weights expected within days-to-weeks). When it drops, trigger a benchmark day per the Recon Triggers table.
+
+### Recommendations
+
+1. **Monitor Qwen HF org daily for `Qwen/Qwen3.8-35B-A3B` and `Qwen/Qwen3.8-35B-A3B-FP8`** — this is the top action item. When weights appear, benchmark day: full throughput + quality suite vs production Qwen3.6-35B-A3B-FP8. It is a near-drop-in eval (same Qwen3_5MoeLoader, same A3B class, same vLLM recipe path).
+2. **Watch SVD for v0.28.x-based `prebuilt-vllm-current`** — e9cf359 cudagraph patch signals active work; next stable build delivers GB10 MoE tuning (#52502) and XQA SM12x (#49718). Expected within days-to-weeks.
+3. **Hold `fwupdmgr update`** — OTA2608 still not announced (~21 weeks), EC fan regression unresolved. Production (EC 0x03000302) unaffected.
+4. **GLM-5.3-Flash 2-node** — informational only; not a single-node production path. The SM121 day-0 bug fixes are worth tracking in vLLM changelog.
+5. **Carry forward**: standing Arm C/D eval plan (B12x probe → NVFP4 probe → DSpark Markov → Nemotron 3.5 Lightning → Ornith-1.5) awaiting eval window. Add Qwen3.8-35B-A3B as step (f) — primary priority once weights release.
+6. **Issue #41063 (DeepGEMM SM12.x)**: confirm status next check — the WebSearch signal about sm12x NVIDIA branch may indicate progress but needs direct verification.
+
+### Baseline Updates Applied (tracking fields only; Current Config reserved for user)
+
+| Field | Old | New |
+|---|---|---|
+| `forum_last_checked_date` | 2026-08-28 (Entry 155) | **2026-08-29 (Entry 156)** |
+| `svd_last_checked_date` | 2026-08-27 (Entry 154) | **2026-08-29 (Entry 156)** (confirmed dev1231 still latest) |
+| `forum_posts_since_155` | — | **(new row)** NEW /t/381429 "GLM-5.3-Flash on 2x DGX Spark 43.4 tok/s" + /t/381541 "GLM-5.3-Flash-NVFP4 on 2x dgx-spark TP=2 docker compose" — both 2-node only, NOT single-node candidates. New ceiling: /t/381541. OTA2608 NOT announced (~21 weeks). EC 0x03000508 fan regression STILL UNRESOLVED (~21 weeks). Classification: WORTH WATCHING. |
+| `arena_top_fp8_qwen35_tok_s` (copy count) | sub1779297106805 recipeCopyCount 221 | **226** (+5; no performance change; metadata-only update) |
+| `arena_top_overall_entry` (copy count) | sub1779495971526 recipeCopyCount 147 | **148** (+1; Atlas NVFP4 218.85 unchanged) |

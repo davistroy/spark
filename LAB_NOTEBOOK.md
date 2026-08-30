@@ -12841,3 +12841,132 @@ in the rebase todo (Entries 114-119) and the orphaned `PENDING_ENTRY_135_recon_2
 content (Entry 135) are **already present on `origin/main`** — the rebase is redundant and can be
 aborted, and the pending file deleted, without losing work. Left for the user to action.
 
+---
+
+## Entry 158 - DGX Spark Recon (2026-08-30)
+
+**Date:** 2026-08-30 UTC
+**Operator:** Claude Code (spark-recon skill) — headless daily run, no user present
+**Status:** RECON — no changes made to the Spark system
+
+Note: Entry 157 (2026-08-29 weekly) was a headless run that verified all checks via primary APIs
+but **did not apply proposed SPARK_BASELINE.md changes**. This run applies those proposed changes
+plus today's findings. Entry 157's baselines are now incorporated here.
+
+### Check 1 — Arena: NO ACTION (FP8 frontier static ~14+ weeks; one new off-topic submission)
+
+Direct Firestore reads successful (HTTP 200) for all three tracked baselines:
+
+| Doc ID | Submitter | Model | Runtime | tg128 c1 | copyCount | Δ vs E157 |
+|---|---|---|---|---|---|---|
+| sub1779297106805 | Stojanovic | Qwen3.6-35B-A3B-FP8 | vLLM | **80.27 ± 22.89** | 226 | unchanged (last updated 2026-08-28) |
+| sub1782803609803 | Poveda | nvidia/Qwen3.6-35B-A3B-NVFP4 | vLLM | **118.91 ± 6.54** | 108 | unchanged |
+| sub1779495971526 | Rawat | RedHatAI/Qwen3.6-35B-A3B-NVFP4 | Atlas | **218.85 ± 13.63** | 149 | unchanged |
+
+- **10% trigger (>88.30 tok/s single-node FP8 vLLM): NOT FIRED.** FP8 frontier static since
+  2026-05-26 — now ~14+ weeks.
+- Firestore LIST (pageSize=50, orderBy submittedAt desc): 2 docs returned. Top:
+  **Ibáñez Fernández, `Qwen3.8-Flash-Next-NVFP4`, 2026-08-30** (pp prefill 1747.7 tok/s;
+  tg128 c1 not captured but expected ~34 tok/s per prior two-source corroboration — not a contender).
+  Second doc partially truncated (pp2048 c1 = 11,353.24 tok/s — likely multi-node or different metric).
+- No new FP8 Qwen3.6-35B-A3B single-node vLLM submissions above 80.27.
+
+### Check 2 — vLLM Releases: NO NEW RELEASE (v0.28.0 latest; arch-guard standing)
+
+GitHub API returned HTTP 403; WebSearch fallback used. v0.28.0 (2026-08-26) confirmed as the
+current stable release — no v0.29 found.
+
+- Arch-guard from Entry 153 **stands, unchanged**: PR #52502 (GB10 fused-MoE FP8 tuning) and
+  PR #49718 (FlashInfer XQA SM12x) in v0.28.0, not yet in any SVD prebuilt.
+- PR #40099 (Gemma4 repetition detection): no new status found via WebSearch.
+- Issue #41063 (DeepGEMM SM12.x): no new status found.
+
+### Check 3 — spark-vllm-docker: NO ACTION (no new build; cudagraph patch unchanged)
+
+GitHub API 403; WebSearch + direct GitHub commits page used.
+
+- `prebuilt-vllm-current` stable: **`0.26.1rc1.dev1231+g7a9993878.d20260826`** (Aug 26 12:10 UTC).
+  **Unchanged from Entry 157.**
+- Latest commit: **e9cf359 (Aug 27 02:11 UTC)** "adjust cudagraph patch for newer vLLM". No new
+  commits in 3 days — v0.28.x prebuilt remains blocked on exactly this.
+- b12x in regular builds (0e943a4, Aug 21): still lowers eval-plan step (a) cost.
+- FlashInfer: `0.6.18-083012d6-d20260825` (Entry 157 confirmed; unchanged).
+
+### Check 4 — Qwen Models: WORTH WATCHING (Qwen3.8-35B-A3B absent; day 4)
+
+HuggingFace egress blocked; WebSearch fallback (3 independent searches).
+
+- **`Qwen/Qwen3.8-35B-A3B` and `-FP8` do NOT exist** — confirmed by multiple search sources
+  including HF discussion pages actively requesting the model, and the QwenLM/Qwen3.8 GitHub
+  org (exists but no 35B-A3B weights published). Day 4 since first watch.
+- Community demand active: multiple HF discussion threads on Qwen3.8-27B and Qwen3.8-2.4T-A95B
+  explicitly asking for the 35B-A3B variant.
+- Current Qwen3.8 HF releases: Qwen3.8-27B (Aug 13-14), Qwen3.8-2.4T-A95B (Aug 12-13),
+  Qwen3.8-Flash-Next (Aug 24). No new models since Entry 157.
+- New Arena submission of Qwen3.8-Flash-Next-NVFP4 (Ibáñez Fernández, 2026-08-30) consistent
+  with community activity on Flash-Next; decode ~34 tok/s floor holds.
+- No Qwen4 announcement. September Apsara Conference still the expected trigger.
+
+### Check 5 — NVIDIA Forum: NO ACTION (egress BLOCKED; WebSearch fallback; no new threads above ceiling)
+
+719.json and 721.json: EGRESS_BLOCKED. WebSearch fallback used.
+
+- No new threads above Entry 157 ceiling **/t/381767** found via WebSearch.
+- Search returned only threads at or below /t/381267 — none above the ceiling.
+- **OTA2608 (August 2026 software update): still NOT ANNOUNCED** (~22 weeks past cadence).
+- **EC 0x03000508 fan regression (case 260716-000029): still UNRESOLVED** (~22 weeks).
+  Production is on EC 0x03000302 and unaffected.
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-35B-A3B absence confirmed by 3+ independent sources.** HF WebSearch (no official
+   model card), QwenLM/Qwen3.8 GitHub org (exists, no 35B-A3B repo), HF community discussion
+   threads (active demand). High confidence: weights not yet released. Day 4 of watch.
+2. **New Qwen3.8-Flash-Next Arena submission corroborates ~34 tok/s decode floor.** Three
+   sources now: Juan El Grande tg128 34.47 tok/s (Entry 157), /t/381519 SGLang 30–35 tok/s
+   (Entry 157), and today's Ibáñez Fernández submission (consistent pattern). Flash-Next entry
+   is durable: "fits single Spark at NVFP4, rejected on throughput ~34 tok/s (half production)."
+3. **vLLM v0.28.0 + SVD delivery gap: unchanged for 3 days.** Entry 157 confirmed arch-guard;
+   this run confirms no new SVD build and no SVD commits since e9cf359 (Aug 27). Delivery blocked
+   status is stable — not degrading, not progressing.
+
+### Triggered Alerts
+
+- `arena | tok_s > baseline + 10%` → **NOT FIRED.** 80.27 vs 88.30 threshold.
+- `huggingface | Qwen3.8-35B-A3B weights` → **PARTIAL, standing** (day 4 of watch). Fires on
+  weights release, not architecture commit.
+- `vllm_release | SM121/GB10/Blackwell` → **standing from Entry 153** (v0.28.0 arch-guard);
+  not re-escalated — gated on SVD prebuilt, no change this cycle.
+- No other trigger rows matched.
+
+### Overall: NO ACTION
+
+Fully static cycle. No new vLLM release, no new SVD build, no new Qwen3.8-35B-A3B, no new
+forum threads above ceiling. Arena baselines confirmed unchanged. Production Qwen3.6-35B-A3B-FP8
+at 66.9 tok/s c1 remains the right single-node vLLM config with no actionable upgrade path.
+
+### Recommendations
+
+1. **Continue daily Qwen3.8-35B-A3B watch.** Still day 4; QwenLM/Qwen3.8 GitHub org active;
+   community demand strong. Weights expected within days-to-weeks of the ms-swift architecture
+   commit (Entry 156). Monitor: Qwen HF org + QwenLM/Qwen3.8 GitHub.
+2. **Watch SVD for v0.28.x prebuilt-vllm-current.** Blocked on e9cf359 (no movement in 3 days).
+   When it lands: probe GB10 MoE tuning (#52502) + FlashInfer XQA SM12x (#49718) + DFlash2 re-test.
+3. **Hold `fwupdmgr update`.** OTA2608 ~22 weeks overdue; EC fan regression unresolved. EC 0x03000302 unaffected.
+4. **BIOS `Power On Behavior` auto-on** (per Entry 157 Rec 1): still pending physical-access window.
+   Highest value-per-effort recovery improvement (converts outage from "needs a person" to "self-recovers").
+
+### Baseline Updates Applied to SPARK_BASELINE.md
+
+This run applies Entry 157's proposed (but not applied) changes plus Entry 158's findings:
+
+| Field | Prior value | New value |
+|---|---|---|
+| `forum_last_checked_date` | 2026-08-29 (Entry 156, egress blocked) | **2026-08-30 (Entry 158); egress BLOCKED; ceiling /t/381767 (Entry 157); no new above ceiling** |
+| `forum_posts_since_156` | ceiling /t/381541 (truncated) | Updated: Entry 157 found 6 threads above /t/381541 up to /t/381767; ceiling = /t/381767 |
+| `forum_posts_since_157` | (not present) | Added: no new above /t/381767; egress blocked; OTA2608 NOT ANNOUNCED (~22w); EC 0x03000508 UNRESOLVED (~22w) |
+| `svd_last_checked_date` | 2026-08-29 (Entry 156) | **2026-08-30 (Entry 158); stable dev1231 confirmed; no new build; last commit e9cf359 (Aug 27)** |
+| `vllm_last_checked_version` | v0.28.0 (Entry 153 2026-08-26) | Added Entry 158 re-confirmation: no v0.29; v0.28.0 still latest |
+| `arena_top_fp8_qwen35_tok_s` | copyCount 145 for Atlas (stale), 108 Poveda, 226 Stojanovic | Atlas copyCount corrected to **149** (Entry 157 confirmed); Poveda 108 (unchanged); Stojanovic 226 (unchanged); new submission noted |
+| `arena_top_overall_entry` | copyCount **148** | copyCount **149** (confirmed Entry 157 + 158) |
+

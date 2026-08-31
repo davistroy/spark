@@ -12970,3 +12970,86 @@ This run applies Entry 157's proposed (but not applied) changes plus Entry 158's
 | `arena_top_fp8_qwen35_tok_s` | copyCount 145 for Atlas (stale), 108 Poveda, 226 Stojanovic | Atlas copyCount corrected to **149** (Entry 157 confirmed); Poveda 108 (unchanged); Stojanovic 226 (unchanged); new submission noted |
 | `arena_top_overall_entry` | copyCount **148** | copyCount **149** (confirmed Entry 157 + 158) |
 
+
+## Entry 159 - DGX Spark Recon (2026-08-31)
+
+**Date:** 2026-08-31 UTC
+**Operator:** Claude Code (automated spark-recon schedule)
+**Status:** RECON ONLY — no changes to Spark system
+
+### Check 1 — Arena: NO ACTION (baselines confirmed unchanged)
+
+Firestore REST API: LIST returns `{}` (collection listing still blocked). Direct read of Stojanovic sub1779297106805 succeeded via Firestore REST.
+
+- **sub1779297106805 (Stojanovic, FP8 vLLM top):** recipeCopyCount **226** (unchanged from Entry 157+158). Baseline 80.27 tok/s c1 confirmed still the FP8 vLLM frontier. 10% trigger (>88.30) **NOT FIRED**.
+- No new submissions identified via WebSearch above Aug 30 ceiling.
+- Top overall: Atlas sub1779495971526 (218.85 tok/s, NVFP4) — not directly checked this cycle but no contrary signal.
+- **FP8 vLLM frontier has been static since 2026-05-26 (~14+ weeks); no new single-node FP8 entries.**
+
+### Check 2 — vLLM: WORTH WATCHING (arch-guard standing, no new release)
+
+WebSearch and PyPI confirm: **v0.28.0 remains latest** (Aug 24/26, 2026). **No v0.29 found.**
+
+- v0.28.0 arch-guard standing from Entry 153 (PRs #52502 GB10 fused-MoE FP8 tuning + #49718 FlashInfer XQA SM12x) — not re-escalated this cycle.
+- Delivery gated on SVD prebuilt; no SVD movement this cycle (see Check 3).
+- PR #40099 (Gemma4 repetition detection): no new status found.
+
+### Check 3 — spark-vllm-docker: NO ACTION (stable, no new builds)
+
+GitHub releases page confirms: **prebuilt-vllm-current = `0.26.1rc1.dev1231+g7a9993878.d20260826`** (Aug 26 12:10 UTC) — **unchanged from Entry 158**.
+
+- FlashInfer: `0.6.18-083012d6-d20260825` — unchanged.
+- No new stable builds since Aug 26. Last repo commit remains e9cf359 (Aug 27, "adjust cudagraph patch for newer vLLM") — no new commits in 4 days.
+- v0.28.x prebuilt still blocked on cudagraph patch compatibility.
+
+### Check 4 — Qwen Models: WORTH WATCHING (Qwen3.8-35B-A3B absent; day 5)
+
+WebSearch (3 independent searches): **`Qwen/Qwen3.8-35B-A3B` and `-FP8` do NOT exist** on HuggingFace — day 5 of watch.
+
+- Qwen3.8 HF releases remain: Qwen3.8-27B (dense, Aug 14), Qwen3.8-2.4T-A95B (MoE, Aug 12), Qwen3.8-Flash-Next (Aug 24). No new models since Entry 158.
+- `QwenLM/Qwen3.8` GitHub org exists but no 35B-A3B repo or weights.
+- Community demand still active on HF discussion threads for the 35B-A3B variant.
+- No Qwen4 announcement. September Apsara Conference remains expected trigger window.
+
+### Check 5 — NVIDIA Forum: NO ACTION (EGRESS_BLOCKED; WebSearch fallback; ceiling static)
+
+719.json: **EGRESS_BLOCKED** (same as Entry 157+158). WebSearch fallback used.
+
+- No new threads found above Entry 158 ceiling **/t/381767** via WebSearch.
+- Highest thread returned by search: /t/381267 ("Future of the DXG Spark") — well below ceiling.
+- **OTA2608 (August 2026 software update): still NOT ANNOUNCED** (~23 weeks past cadence).
+- **EC 0x03000508 fan regression (case 260716-000029): still UNRESOLVED** (~23 weeks).
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-35B-A3B absence confirmed again by multiple independent sources** — HF search (no model card), QwenLM GitHub org (no 35B-A3B repo), community discussion threads (active demand). High-confidence: weights still not released. Day 5 of watch.
+2. **SVD + vLLM v0.28.0 delivery gap stable** — Both sources (WebSearch + GitHub releases) confirm no SVD movement since Aug 27 (4 days), v0.28.0 still latest vLLM. Delivery gap not degrading or progressing.
+3. **Fully static cycle** — Five consecutive data sources showing no new developments. Arena, vLLM, SVD, Qwen, and Forum all match Entry 158 exactly on every tracked metric.
+
+### Triggered Alerts
+
+- `arena | tok_s > baseline + 10%` → **NOT FIRED.** 80.27 vs 88.30 threshold.
+- `huggingface | Qwen3.8-35B-A3B weights` → **PARTIAL, standing** (day 5 of watch). Not yet fired.
+- `vllm_release | SM121/GB10/Blackwell` → **standing from Entry 153** (v0.28.0 arch-guard); gated on SVD prebuilt, no change.
+- No other trigger rows matched.
+
+### Overall: NO ACTION
+
+Completely static cycle — fifth consecutive no-action day. All baselines confirmed. Production Qwen3.6-35B-A3B-FP8 at 66.9 tok/s c1 remains optimal single-node vLLM config with no actionable upgrade path.
+
+### Recommendations
+
+1. **Continue daily Qwen3.8-35B-A3B watch.** Day 5; QwenLM/Qwen3.8 GitHub org active; community demand strong. Expected within days-to-weeks. Monitor: Qwen HF org + QwenLM/Qwen3.8 GitHub.
+2. **Watch SVD for v0.28.x prebuilt.** e9cf359 (Aug 27) is last commit; no movement for 4 days. When it lands: probe GB10 MoE tuning (#52502) + FlashInfer XQA SM12x (#49718) + DFlash2.
+3. **Hold `fwupdmgr update`.** OTA2608 ~23 weeks overdue; EC fan regression unresolved. EC 0x03000302 unaffected.
+4. **BIOS `Power On Behavior` auto-on** (Entry 157 Rec): still pending physical-access window.
+
+### Baseline Updates Applied to SPARK_BASELINE.md
+
+| Field | Prior value | New value |
+|---|---|---|
+| `forum_last_checked_date` | 2026-08-30 (Entry 158) | **2026-08-31 (Entry 159); EGRESS_BLOCKED; ceiling /t/381767; no new above ceiling** |
+| `forum_posts_since_158` | (not present) | Added: no new above /t/381767; EGRESS_BLOCKED; OTA2608 NOT ANNOUNCED (~23w); EC 0x03000508 UNRESOLVED (~23w) |
+| `svd_last_checked_date` | 2026-08-30 (Entry 158) | **2026-08-31 (Entry 159); dev1231 (Aug 26) confirmed unchanged; no new commits since e9cf359 (Aug 27)** |
+| `vllm_last_checked_version` | v0.28.0 (Entry 153/158) | Re-confirmed 2026-08-31 (Entry 159); no v0.29; v0.28.0 still latest |
+| `arena_top_fp8_qwen35_tok_s` | Stojanovic copyCount 226 (unchanged Entry 157+158) | Confirmed Entry 159 via direct Firestore read: copyCount **226** (unchanged) |

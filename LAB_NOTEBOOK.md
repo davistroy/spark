@@ -13053,3 +13053,92 @@ Completely static cycle — fifth consecutive no-action day. All baselines confi
 | `svd_last_checked_date` | 2026-08-30 (Entry 158) | **2026-08-31 (Entry 159); dev1231 (Aug 26) confirmed unchanged; no new commits since e9cf359 (Aug 27)** |
 | `vllm_last_checked_version` | v0.28.0 (Entry 153/158) | Re-confirmed 2026-08-31 (Entry 159); no v0.29; v0.28.0 still latest |
 | `arena_top_fp8_qwen35_tok_s` | Stojanovic copyCount 226 (unchanged Entry 157+158) | Confirmed Entry 159 via direct Firestore read: copyCount **226** (unchanged) |
+
+---
+
+## Entry 160 - DGX Spark Recon (2026-09-01)
+
+**Date:** 2026-09-01 UTC
+**Operator:** Claude Code (automated spark-recon schedule)
+**Status:** RECON ONLY — no changes to Spark system
+
+### Check 1 — Arena: NO ACTION (baselines confirmed unchanged)
+
+Firestore REST API: direct read of sub1779297106805 (Stojanovic, FP8 vLLM top) succeeded.
+
+- **sub1779297106805 (Stojanovic, FP8 vLLM top):** recipeCopyCount **226** (unchanged from Entry 157/158/159). Baseline 80.27 tok/s c1 confirmed still the FP8 vLLM frontier. 10% trigger (>88.30) **NOT FIRED**.
+- No new submissions found above prior ceiling via WebSearch.
+- FP8 vLLM frontier static since 2026-05-26 (~15 weeks; no new single-node FP8 vLLM submissions).
+- Top overall: Atlas sub1779495971526 (218.85 tok/s, NVFP4) — no contrary signal this cycle.
+- Ibáñez Fernández `Qwen3.8-Flash-Next-NVFP4` (2026-08-30, sub from Entry 158) noted; ~34 tok/s tg128 c1 estimated — not a contender for prod upgrade.
+
+### Check 2 — vLLM: WORTH WATCHING (arch-guard standing, no new release)
+
+WebSearch confirmed: **v0.28.0 remains latest** (published Aug 24, 2026). **No v0.28.1 or v0.29 found as of 2026-09-01.**
+
+- v0.28.0 arch-guard from Entry 153 still standing: PR #52502 (GB10 fused-MoE FP8 tuning configs — first upstream-committed GB10-specific MoE tuning) + PR #49718 (FlashInfer XQA decode on SM12x).
+- Delivery gated on SVD prebuilt compatibility; no movement this cycle (see Check 3).
+- PR #40099 (Gemma4 repetition detection): no new status (still OPEN).
+- Issue #41063 (DeepGEMM SM12.x): no new status.
+
+### Check 3 — spark-vllm-docker: NO ACTION (stable, no new builds)
+
+WebFetch of GitHub releases page confirmed: **prebuilt-vllm-current = `0.26.1rc1.dev1231+g7a9993878.d20260826`** (Aug 26 12:10 UTC) — **unchanged from Entry 159**.
+
+- FlashInfer: `0.6.18-083012d6-d20260825` — unchanged.
+- No new stable builds since Aug 26. Staging releases continuing (daily pre-releases Aug 18–21 noted; none since).
+- Last repo commit remains e9cf359 (Aug 27 "adjust cudagraph patch for newer vLLM") — no new commits in 5 days.
+- v0.28.x prebuilt still blocked on cudagraph patch compatibility.
+
+### Check 4 — Qwen Models: WORTH WATCHING (Qwen3.8-35B-A3B absent; day 6)
+
+Multiple independent searches confirm: **`Qwen/Qwen3.8-35B-A3B` and `-FP8` do NOT exist on HuggingFace** — day 6 of watch.
+
+- Qwen3.8 HF releases remain: Qwen3.8-2.4T-A95B (Aug 12), Qwen3.8-27B (Aug 14), Qwen3.8-Flash-Next (Aug 24/prior). No new models since Entry 159.
+- Community demand active: HF discussion threads on Qwen/Qwen3.8-27B (#43 "Qwen3.8 35B A3B model, please"; #120 "community needs Qwen 3.8 35B-A3B") confirm strong demand — weights still withheld.
+- `QwenLM/Qwen3.8` GitHub org exists; no 35B-A3B repo or weights.
+- No Qwen4 announcement. September Apsara Conference remains expected trigger window.
+
+### Check 5 — NVIDIA Forum: NO ACTION (EGRESS_BLOCKED; WebSearch fallback; ceiling static)
+
+719.json: **EGRESS_BLOCKED** (3rd consecutive day). WebSearch fallback used.
+
+- No new threads found above Entry 159 ceiling **/t/381767** via WebSearch. Highest thread returned: /t/381267 ("Future of the DXG Spark") — well below ceiling.
+- **OTA2608 (August 2026 software update): still NOT ANNOUNCED** (~24 weeks past cadence; OTA2606 was June, OTA2607 was July, OTA2608 now ~6 months overdue by monthly cadence).
+- **EC 0x03000508 fan regression (case 260716-000029): still UNRESOLVED** (~24 weeks). Production EC 0x03000302 unaffected.
+- Contextual: /t/371812 "Next version of DGX Spark is here: It is a notebook" surfaced in search (thread ID 371812 < ceiling 381767, below tracking threshold — not new; likely created ~June/July 2026). Relevant context for ongoing /t/381267 "Future of DXG Spark" community discussions.
+
+### Cross-Correlated Findings
+
+1. **Fully static cycle (2nd consecutive)** — all 5 data sources confirm no new developments since Entry 159 (Aug 31). Arena, vLLM, SVD, Qwen, and Forum match Entry 159 exactly on every tracked metric.
+2. **Qwen3.8-35B-A3B community demand vs. persistent non-release** — HF discussion threads (#43, #120), HF model search, and QwenLM GitHub org all independently confirm: model absent, community demand high. Day 6 watch. High confidence no release yet.
+3. **OTA2608 delay deepens** — now ~24 weeks without announcement; forum WebSearch fallback returns no new threads. Pattern consistent with EC 0x03000508 fix holding up the update.
+
+### Triggered Alerts
+
+- `arena | tok_s > baseline + 10%` → **NOT FIRED.** 80.27 vs 88.30 threshold.
+- `huggingface | Qwen3.8-35B-A3B weights` → **PARTIAL, standing** (day 6 of watch). Not yet fired.
+- `vllm_release | SM121/GB10/Blackwell` → **standing from Entry 153** (v0.28.0 arch-guard); gated on SVD prebuilt, no change.
+- No other trigger rows matched.
+
+### Overall: NO ACTION
+
+Fully static cycle — sixth consecutive no-action day. All baselines confirmed. Production Qwen3.6-35B-A3B-FP8 at 66.9 tok/s c1 remains the optimal single-node vLLM config with no actionable upgrade path.
+
+### Recommendations
+
+1. **Continue daily Qwen3.8-35B-A3B watch.** Day 6; active community demand on HF discussions; QwenLM/Qwen3.8 GitHub org exists. September Apsara Conference is the anticipated trigger. Monitor: Qwen HF org + QwenLM/Qwen3.8 GitHub.
+2. **Watch SVD for v0.28.x prebuilt.** e9cf359 (Aug 27) is last commit — 5 days without movement. When it lands: evaluate GB10 MoE tuning (#52502) + FlashInfer XQA SM12x (#49718) + DFlash2.
+3. **Hold `fwupdmgr update`.** OTA2608 ~24 weeks overdue; EC 0x03000508 fan regression unresolved. EC 0x03000302 unaffected.
+4. **BIOS `Power On Behavior` auto-on** (Entry 157 Rec): still pending physical-access window; highest value-per-effort recovery improvement.
+
+### Baseline Updates Applied to SPARK_BASELINE.md
+
+| Field | Prior value | New value |
+|---|---|---|
+| `Last updated` / `Last recon` | 2026-08-31 (Entry 159) | **2026-09-01 (Entry 160)** |
+| `forum_last_checked_date` | 2026-08-31 (Entry 159) | **2026-09-01 (Entry 160); EGRESS_BLOCKED; ceiling /t/381767; no new above ceiling** |
+| `forum_posts_since_159` | (not present) | Added: no new above /t/381767; EGRESS_BLOCKED; OTA2608 NOT ANNOUNCED (~24w); EC 0x03000508 UNRESOLVED (~24w) |
+| `svd_last_checked_date` | 2026-08-31 (Entry 159) | **2026-09-01 (Entry 160); dev1231 (Aug 26) confirmed via WebFetch; no new stable or staging since Aug 27; v0.28.x still blocked on cudagraph patch** |
+| `vllm_last_checked_version` | v0.28.0 (Entry 159 2026-08-31) | Re-confirmed 2026-09-01 (Entry 160); no v0.28.1/v0.29; v0.28.0 still latest |
+| `arena_top_fp8_qwen35_tok_s` | Stojanovic copyCount 226 (Entry 159) | Confirmed Entry 160 via direct Firestore read: copyCount **226** (unchanged) |

@@ -13315,3 +13315,88 @@ Fully static cycle — 8th consecutive no-action period. All baselines confirmed
 | `svd_last_checked_date` | 2026-09-02 (Entry 161) | **2026-09-03 (Entry 162); dev1231 Aug 26 re-confirmed via WebSearch; 8 days stale; v0.28.x still blocked** |
 | `vllm_last_checked_version` | v0.28.0 (re-confirmed Entry 161 2026-09-02) | Re-confirmed 2026-09-03 (Entry 162); no v0.28.1/v0.29; v0.28.0 still latest |
 | `arena_top_fp8_qwen35_tok_s` | Stojanovic 226, Poveda 111, Atlas 157 | Stojanovic **226** (unchanged); Poveda **112** (+1); Atlas **158** (+1) |
+
+---
+
+## Entry 163 - DGX Spark Recon (2026-09-04)
+
+> ⚠️ **ACTION NEEDED — SVD v0.28.x prebuilt landed (Sep 3, 2026).** First v0.28.x build available; includes GB10 MoE FP8 tuning (#52502), FlashInfer XQA SM12x (#49718), DFlash2. Evaluate against production before adopting.
+
+### Check 1 — Arena: NO ACTION (copy counts static; no new single-node FP8 Qwen3.6 above 80.27)
+
+Direct Firestore reads confirmed. GitHub API for LIST returned 2 Sep 3 submissions (both not contenders).
+
+- **sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s):** recipeCopyCount = **226** (unchanged from Entry 162).
+- **sub1782803609803 (Poveda NVFP4, 118.91 tok/s):** recipeCopyCount = **112** (unchanged).
+- **sub1779495971526 (Atlas top overall, 218.85 tok/s):** recipeCopyCount = **158** (unchanged).
+- **LIST (desc by date) returned 2 new Sep 3 submissions:** sub1788454737115 (Mark Chang, DeepSeek-V4-Flash-Vision-Exp, 305B MoE FP8, 4-node cluster, aggregate 775.35) and sub1788435335356 (James Aita, inclusionAI/Ling-3.0-flash-int4, 1-node, INT4, aggregate 567.88). Neither is a single-node FP8 Qwen3.6 35B A3B contender.
+- 10% trigger threshold (>88.30 tok/s) **NOT FIRED**. FP8 vLLM arena frontier static since 2026-05-26 (14+ weeks).
+
+### Check 2 — vLLM: WORTH WATCHING (v0.28.0 still latest; ARCH-GUARD standing)
+
+GitHub API returned HTTP 403; WebSearch fallback used.
+
+- **v0.28.0 confirmed still latest stable** — no v0.28.1 or v0.29.0 found. ARCH-GUARD from Entry 153 continues standing: PR #52502 (GB10 MoE FP8 tuning) and PR #49718 (FlashInfer XQA SM12x).
+- PR #40099 (Gemma4 repetition detection): no new status; assumed still OPEN (~34 days stalled).
+- Issue #41063 (DeepGEMM SM12.x): no new status; assumed OPEN/dormant.
+
+### Check 3 — spark-vllm-docker: ACTION NEEDED ⚠️ (v0.28.x prebuilt NOW AVAILABLE)
+
+**New stable build: `0.28.1rc1.dev345+g4cc0cb6f7.d20260903`** — released Sep 3, 2026 at 17:40 UTC. Tagged `prebuilt-vllm-current`. This is the first v0.28.x-based prebuilt, unblocked from the cudagraph patch that stalled builds since Aug 27 (e9cf359).
+
+- **Coordinated FlashInfer update:** `0.6.18-971b0a6b-d20260903` (new build of same 0.6.18 base; prior was `0.6.18-083012d6-d20260825`).
+- v0.28.x changes accessible for first time: GB10-specific MoE FP8 dispatch tuning (#52502), FlashInfer XQA decode SM12x (#49718), DFlash2, NVFP4 batch-invariant MoE via CUTLASS, ~60% better DSpark TTFT from adaptive speculative token budget.
+- Prior staging builds (dev360-dev1231 range, Aug 18-26) were all "Do Not Use". This is the first promoted stable.
+- Eval plan (from prior recommendations): adopt `prebuilt-vllm-current` wheel, run GB10 MoE tuning eval vs production at c1/c4/c8/c16. Gating condition: ≥+5% c8 throughput.
+
+### Check 4 — Qwen Models: WORTH WATCHING (Qwen3.8-35B-A3B absent; day 9)
+
+HuggingFace EGRESS_BLOCKED; WebSearch fallback used.
+
+- **`Qwen/Qwen3.8-35B-A3B` and `-FP8` still do NOT exist on HuggingFace** — day 9 of watch. WebSearch returns no new Qwen3.8-35B-A3B results.
+- No Qwen3.7, Qwen4, or new ~30-40B-MoE / ~3B-active models from other labs found.
+- September Apsara Conference window remains open as the anticipated trigger.
+
+### Check 5 — NVIDIA Forum: NO ACTION (EGRESS_BLOCKED 6th day; ceiling unchanged)
+
+719.json: **EGRESS_BLOCKED** (6th consecutive day). WebSearch fallback used.
+
+- No new threads above ceiling **/t/382068** found via WebSearch. /t/382068 ("September 2026 Availability of GB10's") now has a page 2 (supply/market continuation — same thread, no new thread ID).
+- **OTA2608: still NOT ANNOUNCED** (~27 weeks past July 2026 OTA cadence).
+- **EC 0x03000508 fan regression (case 260716-000029): still UNRESOLVED** (~27 weeks). Production EC 0x03000302 unaffected.
+- Ceiling unchanged: **/t/382068**.
+
+### Cross-Correlated Findings
+
+1. **SVD v0.28.x prebuilt landed (Checks 2+3)** — vLLM v0.28.0 stable (check 2) is the underlying release; SVD check 3 confirms the prebuilt is now available. High-confidence, directly actionable. Satisfies the waiting condition from Entries 153-162.
+2. **Arena and Qwen frontiers remain static** — no new single-node FP8 vLLM submission above 80.27 tok/s; no Qwen3.8-35B-A3B release. No competitive pressure requiring immediate production change beyond the SVD upgrade path.
+3. **Forum ceiling unchanged** — /t/382068 page 2 is supply discussion, not performance/firmware. EC 0x03000508 and OTA2608 remain open/overdue.
+
+### Triggered Alerts
+
+- `svd | new prebuilt vllm version` → **FIRED.** `0.28.1rc1.dev345+g4cc0cb6f7.d20260903` is the first v0.28.x build and the explicit gate for GB10 MoE eval. **Action required.**
+- `vllm_release | SM121/GB10/Blackwell` → **standing from Entry 153** (v0.28.0 arch-guard); now unblocked via SVD prebuilt.
+- `arena | tok_s > baseline + 10%` → **NOT FIRED.** 80.27 vs 88.30 threshold; unchanged.
+- `huggingface | Qwen3.8-35B-A3B weights` → **PARTIAL, standing** (day 9 of watch). Not yet fired.
+
+### Overall: ACTION NEEDED
+
+SVD v0.28.x prebuilt `0.28.1rc1.dev345+g4cc0cb6f7.d20260903` is the first build incorporating v0.28.0 GB10-specific improvements. Evaluate against production baseline (66.9 tok/s c1, 427.7 c8). Gating: ≥+5% c8 aggregate. All other checks static.
+
+### Recommendations
+
+1. **[IMMEDIATE] Evaluate SVD v0.28.x prebuilt.** Pull `prebuilt-vllm-current` wheel from eugr/spark-vllm-docker; run harness at c1/c4/c8/c16 with production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, FlashInfer MoE). Gate: ≥+5% c8. Key gains to measure: GB10 MoE FP8 tuning (#52502), FlashInfer XQA SM12x (#49718), adaptive speculative budget (TTFT). Coordinate a prod-down window (~90s reload).
+2. **Continue daily Qwen3.8-35B-A3B watch.** Day 9; September Apsara Conference is the anticipated release window. Monitor: Qwen HF org + QwenLM/Qwen3.8 GitHub.
+3. **Hold `fwupdmgr update`.** OTA2608 ~27 weeks overdue; EC 0x03000508 fan regression unresolved. EC 0x03000302 unaffected.
+4. **BIOS `Power On Behavior` auto-on** (Entry 157 Rec): still pending physical-access window.
+
+### Baseline Updates Applied to SPARK_BASELINE.md
+
+| Field | Prior value | New value |
+|---|---|---|
+| `Last updated` / `Last recon` | 2026-09-03 (Entry 162) | **2026-09-04 (Entry 163)** |
+| `svd_last_checked_date` | 2026-09-03 (Entry 162); dev1231 Aug 26; v0.28.x blocked | **2026-09-04 (Entry 163); NEW `0.28.1rc1.dev345+g4cc0cb6f7.d20260903` (Sep 3 17:40); FlashInfer `0.6.18-971b0a6b-d20260903`; first v0.28.x prebuilt** |
+| `forum_last_checked_date` | 2026-09-03 (Entry 162); EGRESS_BLOCKED; ceiling /t/382068 | **2026-09-04 (Entry 163); EGRESS_BLOCKED 6th day; ceiling /t/382068 unchanged** |
+| `forum_posts_since_162` | (not present) | Added: /t/382068 page 2 (supply continuation, same thread); no new thread above ceiling; OTA2608 NOT ANNOUNCED (~27w); EC 0x03000508 UNRESOLVED (~27w) |
+| `vllm_last_checked_version` | v0.28.0 (re-confirmed Entry 162) | Re-confirmed 2026-09-04 (Entry 163); no v0.28.1/v0.29; v0.28.0 still latest stable |
+| `arena_top_fp8_qwen35_tok_s` | Stojanovic 226, Poveda 112, Atlas 158 | All **unchanged** (Entry 163 direct reads). 2 new Sep 3 submissions (DeepSeek-V4 4-node, Ling-3.0-INT4 1-node) — neither is a single-node FP8 Qwen3.6 35B contender. |

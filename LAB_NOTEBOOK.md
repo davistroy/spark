@@ -13491,3 +13491,181 @@ SVD prebuilt updated to `0.28.1rc1.dev397+gfd4a15126.d20260904` (Sep 4) — seco
 | `forum_posts_since_163` | (not present) | Added: no new threads above /t/382068; OTA2608 NOT ANNOUNCED (~28w); EC 0x03000508 UNRESOLVED (~28w). NO ACTION. |
 | `vllm_last_checked_version` | v0.28.0 (re-confirmed Entry 163) | Re-confirmed 2026-09-05 (Entry 164); no v0.28.1 stable/v0.29; v0.28.0 still latest |
 | `arena_top_fp8_qwen35_tok_s` | Stojanovic 226, Poveda 112, Atlas 158 | Stojanovic **227** (+1), Poveda **114** (+2), Atlas **159** (+1). New Sep 5: sub1788600016721 (Zaizen, Qwen3.8-Flash-Next-NVFP4, 2-node SGLang) — not a single-node FP8 Qwen3.6 35B contender. 10% trigger NOT FIRED. |
+
+---
+
+## Entry 165 - DGX Spark Recon (2026-09-05, weekly)
+
+**Date:** 2026-09-05 UTC
+**Operator:** Claude Code (spark-recon skill) — headless weekly run, no user present
+**Status:** RECON — no changes made to the Spark system
+
+> ⚠️ **ACTION NEEDED — three ACTION triggers fired.** (1) **vLLM v0.29.0rc4 tagged 2026-09-04** carrying **PR #54048**, a GB10/family-120-specific MoE **router-GEMM accuracy+perf fix** — the first upstream fix that names our exact silicon *and* our exact MoE path; makes v0.29.0 the strongest Arm C build-upgrade target to date. (2) **DeepGEMM SM12.x trigger FIRED** — #52035 landed DeepGEMM `arch_major==12` in v0.28.0. (3) **SVD prebuilt rolled again to `dev441`**. Separately: **HuggingFace and forum egress both restored today**, and the **EC 0x03000508 fan regression is now being routed by NVIDIA to RMA rather than a firmware fix**.
+
+### Check 1 — Arena Check: NO ACTION (frontier fully static; LIST access restored)
+
+Firestore REST via `curl` worked cleanly. **Collection LIST is currently OPEN** (HTTP 200) — `benchmarks?pageSize=300` returned 3 pages / **312 docs** total. Best access in several weeks.
+
+- **sub1779297106805** (Stojanovic FP8 vLLM): **80.27 tok/s, recipeCopyCount 227** — both unchanged from Entry 164.
+- **sub1782803609803** (Poveda NVFP4 vLLM): **118.91 tok/s, count 114** — unchanged.
+- **sub1779495971526** (Rawat, RedHatAI NVFP4 on **Atlas** runtime): **218.85 tok/s, count 159** — unchanged.
+- **Zero drift** in tok/s or copy count across all three baselines — first fully static day in the tracked series.
+- **No new submissions.** `sub1788600016721` (Zaizen, Qwen3.8-Flash-Next-NVFP4, 2-node SGLang, Sep 5 09:39 UTC) remains newest. Newest single-node is still `sub1788555309524` (Sep 4, Wichert, Qwen3.8-27B-NVFP4, SGLang, 36.13 tok/s).
+- **10% trigger (>88.30 tok/s) NOT FIRED.** FP8 vLLM single-node frontier static since 2026-05-26 (~15 weeks).
+- Standing (not new) single-node context: Nemotron-3.5-Lightning-30B-A3B-NVFP4 **125.13 tok/s** on the *stock* `vllm/vllm-openai:v0.27.1` image (`--moe-backend marlin`, `--kv-cache-dtype fp8`, `--mamba-backend flashinfer`, `--mamba-cache-mode align`, DSpark spec-decode); `unsloth/Qwen3.6-35B-A3B-NVFP4-Fast` 103.96 tok/s (`--moe-backend flashinfer_b12x`, MTP=3). Both remain gated behind the Arm C build upgrade.
+
+### Check 2 — vLLM Release Check: ACTION NEEDED / HIGH (v0.29.0rc4 carries a GB10-specific MoE fix)
+
+- **v0.28.0 (2026-08-26) is still the newest stable.** No v0.28.1 or v0.29.0 stable. **`v0.29.0rc4` tagged 2026-09-04** (rc1 2026-09-02); **603 commits** between v0.28.0 and rc4. `v0.28.1rc0` (Aug 27) was never promoted — superseded by the 0.29 line.
+
+**HIGH — in the unreleased v0.29.0 window:**
+- **#54048 `[Bugfix][MoE] Enable cuBLAS out_dtype router GEMM on all CUDA archs (fixes family-120/GB10)`** (merged 2026-08-30, fixes #49921). The bf16→fp32 MoE router GEMM was falling back to a copy kernel that **bf16-rounds router logits** on family-120; the arch gate admitted only Hopper+SM100. This is an **accuracy *and* throughput** defect on exactly our production MoE dispatch path. Strongest single argument yet for the Arm C upgrade.
+- **#52775 `[Kernel] SM120: stop routing misaligned-M blockwise FP8 GEMMs to the small-M swapAB config`** — blockwise FP8 is the kernel family used by our pre-quant `Qwen3.6-35B-A3B-FP8`.
+- #53574 (SM120 DSv4 contiguous C128A decode topk) and #51395 (SM120 MLA FlashInfer sparse prefill) are SM120-family but MLA/DSv4-only — not our config.
+
+**MEDIUM:**
+- **#52676** fused QK-norm + partial MRoPE + gate for Qwen3.6, validated against `Qwen/Qwen3.6-35B-A3B-FP8` on the compiled/CUDA-graph path.
+- **#52182 removes `VLLM_TEST_FORCE_FP8_MARLIN`**, replaced by `--linear-backend` / `--moe-backend`. Our CLAUDE.md already dropped the env var; record the new flag names for any 0.29 build.
+- FlashInfer 0.6.17 → **0.6.18** (#52681, #54313); **#53111** XQA decode falls back to native FlashInfer on unsupported head_dim; **#52998** FlashInfer all-reduce on by default.
+- Spec-decode: **DFlash2 landed** (#52816, #53435, #53797, #54373); #53077 GDN empty-draft fix; #42376 preserves user `--speculative-config` overrides.
+- NVFP4: #53132 (Kimi-K3), **#54427** weight-only NVFP4 → W4A16 routing. **#53896 adds Qwen3.8-Flash-Next model support.**
+
+**Tracked upstream items:**
+
+| Item | Status | Release |
+|---|---|---|
+| #40099 Gemma4 repetition detection | **Still OPEN**, stale since 2026-07-08 | — Gemma 4 gate **NOT cleared** |
+| #41063 DeepGEMM SM12.x | **OPEN but effectively delivered** — #52035 moved DeepGEMM source to `deepseek-ai/DeepGEMM@8b1392b`, adding `arch_major==12`. 2026-08-31: DSv4-Flash runs **end-to-end on GB10 with stock upstream**. Separate report: patching the family-100 varlen gate boots but IMAs under concurrency | **v0.28.0** |
+| #52502 GB10 fused-MoE FP8 tuning configs (E=256/512) | **MERGED 2026-08-17** | **v0.28.0** |
+| #49718 FlashInfer XQA decode on SM12x | **MERGED 2026-08-11** | **v0.28.0** |
+| #37754 FlashInfer+MTP Xid-13 on SM121 | **OPEN, updated today (2026-09-05)** — now two distinct SM121 defects | unfixed |
+
+**#37754 — material correction.** Community consensus now holds the precondition is **`q_len > 1` (i.e. any MTP), NOT concurrency.** New report on vLLM 0.26.0 + `nvidia/Qwen3.6-35B-A3B-NVFP4` + MTP=3 + `--kv-cache-dtype fp8 --moe-backend marlin --async-scheduling`: illegal memory access in `flashinfer.py:1232` `build()` **with a single request in flight**. FlashInfer #4732 (shipped in 0.6.18) fixes a `sparse_mla_sm120` barrier race but does **not** fix either MTP failure. Suspected trigger: `PLACEHOLDER_TOKEN_ID` (-1) surviving in `scheduled_spec_decode_tokens` when `--async-scheduling` is enabled. **Production is unaffected — we run FLASH_ATTN attention, not FlashInfer attention** (Entry 076). But this is a **hard blocker for any NVFP4 + FlashInfer + MTP path on 0.29**, which is precisely the configuration every high-scoring Arena NVFP4 recipe uses.
+
+### Check 3 — spark-vllm-docker Check: ACTION NEEDED (standing; prebuilt rolled to dev441)
+
+| | Entry 164 | Now | Published |
+|---|---|---|---|
+| vLLM prebuilt | `0.28.1rc1.dev397+gfd4a15126.d20260904` | **`0.28.1rc1.dev441+g2902ca17e.d20260905`** | 2026-09-05 11:44 UTC |
+| FlashInfer | `0.6.18-dbc47414-d20260904` | **`0.6.18-18e5811d-d20260905`** | 2026-09-05 11:36 UTC |
+
+Same upstream base (0.28.1rc1), same FlashInfer minor — a same-day wheel roll, not a version bump. Assets: `vllm-*cp312-linux_aarch64.whl` (499 MB); FlashInfer `_cubin` (2.1 GB), `_jit_cache` aarch64 (186 MB), `_python` (28.8 MB).
+
+**New commit since 94b3c306:** `eacaa8f3` (2026-09-05 16:18 UTC, "Adjusted mem patch for kv shape", +147/−12).
+- Rewrites `docker/patch_vllm_spark_kv_cache_cleanup.py` into a **multi-anchor patcher** (`find_first_line`) so post-profile memory cleanup lands **before** the B12X fork's `final_profile_snapshot = MemorySnapshot(...)`, not only at upstream's `profile_result.after_profile.free_memory`. Without it, late persistent allocations stay charged against the KV-cache budget. **Directly relevant to our BF16-KV headroom constraint** (504K tokens @131K, 3.85x max concurrency).
+- Moves the B12X preset vLLM ref **`dev/infernal-invocation` → `dev/jovian-judgement`** (`local-inference-lab/vllm`). B12X repo still `lukealonso/b12x@master`. Build args unchanged: `TORCH_CUDA_ARCH_LIST=12.1a`, `FLASHINFER_CUDA_ARCH_LIST=12.1a`, torch 2.13.0, CUTLASS DSL 4.7.0, `VLLM_PRESERVE_SM12X_TARGET=1`, `VLLM_PATCH_B12X_C128A_ALIGNMENT=1`.
+- Recipe count now 35 (`recipes/glm-5.3-flash.yaml` added in 94b3c306). **No changes to any Qwen3.6-35B-A3B recipe** (`-fp8`, `-fp8-dflash`, `-nvfp4`, `-nvfp4-no-mtp` all present and untouched) — our eval targets are stable. No new image tags; `--exp-b12x` still pulls `eugr/spark-vllm-b12x:latest`.
+
+**Open issues of note (20 open):**
+- **#376 (Sep 4, new):** DeepSeek-V4-Flash-0731 on the 2026-08-15 b12x build produced **silent wrong outputs plus latency drift with uptime, no crash**; reporter confirms fixed by the 2026-09-03 `dev/jovian-judgement` recipe. **Cautionary: b12x regressions can be silent rather than fatal** — any b12x eval needs a quality gate, not just a throughput gate.
+- **#358:** dspark spec-decode acceptance **collapses to ~0 under sustained load** on b12x nightly (TP=2), empty responses until restart.
+- #352 / #349: b12x `block_fp8_linear_mxfp8_fused` hang / illegal address on 2-node GB10 sm_121a (Aug 15 build) — multi-node only.
+- #353: `mods/inkling-sm12-paged-kv` broken after vLLM 0.27.1; workaround pins an older vLLM ref.
+- #375 / #350: recipe requests for Qwen3.8-Flash-Next, DeepSeek-V4-Flash-Vision-Exp, qwen3.8-27b-nvfp4.
+
+### Check 4 — Qwen Model Check: WORTH WATCHING (Qwen3.8-35B-A3B absent day 10) + NEW CONTENDER
+
+**HuggingFace egress was NOT blocked today** — direct API access worked, so this is a high-confidence negative rather than a search-fallback inference.
+
+- **`Qwen/Qwen3.8-35B-A3B` and `-FP8`: ABSENT (day 10).** Both return HTTP 401 `{"error":"Invalid username or password."}` — byte-identical to a fabricated control repo (`Qwen/ThisRepoDefinitelyDoesNotExist12345`), while `Qwen/Qwen3.6-35B-A3B-FP8` and `Qwen/Qwen3.8-27B` return 200. Corroborated by a full `author=Qwen` listing sorted by `createdAt`: **newest official Qwen repo is `Qwen/Qwen-Drive-1.0-4B` (2026-08-27)**, an autonomous-driving VLM. Nothing from Qwen in the window.
+- Signal remains real but unreleased: ms-swift commit `ab726e9` (PR #9914) still lists both repo names alongside shipped entries.
+- **Apsara Conference: NOT YET HELD — confirmed September 22–24, 2026, Hangzhou (17 days out).** No announcements exist. "Qwen4 / Qwen3.8-35B-A3B at Apsara" is pattern-matching speculation, not reporting — treat accordingly.
+- **Name-squat to ignore:** `Lord-H4D3ZS/Qwen3.8-Distill-35B-A3B-Coder-Abliterated` (2026-08-15, 38K downloads) — not the official Qwen org.
+
+**🆕 NEW MODEL — K2-Horizon family (IFM / MBZUAI), released 2026-09-01. First credible Qwen3.6-35B-A3B challenger in months, and missed by every web tracker (found via direct HF API sweep).**
+
+`IFM/K2-Horizon-MoVA-36B-A4B` — **36B total / 4B active** MoE (100 experts, top-8 + 1 shared):
+- **Official FP8: `IFM/K2-Horizon-MoVA-36B-A4B-FP8`** (2026-09-03), **48.4 GB**, dynamic activation scheme. BF16 base 74.9 GB.
+- **NVFP4: `primitive-ai/K2-Horizon-MoVA-36B-A4B-NVFP4`** (2026-09-04, community), 36.7 GB.
+- **512K context** (524,288 native — 4× our current 128K). **Apache-2.0.**
+- Architecture: **standard transformer MoE** + "Mixture-of-Values attention" (`mova_num_experts: 64`). `configuration_k2_horizon.py` grepped for `mamba` / `ssm` / `conv1d` / `delta_net` — **zero markers. NOT a hybrid; vLLM #37431 does not apply.** This clears the single blocker that has killed most A3B-class candidates on SM121.
+- **vLLM support MERGED: PR #55063 (2026-09-03, into `main`)** — i.e. it lands in **v0.29.0**, the same build as the GB10 router-GEMM fix. Follow-up #55335 (partial-RoPE folding) still open. Requires `--trust-remote-code`.
+- Siblings: `K2-Horizon-32B` (dense, 69.6 GB / FP8 37.4 GB), 7B, 3.7B, 0.9B — all Apache-2.0 with official FP8. `K2-Horizon-375B-A23B` (FP8 391 GB) **does not fit**.
+- **Unverified vendor claim, do not accept:** IFM asserts it beats open models "up to 15× its size."
+- **Residual risk:** the MoVA attention path is entirely unproven on SM121, and vLLM support is 2 days old. Treat as an eval candidate, not a production candidate.
+
+**Nothing else.** Direct org sweeps across 28 labs found no other new fits since 2026-08-29. `DeepSeek-V4-Flash-Vision-Exp` (08-31, top-trending) is **167.8 GB even with FP8/FP4 experts — does not fit a single Spark**. Ling-3.0-flash (08-02) and Granite 4.2 (08-07) predate the window; only derivative quants are new.
+
+### Check 5 — NVIDIA Forum Check: ACTION NEEDED (access restored; 14 new topics; EC regression now routed to RMA)
+
+**JSON access WORKED — first success after 7 consecutive EGRESS_BLOCKED days.** `719.json` returned 200 with a full topic list; `721.json` returns 301; `search.json` also worked, allowing direct queries on tracked items. No WebSearch fallback needed.
+
+**14 new topics above /t/382068. New ceiling: /t/382459.**
+
+**ACTION:**
+- **/t/382452 — "OTA update to DGX OS 7.5.0 kills all display output when nvidia-drm-options-modeset0 is installed"** (smile.xuc, 2026-09-05). OTA to kernel `6.17.0-1032-nvidia` + driver **580.173.02** leaves **zero DRM connectors** when NVIDIA's own `nvidia-drm-options-modeset0` baseos package is present: no framebuffer console, HDMI/USB-C DP dead. **Directly reinforces the Entry 126 apt-hold watch item — same 580.173.02 driver.** Headless implication: any Spark OTA now needs a confirmed physical-console window.
+- **/t/382446** — MiaAI_lab Qwen3.8-Flash-Next NVFP4 recipe on a **single** Spark (siertum, 09-05): 1M context (1.43M KV tokens), vision/video, **37 tok/s c1**, 86 tok/s agg @ c4, 1500–2000 tok/s prefill. Repo `MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark`.
+- **/t/382117** — "Fitting Qwen3.8-Flash-Next (180B) onto one Spark — ~44 tok/s at four bits" (Albond, 09-02): NVFP4 base + 309 dense projections re-serialized as blockwise FP8 + PQ draft head; **43.8 tok/s median c1** vs 34.4 without the FP8-dense conversion (22% shorter step). Ships `--max-model-len 8192` (raise to 64K). c1-only, no concurrency data.
+- **/t/382449** — **NVIDIA published an official `nvidia/Qwen3.8-Flash-Next-NVFP4` checkpoint** (Dickson, 09-05), removing the community-quant dependency.
+
+**INFO:**
+- **/t/382099** — GLM-5.3-Flash on 2× GB10: **spec-decode causes long-prefill TTFT to alternate ~2× after mixed workloads**; decode unaffected, restart clears it (fernando.qi, 09-02). Relevant to our MTP=2 config.
+- /t/382453 — SGLang+DFlash, Qwen3.8-27B, 200K context, bare-metal single Spark (geotoppos, 09-05).
+- /t/382435 — FP8 Qwen3.8-Flash-Next on 2× Spark via SGLang, 37–40 tok/s — 15–21% slower than NVFP4 (bradsmithmba, 09-05).
+- /t/382459 (GLM-5.3 FP8 TP4 switchless), /t/382450 (Spark Control Center dashboard + Zellij web terminal).
+- SKIP: /t/382392 (Unreal Engine), /t/382162 (unsloth desktop), /t/382456 (ASUS checksums), /t/382405, /t/382440.
+
+**Tracked items:**
+1. **OTA2608 — still NOT ANNOUNCED.** Global forum search for "OTA2608" returns 0 hits. ~32 weeks since the July OTA.
+2. **EC 0x03000508 fan-curve regression — UNRESOLVED and ESCALATING.** /t/377069 (last post 09-02): trufflebutter reports the exact `0x02004e18 → 0x03000508` timeline, 97 °C hotspots, spontaneous hard power-off mid-inference with vLLM collapsing 47 → 0 tok/s. **EC rollback did NOT help** him or csaba.kecskemeti. **NVIDIA staff (aniculescu) response is now "failing Field Diagnostic = automatic RMA approval" — NVIDIA is routing this to RMA, not to a firmware fix.** Reported mitigation that helps: `nvidia-smi -lgc 200,2100`.
+3. **EC/USB-C-PD power cut at 150–185 W** — Balaxxe's netconsole-proven writeup remains at **/t/381415** (last post 08-28); still no NVIDIA acknowledgement. No new posts.
+4. **BIOS `Power On Behavior` auto-on (/t/381733)** — no new confirmations since 08-28; thread drifted to GLM-5.3 hangs. dngettler reports auto-restart is default on his unit.
+5. **GPU SM clock pinned at 721 MHz (/t/376039) — ✅ RESOLVED / CLOSED.** Fix confirmed: **full power drain** (unplug, hold power button 10 s, replug). Diagnosed as a **PSU power-negotiation lockout after an OOM overboost**, not a driver issue. Topic auto-closed 2026-07-24. *(This watch item can be retired.)*
+
+### Cross-Correlated Findings
+
+1. **⭐ GB10 router-GEMM fix (Check 2) + SVD prebuilt dev441 (Check 3) → the Arm C upgrade case is now materially stronger.** #54048 merged 2026-08-30 into the 0.29 window; SVD's `dev441` sits at `0.28.1rc1 + 441 dev commits @ d20260905`, so it very likely already carries the fix. This converts Arm C from "newer is probably faster" into "our current build is provably mis-dispatching MoE router logits on GB10, at a cost to both accuracy and throughput." **Verify #54048's presence in the chosen prebuilt before benchmarking** — it changes what a null result would mean.
+2. **⭐ Speculative-decode instability cluster on SM12x — three independent sources converge.** vLLM #37754 updated today (Check 2: IMA at `flashinfer.py:1232` with `q_len>1`, single request, NVFP4+MTP=3+FlashInfer) + SVD open issue #358 (Check 3: dspark spec-decode acceptance collapses to ~0 under sustained load, empty responses until restart) + forum /t/382099 (Check 5: GLM-5.3 spec-decode TTFT alternates ~2× after mixed workloads). Different runtimes, different models, same subsystem. **Our production MTP=2 on FLASH_ATTN is not on any of these paths and shows no symptoms** — but this cluster is a strong argument to hold a spec-decode-specific soak gate on any Arm C build that touches the speculative path.
+3. **Driver 580.173.02 corroboration (Check 5 ↔ standing Entry 126 watch item).** /t/382452's display-output kill and Entry 126's GPU-loss-after-reboot are the **same driver version** on the same platform, reported independently ~5 weeks apart. The `apt-mark hold` recommendation is now multiply corroborated — treat it as confirmed, not precautionary.
+4. **K2-Horizon vLLM support (Check 4) lands in the same release as the GB10 fix (Check 2).** PR #55063 merged to `main` 2026-09-03 → ships in v0.29.0, alongside #54048. **The new-model eval and the build upgrade are the same window** — one prod-down window can serve both. Efficient sequencing opportunity.
+5. **Qwen3.8-Flash-Next single-Spark recipes (Check 5) ↔ Arena 2-node submission (Check 1) ↔ standing Entry 154/157 rejection.** The community has now demonstrated Flash-Next on a *single* Spark at 37–44 tok/s c1 (three independent recipes), and NVIDIA has published an official NVFP4 checkpoint. **This empirically confirms the Entry 157 rejection on single-node hardware:** ~44 tok/s best case is ~66% of our production 66.9 tok/s, with no concurrency data published. **Rejection stands, now on measured single-node evidence rather than inference.**
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---|---|
+| `vllm_release \| DeepGEMM AND (SM12 OR SM121 OR Blackwell OR GB10)` | **🔴 FIRED.** #52035 landed DeepGEMM `arch_major==12` in **v0.28.0**; DSv4-Flash now runs end-to-end on GB10 with stock upstream. Trigger action text ("benchmark Qwen3.5 FP8 with DeepGEMM") is now executable — but only on a ≥v0.28.0 build, i.e. folded into Arm C. |
+| `vllm_release \| SM121 OR GB10 OR Blackwell` (arch-guard, standing since Entry 153) | **🔴 FIRED, strengthened.** #54048 explicitly names GB10/family-120 and fixes our MoE router path. |
+| `svd \| new prebuilt vllm version` | **🔴 STILL FIRED.** `0.28.1rc1.dev441+g2902ca17e.d20260905`. Use dev441 (not dev397) as the eval target. |
+| `vllm_release \| #37754 OR (FlashInfer AND MTP AND (crash OR Xid))` | **🔴 FIRED.** #37754 updated today; precondition corrected to `q_len>1` (any MTP), not concurrency. No fix landed. Production on FLASH_ATTN unaffected; blocks NVFP4+FlashInfer+MTP on 0.29. |
+| `vllm_release \| speculative AND (Qwen OR MoE)` | **🟡 FIRED (INFO).** DFlash2 landed (#52816, #53435, #53797, #54373); #42376 preserves user `--speculative-config`. |
+| `vllm_release \| FlashInfer AND (heterogeneous OR mixed head)` | **🟡 PARTIAL (INFO).** #53111 — XQA decode falls back to native FlashInfer on unsupported head_dim. |
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Threshold >88.30 tok/s; top FP8 vLLM single-node static at 80.27. |
+| `huggingface \| Qwen3.7 (27B OR 35B) OR Qwen3.6-Plus OR Qwen4 weights` | **NOT FIRED** (standing). Qwen3.8-35B-A3B absent day 10; confirmed via unblocked direct HF API. |
+| `vllm_release \| gemma4 AND (guided OR grammar OR xgrammar)` | **NOT FIRED.** #40099 still OPEN and stale since 2026-07-08. Gemma 4 experiment remains gated. |
+| `vllm_release \| MXFP4 AND (online OR on-the-fly OR Qwen)` | **NOT FIRED.** |
+
+### Overall: ACTION NEEDED
+
+Four ACTION-level triggers fired. The week's decisive finding is **PR #54048** — the first upstream fix naming GB10/family-120 *and* landing on our exact MoE router-GEMM path, correcting a bf16-rounding defect that costs both accuracy and throughput on the build we run today. Combined with the GB10 fused-MoE tuning configs (#52502) and FlashInfer XQA SM12x (#49718) already shipped in v0.28.0, plus DeepGEMM SM12.x, the Arm C build upgrade has moved from opportunistic to **overdue**. Secondary: a genuinely new and architecturally compatible A3B-class contender (K2-Horizon-MoVA-36B-A4B) whose vLLM support lands in the same release. Both egress channels (HuggingFace, forum) recovered today, so today's negatives are high-confidence.
+
+### Recommendations
+
+1. **[TOP PRIORITY — escalated] Schedule the Arm C build-upgrade eval window.** Target `prebuilt-vllm-current` at **`0.28.1rc1.dev441+g2902ca17e.d20260905`** from `eugr/spark-vllm-docker` (refresh the pin at window open — it has rolled daily). **Before benchmarking, verify #54048 is present in the wheel** (`git log` the pinned vLLM ref for `54048` / "router GEMM"); its presence or absence changes the interpretation of any null result. Run the harness at c1/c4/c8/c16 against production config (`Qwen/Qwen3.6-35B-A3B-FP8`, MTP=2, FLASH_ATTN, FlashInfer MoE, BF16 KV, `--max-num-batched-tokens 32768`). **Adoption gate: ≥+5% c8** (per Entry 080 precedent). Add a **quality gate** this time — SVD issue #376 shows b12x-lineage regressions can be silent rather than fatal. Note `--linear-backend`/`--moe-backend` replace `VLLM_TEST_FORCE_FP8_MARLIN` (#52182). Coordinate a prod-down window (~90 s reload; cold start ~435 s with a cold Triton cache).
+2. **[NEW — eval candidate] Add `IFM/K2-Horizon-MoVA-36B-A4B-FP8` to the Arm C eval slate as a step (f).** 36B/4B-active standard-MoE (not hybrid Mamba — #37431 does not apply), official FP8 at 48.4 GB, 512K context, Apache-2.0, vLLM PR #55063 merged 2026-09-03 → available in v0.29.0. **Same build window as recommendation 1** — sequence them together rather than opening two prod-down windows. Risks to test explicitly: MoVA attention is unvalidated on SM121; vLLM support is days old; needs `--trust-remote-code`. Treat the vendor's "beats models 15× its size" claim as unverified.
+3. **[CONFIRMED — act before next apt operation] Pin the NVIDIA driver.** /t/382452 independently corroborates Entry 126: driver **580.173.02** breaks DGX Spark, now in two distinct ways (GPU lost after reboot; all display output lost with `nvidia-drm-options-modeset0`). Apply `sudo apt-mark hold nvidia-driver-580 nvidia-dkms-580` (and the prebuilt module packages) **before** the next `apt upgrade`. Requires interactive sudo — user action.
+4. **[HOLD — unchanged] Do not run `fwupdmgr update`.** OTA2608 still unannounced (~32 weeks). The EC 0x03000508 fan regression is **unresolved and escalating** — NVIDIA is now routing affected units to **RMA rather than issuing a firmware fix**, and EC rollback did not help multiple reporters. Production EC `0x03000302` is unaffected; keep it that way.
+5. **[Watch-item retirement] Close the GPU 721 MHz clock-lock watch item.** /t/376039 is resolved and auto-closed: root cause was a PSU power-negotiation lockout after an OOM overboost; fix is a full power drain (unplug, hold power 10 s, replug). Fold the drain procedure into the power-recovery runbook alongside the Entry 157 EC/PD finding.
+6. **[Continue] Qwen3.8-35B-A3B watch — day 10.** Apsara Conference is **September 22–24, 2026** (17 days out) and is the concrete anticipated window. Today's absence is high-confidence (HF egress unblocked, verified against a control repo). No action until an official Qwen-org model card appears.
+7. **[Unchanged] BIOS `Power On Behavior` auto-on** (Entry 157) — still pending a physical-access window.
+
+### Baseline Updates — NOT APPLIED (headless run, no user present)
+
+Per run instructions, `SPARK_BASELINE.md` was **not modified**. The following changes are proposed and await explicit user confirmation:
+
+| Field | Current value | Proposed new value |
+|---|---|---|
+| `Last updated` / `Last recon` | 2026-09-05 (Entry 164) | 2026-09-05 (Entry 165, weekly) |
+| `vllm_last_checked_version` | v0.28.0 (re-confirmed Entry 164) | v0.28.0 still latest stable; **`v0.29.0rc4` tagged 2026-09-04** (603 commits since v0.28.0). **#54048 GB10/family-120 MoE router-GEMM fix merged 2026-08-30** — HIGH. #52775 SM120 blockwise-FP8 misaligned-M fix. #52182 drops `VLLM_TEST_FORCE_FP8_MARLIN` → `--linear-backend`/`--moe-backend`. #55063 K2-Horizon support merged. #37754 precondition corrected to `q_len>1`, still unfixed. |
+| `svd_last_checked_date` | 2026-09-05 (Entry 164); `dev397+gfd4a15126.d20260904` | 2026-09-05 (Entry 165); **`0.28.1rc1.dev441+g2902ca17e.d20260905`**; FlashInfer **`0.6.18-18e5811d-d20260905`**; commit `eacaa8f3` KV-budget mem-patch fix; B12X ref → `dev/jovian-judgement` |
+| `forum_last_checked_date` | 2026-09-05 (Entry 164); EGRESS_BLOCKED 7th day | 2026-09-05 (Entry 165); **JSON ACCESS RESTORED**; **ceiling /t/382068 → /t/382459**; 14 new topics |
+| `arena_top_fp8_qwen35_tok_s` | Stojanovic 227, Poveda 114, Atlas 159 | **Unchanged** — Stojanovic 227, Poveda 114, Atlas 159; zero drift. LIST **restored** (312 docs, 3 pages, HTTP 200). 10% trigger NOT FIRED. |
+| `qwen_watch_qwen38_a3b` | day 9, absent | **day 10, ABSENT** — verified via unblocked HF API against a control repo; newest official Qwen repo is `Qwen/Qwen-Drive-1.0-4B` (08-27). Apsara Conference **Sept 22–24, 2026**. |
+| **New Watch Item** | — | **[⚠ ACTION 2026-09-05 — Entry 165] vLLM PR #54048 — GB10/family-120 MoE router-GEMM bf16-rounding fix.** First upstream fix naming our silicon *and* our MoE dispatch path. Merged 2026-08-30, ships in v0.29.0. Elevates Arm C from opportunistic to overdue. Verify presence in the pinned prebuilt before benchmarking. |
+| **New Watch Item** | — | **[NEW 2026-09-05 — Entry 165] `IFM/K2-Horizon-MoVA-36B-A4B` — new A3B-class eval candidate, Arm C step (f).** 36B/4B-active standard MoE (100 experts, top-8+1 shared), MoVA attention, **NOT hybrid Mamba** (#37431 N/A), official FP8 48.4 GB, community NVFP4 36.7 GB, **512K ctx**, Apache-2.0. vLLM PR #55063 merged 2026-09-03 → v0.29.0. Needs `--trust-remote-code`. MoVA unvalidated on SM121. |
+| **New Watch Item** | — | **[NEW 2026-09-05 — Entry 165] Spec-decode instability cluster on SM12x** — vLLM #37754 (`q_len>1` IMA, single request), SVD #358 (dspark acceptance → 0 under sustained load), forum /t/382099 (GLM-5.3 TTFT 2× alternation). Three runtimes, one subsystem. Production MTP=2 + FLASH_ATTN unaffected; require a spec-decode soak gate on any Arm C build touching the speculative path. |
+| **Watch Item — RETIRE** | GPU SM clock pinned at 721 MHz (/t/376039, /t/376239) | **CLOSED 2026-09-05 (Entry 165).** Resolved and auto-closed 2026-07-24. Root cause: PSU power-negotiation lockout after an OOM overboost. Fix: full power drain (unplug, hold power 10 s, replug). Fold into the power-recovery runbook. |
+| **Watch Item — UPDATE** | EC 0x03000508 fan regression (/t/377069) | **ESCALATED 2026-09-05 (Entry 165):** NVIDIA staff now answer with "failing Field Diagnostic = automatic RMA approval" — **routing to RMA, not a firmware fix.** EC rollback did NOT help multiple reporters. Mitigation that helps: `nvidia-smi -lgc 200,2100`. ~32 weeks unresolved. |
+| **Watch Item — UPDATE** | Driver 580.173.02 apt-hold (Entry 126) | **CORROBORATED 2026-09-05 (Entry 165):** /t/382452 — DGX OS 7.5.0 OTA + kernel `6.17.0-1032-nvidia` + driver 580.173.02 leaves zero DRM connectors when `nvidia-drm-options-modeset0` is installed (no console, no HDMI/DP). Second independent failure mode for the same driver. Apply the hold before the next apt operation. |
+| **Watch Item — CONFIRM** | Qwen3.8-Flash-Next rejection (Entry 154/157) | **CONFIRMED ON SINGLE-NODE MEASUREMENT 2026-09-05 (Entry 165):** three independent single-Spark recipes (/t/382446 37 tok/s, /t/382117 43.8 tok/s, /t/382435 37–40 tok/s 2-node) plus an official `nvidia/Qwen3.8-Flash-Next-NVFP4` checkpoint (/t/382449). Best case ~44 tok/s c1 = ~66% of production 66.9. **Rejection stands on measured evidence.** |
+

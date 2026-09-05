@@ -13400,3 +13400,94 @@ SVD v0.28.x prebuilt `0.28.1rc1.dev345+g4cc0cb6f7.d20260903` is the first build 
 | `forum_posts_since_162` | (not present) | Added: /t/382068 page 2 (supply continuation, same thread); no new thread above ceiling; OTA2608 NOT ANNOUNCED (~27w); EC 0x03000508 UNRESOLVED (~27w) |
 | `vllm_last_checked_version` | v0.28.0 (re-confirmed Entry 162) | Re-confirmed 2026-09-04 (Entry 163); no v0.28.1/v0.29; v0.28.0 still latest stable |
 | `arena_top_fp8_qwen35_tok_s` | Stojanovic 226, Poveda 112, Atlas 158 | All **unchanged** (Entry 163 direct reads). 2 new Sep 3 submissions (DeepSeek-V4 4-node, Ling-3.0-INT4 1-node) — neither is a single-node FP8 Qwen3.6 35B contender. |
+
+---
+
+## Entry 164 - DGX Spark Recon (2026-09-05)
+
+**Date:** 2026-09-05 ~10:00 UTC
+**Operator:** Claude Code (spark-recon skill / scheduled)
+**Status:** RECON — no changes made to Spark system
+
+> ⚠️ **ACTION NEEDED (2nd consecutive day) — SVD v0.28.x prebuilt updated to `0.28.1rc1.dev397+gfd4a15126.d20260904`** (Sep 4, 2026). Incremental update from Entry 163's dev345 (+52 commits, same v0.28.1rc1/v0.28.0 base). FlashInfer also refreshed: `0.6.18-dbc47414-d20260904`. New b12x branch switch + GLM 5.3 Flash recipe added. Evaluate against production before adopting.
+
+### Check 1 — Arena: NO ACTION (copy counts ticked up; new Sep 5 submission is 2-node SGLang, not a single-node FP8 Qwen3.6 contender)
+
+Direct Firestore reads confirmed. LIST returned 1 new Sep 5 submission.
+
+- **sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s):** recipeCopyCount = **227** (+1 from Entry 163's 226).
+- **sub1782803609803 (Poveda NVFP4, 118.91 tok/s):** recipeCopyCount = **114** (+2 from Entry 163's 112).
+- **sub1779495971526 (Atlas top overall, 218.85 tok/s):** recipeCopyCount = **159** (+1 from Entry 163's 158).
+- **LIST (latest, desc):** sub1788600016721 — Shota Zaizen, `Qwen3.8-Flash-Next-NVFP4`, 2-node SGLang, 180B params, agg 1009.79, tg128 c5 = 76.84 tok/s (Sep 5 09:39 UTC). NOT a single-node FP8 Qwen3.6 35B A3B contender; consistent with Watch Item rejection (~34 tok/s c1 floor).
+- 10% trigger threshold (>88.30 tok/s) **NOT FIRED**. FP8 vLLM arena frontier static since 2026-05-26 (15+ weeks).
+
+### Check 2 — vLLM: WORTH WATCHING (v0.28.0 still latest; ARCH-GUARD standing)
+
+GitHub API used.
+
+- **v0.28.0 confirmed still latest stable** — no v0.28.1 stable or v0.29.0 found. ARCH-GUARD from Entry 153 continues standing: PR #52502 (GB10 MoE FP8 tuning) and PR #49718 (FlashInfer XQA SM12x).
+- PR #40099 (Gemma4 repetition detection): no new status; assumed still OPEN.
+- Issue #41063 (DeepGEMM SM12.x): no new status; assumed OPEN/dormant.
+
+### Check 3 — spark-vllm-docker: ACTION NEEDED ⚠️ (v0.28.x prebuilt updated to dev397, Sep 4)
+
+**Updated stable build: `0.28.1rc1.dev397+gfd4a15126.d20260904`** — released Sep 4, 2026. +52 commits over Entry 163's `dev345` build (same v0.28.1rc1/v0.28.0 base). **FlashInfer also refreshed: `0.6.18-dbc47414-d20260904`** (was `0.6.18-971b0a6b-d20260903`).
+
+New commits since Entry 163:
+- **94b3c306 (Sep 4):** "Added GLM 5.3 Flash recipe" — consistent with forum /t/381429+/t/381541 community interest (2-node only).
+- **68e1b4c3 (Sep 3):** "Updated DSV4F recipe"
+- **e91bc763 (Sep 3):** "Switch to a new b12x branch" — b12x kernel branch updated.
+
+Eval action from Entry 163 continues. Use dev397 (not dev345) as the eval target.
+
+### Check 4 — Qwen Models: WORTH WATCHING (Qwen3.8-35B-A3B absent; day 10)
+
+WebSearch fallback (HuggingFace EGRESS_BLOCKED).
+
+- **`Qwen/Qwen3.8-35B-A3B` and `-FP8` still do NOT exist on HuggingFace** — day 10 of watch. No results found.
+- Confirmed prior releases: Qwen3.8-2.4T-A95B (Aug 12), Qwen3.8-27B (Aug 14). No A3B-class MoE 35B variant.
+- September Apsara Conference window remains open as the anticipated trigger.
+
+### Check 5 — NVIDIA Forum: NO ACTION (EGRESS_BLOCKED 7th consecutive day; ceiling unchanged)
+
+719.json: **EGRESS_BLOCKED** (7th consecutive day). WebSearch fallback used.
+
+- No new threads above ceiling **/t/382068** found via WebSearch.
+- **OTA2608: still NOT ANNOUNCED** (~28 weeks past July 2026 OTA cadence).
+- **EC 0x03000508 fan regression (case 260716-000029): still UNRESOLVED** (~28 weeks). Production EC 0x03000302 unaffected.
+- Ceiling unchanged: **/t/382068**.
+
+### Cross-Correlated Findings
+
+1. **SVD dev397 + vLLM v0.28.0 ARCH-GUARD (Checks 2+3)** — v0.28.0 stable (check 2) is the base; SVD dev397 (Sep 4) is the second consecutive available v0.28.x prebuilt. High-confidence. ACTION NEEDED standing from Entry 163.
+2. **GLM 5.3 Flash recipe in SVD (Check 3) ↔ Forum watch items** — recipe 94b3c306 matches /t/381429+/t/381541 community deployments. 2-node only, not a single-node production candidate.
+3. **Qwen3.8-Flash-Next-NVFP4 in Arena (Check 1) ↔ Watch Item** — 2-node SGLang sub confirms continued community interest; throughput consistent with Watch Item rejection floor (~34 tok/s c1). No new signal.
+
+### Triggered Alerts
+
+- `svd | new prebuilt vllm version` → **STILL FIRED.** `0.28.1rc1.dev397+gfd4a15126.d20260904` (incremental update over Entry 163 dev345). Eval action continues; use dev397 as eval target.
+- `vllm_release | SM121/GB10/Blackwell` → **standing from Entry 153** (v0.28.0 arch-guard). SVD prebuilt available for eval.
+- `arena | tok_s > baseline + 10%` → **NOT FIRED.** Threshold >88.30 tok/s; unchanged.
+- `huggingface | Qwen3.8-35B-A3B weights` → **PARTIAL, standing** (day 10 of watch). Not yet fired.
+
+### Overall: ACTION NEEDED
+
+SVD prebuilt updated to `0.28.1rc1.dev397+gfd4a15126.d20260904` (Sep 4) — second consecutive day with available v0.28.x prebuilt. Eval action from Entry 163 continues. All other checks static or incrementally updating.
+
+### Recommendations
+
+1. **[IMMEDIATE — 2nd consecutive day] Evaluate SVD v0.28.x prebuilt (now dev397).** Pull `prebuilt-vllm-current` wheel from eugr/spark-vllm-docker; run harness at c1/c4/c8/c16 with production config (Qwen3.6-35B-A3B-FP8, MTP=2, FLASH_ATTN, FlashInfer MoE). Gate: ≥+5% c8. Key gains: GB10 MoE FP8 tuning (#52502), FlashInfer XQA SM12x (#49718), adaptive speculative budget (TTFT), new b12x branch. Coordinate prod-down window (~90s reload). Use dev397 build (not yesterday's dev345).
+2. **Continue daily Qwen3.8-35B-A3B watch.** Day 10; September Apsara Conference remains anticipated window.
+3. **Hold `fwupdmgr update`.** OTA2608 ~28 weeks overdue; EC 0x03000508 fan regression unresolved. EC 0x03000302 unaffected.
+4. **BIOS `Power On Behavior` auto-on** (Entry 157 Rec): still pending physical-access window.
+
+### Baseline Updates Applied to SPARK_BASELINE.md
+
+| Field | Prior value | New value |
+|---|---|---|
+| `Last updated` / `Last recon` | 2026-09-04 (Entry 163) | **2026-09-05 (Entry 164)** |
+| `svd_last_checked_date` | 2026-09-04 (Entry 163); `0.28.1rc1.dev345+g4cc0cb6f7.d20260903` | **2026-09-05 (Entry 164); UPDATED `0.28.1rc1.dev397+gfd4a15126.d20260904` (Sep 4); FlashInfer `0.6.18-dbc47414-d20260904`; +52 commits; new b12x branch; GLM 5.3 Flash recipe** |
+| `forum_last_checked_date` | 2026-09-04 (Entry 163); EGRESS_BLOCKED 6th day | **2026-09-05 (Entry 164); EGRESS_BLOCKED 7th consecutive day; ceiling /t/382068 unchanged** |
+| `forum_posts_since_163` | (not present) | Added: no new threads above /t/382068; OTA2608 NOT ANNOUNCED (~28w); EC 0x03000508 UNRESOLVED (~28w). NO ACTION. |
+| `vllm_last_checked_version` | v0.28.0 (re-confirmed Entry 163) | Re-confirmed 2026-09-05 (Entry 164); no v0.28.1 stable/v0.29; v0.28.0 still latest |
+| `arena_top_fp8_qwen35_tok_s` | Stojanovic 226, Poveda 112, Atlas 158 | Stojanovic **227** (+1), Poveda **114** (+2), Atlas **159** (+1). New Sep 5: sub1788600016721 (Zaizen, Qwen3.8-Flash-Next-NVFP4, 2-node SGLang) — not a single-node FP8 Qwen3.6 35B contender. 10% trigger NOT FIRED. |

@@ -13669,3 +13669,43 @@ Per run instructions, `SPARK_BASELINE.md` was **not modified**. The following ch
 | **Watch Item — UPDATE** | Driver 580.173.02 apt-hold (Entry 126) | **CORROBORATED 2026-09-05 (Entry 165):** /t/382452 — DGX OS 7.5.0 OTA + kernel `6.17.0-1032-nvidia` + driver 580.173.02 leaves zero DRM connectors when `nvidia-drm-options-modeset0` is installed (no console, no HDMI/DP). Second independent failure mode for the same driver. Apply the hold before the next apt operation. |
 | **Watch Item — CONFIRM** | Qwen3.8-Flash-Next rejection (Entry 154/157) | **CONFIRMED ON SINGLE-NODE MEASUREMENT 2026-09-05 (Entry 165):** three independent single-Spark recipes (/t/382446 37 tok/s, /t/382117 43.8 tok/s, /t/382435 37–40 tok/s 2-node) plus an official `nvidia/Qwen3.8-Flash-Next-NVFP4` checkpoint (/t/382449). Best case ~44 tok/s c1 = ~66% of production 66.9. **Rejection stands on measured evidence.** |
 
+
+## Entry 166 - DGX Spark Recon (2026-09-06)
+
+> **WORTH WATCHING** — No new ACTION triggers today. All Entry 165 actions carry forward unchanged (Arm C eval overdue, driver apt-hold, BIOS auto-on). Qwen3.8-35B-A3B watch day 11; Apsara Conference 16 days out. Forum EGRESS blocked 9th consecutive day. WebSearch AI hallucinated PR #40099 merge claim — manually verified STILL OPEN.
+
+### Check Results
+
+1. **Arena:** Firestore LIST accessible (HTTP 200). Direct reads confirmed: Stojanovic FP8 (sub1779297106805) recipeCopyCount **227** (unchanged). Poveda NVFP4 (sub1782803609803) recipeCopyCount **114** (unchanged). Atlas overall (sub1779495971526) recipeCopyCount **159** (unchanged). **New submission today: sub1788677816809** (Tadeusz Hupało, Qwen3.8-Flash-Next-NVFP4, **2-node**, Sep 6 06:57 UTC, spec decode disabled, tg32 c1 ~26.1 tok/s) — NOT a single-node FP8 Qwen3.6-35B-A3B contender; 2-node deployment further corroborates Entry 165 rejection of Flash-Next. Also visible: sub1788630213132 (Qwen3.8-27B-NVFP4, not our target). 10% trigger NOT FIRED (threshold >88.30 tok/s; FP8 vLLM single-node frontier static since 2026-05-26, ~15.5 weeks).
+2. **vLLM:** GitHub API 403; WebSearch + releases page confirm **v0.28.0 still latest stable** (published Aug 26). v0.29.0 still in RC phase (rc4 from Sep 4 per Entry 165; no stable release today). Standing arch-guard triggers from Entry 165 unchanged (#54048 GB10 MoE router-GEMM fix ships in v0.29.0, #52502 GB10 fused-MoE tuning in v0.28.0). **NOTE: WebSearch surfaced a result asserting PR #40099 "merged November 2025" — HALLUCINATION CONFIRMED.** Direct WebFetch of the PR page confirms PR #40099 is **STILL OPEN**, last activity July 8, 2026 (@kiucho comment) — consistent with all prior tracking. The search AI confused PR numbers or fabricated the merge claim. PR #41063 (DeepGEMM SM12.x): no new status found.
+3. **SVD (eugr/spark-vllm-docker):** GitHub API 403; releases page WebFetch confirms **`0.28.1rc1.dev441+g2902ca17e.d20260905`** (Sep 5 11:44 UTC) remains the current build. FlashInfer: `0.6.18-18e5811d-d20260905`. **No new build in ~24h.** Build cadence may be shifting from daily to every 2+ days. Dev441 remains the Arm C eval target (unchanged from Entry 165). NOTE: This also applies Entry 165's proposed baseline update (dev397 → dev441) that wasn't applied in that headless run.
+4. **Qwen models:** HF EGRESS blocked. WebSearch: no Qwen3.8-35B-A3B release found — only Qwen3.6 variants. **Day 11 of watch, still absent.** Apsara Conference **September 22–24, 2026** (16 days out). Arena sub1788677816809 (Hupało Qwen3.8-Flash-Next-NVFP4, 2-node ~26 tok/s) provides independent corroboration that Flash-Next is a multi-node deployment below production throughput.
+5. **Forum:** 719.json EGRESS_BLOCKED **9th consecutive day**; WebSearch fallback. No new threads above ceiling /t/382459 identified. WebSearch highest indexed thread remains /t/382068 (Sep 2 availability thread). OTA2608: **NOT ANNOUNCED** (~33 weeks overdue). EC 0x03000508 fan regression: **UNRESOLVED** (NVIDIA routing to RMA, per Entry 165 escalation).
+
+### Cross-Correlated Findings
+
+1. **Multi-source confirmation: Qwen3.8-Flash-Next rejected as single-node production candidate.** Arena sub1788677816809 (2-node, ~26 tok/s tg32) + three forum recipes in Entry 165 (37–44 tok/s single-node) + official NVIDIA NVFP4 checkpoint announcement (Entry 165) all confirm: Flash-Next best case ~44 tok/s c1 on single Spark = ~66% of production 66.9 tok/s. Rejection stands with growing independent evidence.
+2. **No new action triggers vs Entry 165.** The week's key open item (Arm C eval on dev441 targeting GB10 MoE router-GEMM fix via #54048) carries forward unchanged. Today confirmed the eval target remains dev441.
+3. **WebSearch AI hallucination flag.** The search AI's "PR #40099 merged Nov 2025" claim demonstrates that AI-generated search summaries for technical PRs can be confidently wrong about status and date. Direct WebFetch of the primary source remains essential for status tracking.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 unchanged; FP8 vLLM frontier ~15.5 weeks static. |
+| `vllm_release \| SM121 OR GB10` (arch-guard, carry-forward) | **STILL FIRED** (carry-forward; no new releases today). |
+| `svd \| new prebuilt vllm version` | **NOT FIRED today.** Dev441 unchanged since Sep 5. |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **NOT FIRED.** Day 11 absent. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** PR STILL OPEN (manually verified). Search AI hallucination ruled out. |
+
+### Overall: WORTH WATCHING
+
+No new ACTION triggers today. Arena frontier static, SVD build stable at dev441, vLLM v0.28.0 unchanged, forum silent above /t/382459, Qwen3.8-35B-A3B day 11 absent. All Entry 165 recommendations carry forward. The one new finding is a confirmed WebSearch hallucination about PR #40099 — a useful data quality note.
+
+### Recommendations
+
+1. **[CARRY-FORWARD TOP PRIORITY] Schedule Arm C build-upgrade eval on dev441.** Target `0.28.1rc1.dev441+g2902ca17e.d20260905`. See Entry 165 for full recommendation including #54048 verification, quality gate, K2-Horizon step (f).
+2. **[CARRY-FORWARD] Driver apt-hold** — apply `sudo apt-mark hold nvidia-driver-580 ...` before any apt operation. 580.173.02 doubly corroborated.
+3. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
+4. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~33 weeks, EC 0x03000508 routing to RMA.
+5. **[WATCH] Qwen3.8-35B-A3B — day 11.** Apsara Conference Sept 22–24. No action until official Qwen org HF release.

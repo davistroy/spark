@@ -13708,4 +13708,46 @@ No new ACTION triggers today. Arena frontier static, SVD build stable at dev441,
 2. **[CARRY-FORWARD] Driver apt-hold** — apply `sudo apt-mark hold nvidia-driver-580 ...` before any apt operation. 580.173.02 doubly corroborated.
 3. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
 4. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~33 weeks, EC 0x03000508 routing to RMA.
+
+---
+
+## Entry 167 - DGX Spark Recon (2026-09-07)
+
+> **WORTH WATCHING** — No new ACTION triggers. Key event: SVD has a new build (`dev462`, Sep 7) superseding the Arm C eval target (`dev441`). New forum thread /t/382522 above ceiling but low-severity (Flash-Next meta-discussion). `Qwen/Qwen-AgentWorld-35B-A3B` surfaced as a previously-untracked official Qwen 35B/3B-active model (released 2026-06-25); specialized for agent simulation, not a general-inference upgrade path. Qwen3.8-35B-A3B: day 12 absent; Apsara Conference 15 days out. All Entry 166 carry-forward actions unchanged.
+
+### Check Results
+
+1. **Arena:** Firestore LIST returned `{}` (blocked again — fluctuating pattern continues; LIST was 312 docs Sep 5, `{}` today). Direct reads: Stojanovic FP8 (sub1779297106805) recipeCopyCount **227** (UNCHANGED). Poveda NVFP4 (sub1782803609803) recipeCopyCount **114** (UNCHANGED). Atlas overall (sub1779495971526) recipeCopyCount **159** (UNCHANGED). No new FP8 vLLM submissions identified above 80.27 tok/s c1. **10% trigger NOT FIRED** (threshold >88.30 tok/s; FP8 vLLM single-node frontier static ~15.5 weeks since 2026-05-26).
+2. **vLLM:** GitHub API 403; WebSearch confirms **v0.28.0 still latest stable** (Aug 26). v0.29.0 still in RC (rc4 from Sep 4; no stable release). Standing arch-guard triggers carry forward: #54048 (GB10 MoE router-GEMM bf16-rounding fix, merged 2026-08-30, ships v0.29.0); #52502 (GB10 fused-MoE FP8 dispatch tuning, in v0.28.0). PR #40099 (Gemma4 repetition): no new status — assumed STILL OPEN. Issue #41063 (DeepGEMM SM12.x): no new status.
+3. **SVD (eugr/spark-vllm-docker):** **NEW BUILD: `0.28.1rc1.dev462+g9ca97b28b.d20260906`** (Sep 7, 02:10 UTC, tag `prebuilt-vllm-current`). FlashInfer: `0.6.18-6c14bbd5-d20260906`. +21 commits over prior tracked dev441 (Sep 5). Notable commits: Sep 6 "Fix regression in V2 model runner" (stability fix, relevance to MTP path unverified); Sep 7 "Switched GLM 5.3 Flash to a new loader". Dev462 **supersedes dev441 as the Arm C eval target.**
+4. **Qwen models:** HF EGRESS blocked. WebSearch: no Qwen3.8-35B-A3B release. **Day 12 absent.** Apsara Conference Sep 22–24 (15 days). **INFORMATIONAL:** `Qwen/Qwen-AgentWorld-35B-A3B` surfaced in search results — official Qwen-org 35B/3B-active MoE model, released 2026-06-25, 262K context, "native language world model for agentic environment simulation." Multiple community quants exist (unsloth GGUF, cyankiwi AWQ-INT4, SC117 MTP-APEX-GGUF). Not previously tracked. Specialized purpose (agent simulation domains) — not a direct general-inference production upgrade path.
+5. **Forum:** 719.json EGRESS_BLOCKED **10th consecutive day**; WebSearch fallback. **NEW /t/382522** "Which single Spark Qwen3.8-Flash-Next thread is the best?" (Sep 7, ~early UTC; ID 382522 > prior ceiling /t/382459). Meta-discussion about which single-node Flash-Next deployment thread to follow — LOW severity (Flash-Next rejected Entry 165, this corroborates continued community interest without new performance data). New ceiling: **/t/382522**. OTA2608: NOT ANNOUNCED (~34 weeks overdue). EC 0x03000508 fan regression: UNRESOLVED (NVIDIA routing to RMA).
+
+### Cross-Correlated Findings
+
+1. **Flash-Next single-node rejection multi-source confirmed (again).** Forum /t/382522 meta-thread + prior Entry 165 single-node measurements (37–44 tok/s) + Arena 2-node-only submissions: three independent signals that Flash-Next does not work well single-node. Rejection stands.
+2. **SVD build acceleration.** Dev462 (Sep 7) follows dev441 (Sep 5) only 2 days later with a V2 model runner regression fix — suggests active maintenance cadence; Arm C eval target should track current prebuilt, now dev462.
+3. **Qwen-AgentWorld-35B-A3B previously missed.** Released 2026-06-25 (~11 weeks ago), community quants active, not in prior tracking. Architecture identical to Qwen3.6 (35B/3B-active MoE). Specialized purpose limits immediate production relevance but worth monitoring if use-case expands to agent-loop workloads.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 unchanged; frontier static ~15.5 weeks. |
+| `vllm_release \| SM121 OR GB10` (arch-guard, carry-forward) | **STILL FIRED** (carry-forward; no new stable release today). |
+| `svd \| new prebuilt vllm version` | **FIRED.** Dev462 is new (dev441 → dev462, +21 commits, Sep 7). |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **NOT FIRED.** Day 12 absent. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** No change. |
+
+### Overall: WORTH WATCHING
+
+SVD has a new build (dev462) that supersedes the Arm C eval target. New forum thread above ceiling is Flash-Next meta-discussion, low severity. Qwen3.8-35B-A3B still absent day 12. No new ACTION triggers.
+
+### Recommendations
+
+1. **[UPDATED TOP PRIORITY] Arm C build-upgrade eval: update target to `dev462`.** Previous target `dev441+g2902ca17e.d20260905` superseded by `0.28.1rc1.dev462+g9ca97b28b.d20260906` (Sep 7). The Sep 6 "Fix regression in V2 model runner" commit is an additional reason to target the newest build. See Entry 165 for full eval procedure (#54048 verification, quality gate, K2-Horizon step (f)).
+2. **[INFORMATIONAL] Evaluate `Qwen/Qwen-AgentWorld-35B-A3B` if agent-loop workloads emerge.** Same MoE architecture as Qwen3.6, FP8 quant feasible, 262K context. Purpose-specialized (agent simulation), not a general inference upgrade. Community quants available (cyankiwi AWQ-INT4, unsloth GGUF). Note: AWQ INT4 path rejected for SM121 (Entry 051); FP8 eval would require Arm C first.
+3. **[CARRY-FORWARD] Driver apt-hold** — apply before any apt operation. 580.173.02 doubly corroborated.
+4. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
+5. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~34 weeks, EC 0x03000508 routing to RMA.
 5. **[WATCH] Qwen3.8-35B-A3B — day 11.** Apsara Conference Sept 22–24. No action until official Qwen org HF release.

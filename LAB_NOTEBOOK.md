@@ -13790,3 +13790,42 @@ SVD trigger fires on dev486 (intra-day second build Sep 7, supersedes dev462 as 
 3. **[CARRY-FORWARD] Driver apt-hold** — apply before any apt operation. 580.173.02 doubly corroborated.
 4. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
 5. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~35 weeks overdue; EC 0x03000508 routing to RMA.
+
+## Entry 169 - DGX Spark Recon (2026-09-09)
+
+> **WORTH WATCHING** — No ACTION triggers. Stojanovic FP8 recipeCopyCount 227→228 (+1); Atlas overall 160→161 (+1) — minor continued community activity. Qwen3.8-35B-A3B: **day 14 absent**; Apsara Conference Sep 22–24 now 13 days out. vLLM v0.28.0 still latest stable (no v0.29.0 stable). No new SVD build beyond dev486 (Sep 7). Forum ceiling /t/382522 unchanged. All Entry 168 carry-forwards hold.
+
+### Check Results
+
+1. **Arena:** Firestore LIST returned `{}` (blocked — 12th consecutive day). Direct reads: Stojanovic FP8 (sub1779297106805) recipeCopyCount **228** (+1 from 227, Entry 168). Poveda NVFP4 (sub1782803609803) recipeCopyCount **114** (UNCHANGED). Atlas overall (sub1779495971526) recipeCopyCount **161** (+1 from 160, Entry 168). Stojanovic recipe confirmed: DFlash spec-decode (n=8), flash_attn backend, gpu_util 0.85, max_model_len 262,144. No new FP8 vLLM submissions above 80.27 tok/s c1 identified. **10% trigger NOT FIRED** (threshold >88.30 tok/s; frontier static ~15.7 weeks since 2026-05-26).
+2. **vLLM:** GitHub API 403 (blocked in remote env). WebSearch: **v0.28.0 still latest stable** — no v0.29.0 stable. v0.29.0 RC series continues. Carry-forward arch-guard triggers: #52502 (GB10 fused-MoE FP8 tuning), #54048 (GB10 MoE router-GEMM bf16-rounding fix, ships v0.29.0). PR #40099 (Gemma4 repetition): no new status — assumed STILL OPEN. Issue #41063 (DeepGEMM SM12.x): no new status.
+3. **SVD (eugr/spark-vllm-docker):** GitHub API 403 (blocked in remote env). WebSearch: no new build beyond **dev486+gd875ff5ba.d20260907** (Sep 7 18:12 UTC). Search result title shows cached `dev345+g4cc0cb6f7.d20260903` (Sep 3 build) for the `prebuilt-vllm-current` tag page — older cached index; dev486 remains current. No new Arm C builds this cycle.
+4. **Qwen models:** Qwen3.8-35B-A3B **NOT found — day 14 absent**. WebSearch shows no A3B MoE release in September 2026. Confirmed August 2026 Qwen3.8 releases: Qwen3.8-2.4T-A95B (Aug 12, dense) and Qwen3.8-27B (Aug 14, dense 262K ctx) — neither is an A3B-class production upgrade candidate. Apsara Conference Sep 22–24 (13 days out) remains primary release window hypothesis.
+5. **Forum:** 719.json EGRESS_BLOCKED **12th consecutive day**; WebSearch fallback. No new threads above ceiling /t/382522 found — highest indexed threads remain /t/382068 (Sep 2 GB10 availability) and /t/381267 (Future of DGX Spark). OTA2608: **NOT ANNOUNCED** (~35 weeks overdue). EC 0x03000508 fan regression: **UNRESOLVED** (NVIDIA routing to RMA).
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-35B-A3B absence corroborated (HF + Forum).** WebSearch of HuggingFace yields no A3B MoE release; forum WebSearch also silent. Two independent channels confirm day-14 absence. Apsara Conference 13 days out.
+2. **Arena FP8 frontier static ↔ no new SVD builds.** No new Arena FP8 submissions above 80.27 tok/s aligns with no new SVD build beyond dev486 — consistent with no new eval-capable community builds this cycle.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 unchanged; frontier static ~15.7 weeks. |
+| `vllm_release \| SM121 OR GB10` (arch-guard, carry-forward) | **STILL FIRED** (carry-forward; no new stable release). |
+| `svd \| new prebuilt vllm version` | **NOT FIRED.** dev486 (Sep 7) confirmed still current; no new build found. |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **NOT FIRED.** Day 14 absent. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** No change. |
+
+### Overall: WORTH WATCHING
+
+No ACTION triggers. All baselines static. Qwen3.8-35B-A3B absence extends to day 14; Apsara Conference (Sep 22–24) now 13 days out — still within the anticipated window. Minor recipeCopyCount increments (+1 Stojanovic, +1 Atlas) indicate continued community activity without performance boundary movement.
+
+### Recommendations
+
+1. **[CARRY-FORWARD] Arm C build-upgrade eval target: dev486** (`0.28.1rc1.dev486+gd875ff5ba.d20260907`, Sep 7 18:12 UTC). No new build this cycle; dev486 remains the eval target.
+2. **[WATCH] Qwen3.8-35B-A3B — day 14.** Apsara Conference Sep 22–24 (13 days). Trigger immediate recon notification on official `Qwen/Qwen3.8-35B-A3B-FP8` HF release.
+3. **[CARRY-FORWARD] Driver apt-hold** — apply before any apt operation. 580.173.02 corroborated.
+4. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
+5. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~35 weeks overdue; EC 0x03000508 routing to RMA.

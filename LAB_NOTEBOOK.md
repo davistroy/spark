@@ -13829,3 +13829,44 @@ No ACTION triggers. All baselines static. Qwen3.8-35B-A3B absence extends to day
 3. **[CARRY-FORWARD] Driver apt-hold** — apply before any apt operation. 580.173.02 corroborated.
 4. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
 5. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~35 weeks overdue; EC 0x03000508 routing to RMA.
+
+## Entry 170 - DGX Spark Recon (2026-09-10)
+
+> ⚠ **ACTION NEEDED** — **vLLM v0.29.0 stable released 2026-09-09** with multiple GB10/SM121-specific changes: #54048 (GB10 MoE router-GEMM bf16-rounding fix, CONFIRMED SHIPPED), **#53649 (autotuning — 33.6% E2E latency reduction, GB10-listed; scope vs production MoE FP8 workload TBD)**, #52018 (b12x FP4 MoE SM121), #54277 (DSpark FlashInfer MLA). Simultaneously, SVD dev588 (`0.28.1rc1.dev588+gc7e9816c6.d20260909`) + FlashInfer `0.6.18-8e3854bc-d20260909` both released Sep 9 — fires SVD trigger. If #53649 applies to Qwen3.6-35B-A3B-FP8 MoE on SM121, c=1 could move from 66.9 toward ~89 tok/s — above the Arena 10% trigger threshold (88.30). **Arm C eval is now fully unblocked: all upstream dependencies cleared.**
+
+### Check Results
+
+1. **Arena:** Firestore LIST returned `{}` (blocked — 13th consecutive day). Direct reads: Stojanovic FP8 (sub1779297106805) recipeCopyCount **228** (UNCHANGED from Entry 169). Poveda NVFP4 (sub1782803609803) recipeCopyCount **114** (UNCHANGED). No new FP8 vLLM submissions above 80.27 tok/s c1 identified. **10% trigger NOT FIRED** (threshold >88.30 tok/s; FP8 vLLM frontier static ~15.9 weeks since 2026-05-26).
+2. **vLLM:** GitHub API 403 (blocked in remote env); WebSearch + GitHub release page confirm **v0.29.0 STABLE RELEASED 2026-09-09** — first stable since v0.28.0 (2026-08-26). Key GB10/SM121 items: (1) **#54048** "cuBLAS out_dtype router GEMM on all archs including GB10" — GB10 MoE router-GEMM bf16-rounding fix, tracked as expected in v0.29.0, NOW CONFIRMED SHIPPED; (2) **#53649** "Autotuning with 33.6% E2E latency reduction" — NEW, listed under GB10 changes; if applicable to MoE FP8 inference on SM121, significant throughput gain; (3) **#52018** b12x FP4 MoE support for SM120/SM121; (4) **#52980** FA4 re-enabled for head_size=256 on Blackwell; (5) **#54277** DSpark drafting with FlashInfer MLA under DCP; (6) **#52823** Adaptive top-k width re-landed. Breaking: Model Runner V2 now default; 10 deprecated model architectures removed. **PR #40099 (Gemma4 repetition): NOT in v0.29.0 — STILL OPEN.** PR #52502 (GB10 fused-MoE FP8 tuning, was in v0.28.0): inherited by v0.29.0. Issue #41063 (DeepGEMM SM12.x): no new status (OPEN/dormant).
+3. **SVD (eugr/spark-vllm-docker):** GitHub API 403; WebSearch confirms **NEW BUILD: `0.28.1rc1.dev588+gc7e9816c6.d20260909`** (Sep 9 12:25 UTC; +102 dev commits over dev486 Sep 7 18:12 UTC). Also **NEW FlashInfer: `0.6.18-8e3854bc-d20260909`** (Sep 9). Both released same day as v0.29.0 stable. SVD build tracks v0.28.1rc1 branch (independent of v0.29.0 stable series; content relationship TBD). **SVD trigger fires. Arm C eval target updated to dev588.**
+4. **Qwen models:** Qwen3.8-35B-A3B **NOT found — day 15 absent**. QwenLM/Qwen3.8 GitHub repo README lists only Qwen3.8-27B (Aug 14) and Qwen3.8-2.4T-A95B (Aug 12) — no 35B-A3B listed even as upcoming. Apsara Conference Sep 22–24 (12 days) remains primary release window hypothesis. No other new A3B-class MoE models from Qwen or other labs identified.
+5. **Forum:** 719.json EGRESS_BLOCKED **13th consecutive day**; WebSearch fallback. No new threads above ceiling /t/382522 found — highest indexed thread remains /t/382068 (Sep 2 GB10 availability). Informational: Nouveau+NVK working on GB10 (Red Hat's David Airlie, Phoronix Sep 2026; uses NVIDIA R610 firmware; no production relevance). OTA2608: **NOT ANNOUNCED** (~36 weeks overdue). EC 0x03000508 fan regression: **UNRESOLVED** (NVIDIA routing to RMA).
+
+### Cross-Correlated Findings
+
+1. **v0.29.0 stable + SVD dev588 + FlashInfer 0.6.18-8e3854bc all released Sep 9 (same day)** — tri-source convergence. High-confidence vLLM ecosystem milestone. Arm C eval gate is fully unblocked: both the stable upstream release and the community build are available simultaneously for the first time.
+2. **#54048 GB10 router-GEMM bf16-rounding CONFIRMED SHIPPED** — tracked in SPARK_BASELINE.md since Entry 168 as "merged 2026-08-30, ships v0.29.0." Now confirmed. Direct MoE routing improvement for SM121 correctness.
+3. **Qwen3.8-35B-A3B absent (HF search + QwenLM/Qwen3.8 GitHub repo — two channels, day 15).** The model is not listed as an announced upcoming release in the QwenLM/Qwen3.8 repo README — slightly weakens the imminence hypothesis; Apsara Conference (Sep 22–24) remains plausible window.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 unchanged; frontier static ~15.9 weeks. |
+| `vllm_release \| SM121 OR GB10` (arch-guard) | **⚠ FIRED.** v0.29.0 (Sep 9): #54048 (GB10 router-GEMM), #53649 (33.6% E2E latency reduction, GB10-listed), #52018 (b12x FP4 MoE SM121), #54277 (DSpark FlashInfer MLA). |
+| `svd \| new prebuilt vllm version` | **⚠ FIRED.** dev588 (`0.28.1rc1.dev588+gc7e9816c6.d20260909`, Sep 9 12:25 UTC) + FlashInfer `0.6.18-8e3854bc-d20260909` (Sep 9). |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **NOT FIRED.** Day 15 absent. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** Not in v0.29.0. |
+
+### Overall: ACTION NEEDED
+
+Two triggers fired simultaneously (vLLM arch-guard + SVD new build). vLLM v0.29.0 is the first stable release since v0.28.0 (2 weeks ago) and includes four GB10/SM121-specific improvements. The standout new finding is **#53649 (33.6% E2E latency reduction from autotuning)** — if applicable to Qwen3.6-35B-A3B-FP8 MoE on SM121, it would push production c=1 from 66.9 tok/s to ~89 tok/s, crossing both the Arena 10% trigger threshold (88.30) and the FP8 vLLM frontier (Stojanovic 80.27). This warrants immediate investigation of PR #53649 scope before scheduling the Arm C eval.
+
+### Recommendations
+
+1. **[NEW — PRIORITY 1] Investigate PR #53649 (33.6% E2E latency reduction) scope.** Determine: (a) GB10/SM121-specific or general? (b) mechanism (GEMM autotuning, kernel selection, tuning config)? (c) applicable to MoE FP8 on SM121? Fetch vLLM v0.29.0 release notes or PR #53649 directly. If applicable, production upgrade priority is elevated to critical.
+2. **[UPDATED — PRIORITY 2] Arm C eval target: dev588.** `0.28.1rc1.dev588+gc7e9816c6.d20260909` (Sep 9 12:25 UTC) + FlashInfer `0.6.18-8e3854bc-d20260909`. Eval window fully unblocked — no upstream dependencies pending. Benchmark Qwen3.6-35B-A3B-FP8 on dev588 vs production cu132 baseline at next maintenance window. Also validate v0.29.0 items: #54048 router-GEMM fix, #53649 autotuning delta.
+3. **[WATCH] Qwen3.8-35B-A3B — day 15.** Not listed in QwenLM/Qwen3.8 repo README; Apsara Conference Sep 22–24 (12 days). Trigger immediate recon notification on official `Qwen/Qwen3.8-35B-A3B-FP8` HF release.
+4. **[CARRY-FORWARD] Driver apt-hold** — apply before any apt operation. 580.173.02 corroborated.
+5. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
+6. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~36 weeks overdue; EC 0x03000508 routing to RMA.

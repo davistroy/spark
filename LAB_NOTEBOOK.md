@@ -13870,3 +13870,44 @@ Two triggers fired simultaneously (vLLM arch-guard + SVD new build). vLLM v0.29.
 4. **[CARRY-FORWARD] Driver apt-hold** — apply before any apt operation. 580.173.02 corroborated.
 5. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
 6. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~36 weeks overdue; EC 0x03000508 routing to RMA.
+
+## Entry 171 - DGX Spark Recon (2026-09-11)
+
+> **WORTH WATCHING** — No new action triggers. Carry-forward action from Entry 170 (Arm C eval on dev588) remains the priority. **Scope note on #53649:** Entry 170 described it as "listed under GB10 changes" but the actual v0.29.0 release notes call it "Blackwell autotuning" (broader family scope than stated — SM121 applicability unconfirmed, TBD in Arm C eval). Stojanovic FP8 recipeCopyCount +2 (228→230) — minor community uptick, no new performance frontier. PR #40099 WebSearch anomaly flagged (claim of November 2025 merge contradicts prior tracking — unverified). Qwen3.8-35B-A3B absent day 16. Forum ceiling /t/382522 unchanged.
+
+### Check Results
+
+1. **Arena:** Firestore LIST not attempted (continues blocked per Entry 170 pattern). Direct reads: Stojanovic FP8 (sub1779297106805) recipeCopyCount **230** (+2 from 228 in Entry 170). Poveda NVFP4 (sub1782803609803) recipeCopyCount **114** (UNCHANGED). Atlas overall (sub1779495971526) recipyCopyCount **161** (UNCHANGED). No new FP8 vLLM submissions above 80.27 tok/s c1 identified. **10% trigger NOT FIRED** (threshold >88.30 tok/s; FP8 vLLM frontier static ~16.1 weeks since 2026-05-26). Stojanovic recipe confirmed: "Qwen3.6-35B-A3B-FP8-DFLASH-FlashQLA", FP8, vLLM, `Qwen/Qwen3.6-35B-A3B-FP8`.
+2. **vLLM:** GitHub API 403; WebSearch + GitHub releases page confirm **v0.29.0 remains the latest stable** (released 2026-09-09; no v0.30.x found). **Scope correction on #53649:** the v0.29.0 release notes title this as "Blackwell autotuning with 33.6% E2E latency reduction" — NOT explicitly "GB10-specific" as Entry 170 stated; SM121 is Blackwell-class but the tuning may target SM100 (B200) more than SM121. Applicability to Qwen3.6-35B-A3B-FP8 MoE on SM121 remains TBD — Arm C eval will settle this. Other v0.29.0 items confirmed unchanged from Entry 170: #54048 (cuBLAS out_dtype router GEMM on all archs including GB10), #52018 (b12x FP4 MoE SM120/SM121), #54277 (FlashInfer MLA for DSpark under DCP). **New item noted:** Qwen3.8-Flash-Next now officially supported in v0.29.0 with BF16/FP8/NVFP4 (informational; Flash-Next already rejected as single-node production candidate in Entry 165). **PR #40099 anomaly:** WebSearch returned a claim that PR #40099 was "merged in November 2025" — this is **INCONSISTENT** with prior tracking (Entry 170: NOT in v0.29.0, STILL OPEN; SPARK_BASELINE gemma4_pr_status explicitly "OPEN"). Almost certainly a WebSearch hallucination; treat as unverified and do NOT update baseline. Manual verification recommended (check GitHub PR #40099 directly). Issue #41063 (DeepGEMM SM12.x): no new status.
+3. **SVD (eugr/spark-vllm-docker):** GitHub API 403; WebSearch confirms prebuilt-vllm-current released September 9 12:25 UTC = **dev588** unchanged. "New stable build" description corroborated. No new build this cycle. SVD trigger from Entry 170 is the standing state; dev588 remains the Arm C eval target.
+4. **Qwen models:** Qwen3.8-35B-A3B **NOT found — day 16 absent.** Multiple WebSearch queries confirm no A3B MoE variant in Qwen3.8 family. Qwen3.8 open-weight confirmed variants: 27B dense (Aug 14), Flash-Next 125B/6B-active (Aug 26), 2.4T-A95B (API Aug 3; open weights announced ~Aug). One search explicitly states "there is no Qwen/Qwen3.8-35B-A3B on HuggingFace." Apsara Conference Sep 22–24 (11 days) remains primary release window hypothesis. No other new A3B-class MoE models from Qwen or other labs identified. Note: vLLM v0.29.0 native support for Qwen3.8-Flash-Next is informational only (Flash-Next rejected in Entry 165 on throughput).
+5. **Forum:** 719.json EGRESS_BLOCKED **14th consecutive day**; WebSearch fallback. No new threads above ceiling **/t/382522** found — highest indexed results continue to reference /t/382068 (Sep 2 GB10 availability) and /t/381267 (Future of DGX Spark). OTA2608: **NOT ANNOUNCED** (~37 weeks overdue). EC 0x03000508 fan regression: **UNRESOLVED** (NVIDIA routing to RMA, case 260716-000029). No new driver/firmware/model/SM121 findings.
+
+### Cross-Correlated Findings
+
+1. **Stojanovic FP8 recipeCopyCount +2 (230, direct Firestore read).** Minor community uptick in recipe usage without performance frontier movement. Aligns with no new SVD builds and no new Arena submissions — the ecosystem is in a hold state pending the Arm C eval window.
+2. **#53649 "Blackwell autotuning" scope ambiguity** — independently noted in both the v0.29.0 GitHub release page and the AI/TLDR release summary. Neither source says "GB10" or "SM121" explicitly. Entry 170's "listed under GB10 changes" language overstated the specificity. This is a two-source confirmation that the scope note is valid and the Arm C eval is the correct resolution path.
+3. **Qwen3.8-35B-A3B still absent (HF search + QwenLM/Qwen3.8 GitHub repo absence — two channels, day 16).** The HuggingFace and web search channels both confirm absence. The 11-day Apsara window remains the best hypothesis.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 unchanged; frontier static ~16.1 weeks. recipeCopyCount +2 (noise). |
+| `vllm_release \| SM121 OR GB10` (arch-guard) | **CARRY-FORWARD** from Entry 170 (v0.29.0). No new release this cycle. |
+| `svd \| new prebuilt vllm version` | **NOT FIRED.** dev588 (Sep 9) confirmed still current; no new build. |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **NOT FIRED.** Day 16 absent. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** WebSearch merge claim unverified / likely hallucination; baseline says OPEN. |
+
+### Overall: WORTH WATCHING
+
+No new action triggers. All baselines from Entry 170 carry forward. Primary action item remains the Arm C eval on dev588 (v0.29.0 content). The #53649 scope uncertainty (Blackwell vs GB10-specific) slightly tempers the ~89 tok/s c=1 forecast but does not change the action — the eval measures it directly. Qwen3.8-35B-A3B absent day 16; Apsara Conference 11 days out. PR #40099 anomaly (WebSearch claim vs our tracking) warrants manual GitHub verification at next opportunity.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] Execute Arm C eval on dev588.** Target: `0.28.1rc1.dev588+gc7e9816c6.d20260909` + FlashInfer `0.6.18-8e3854bc-d20260909`. Fully unblocked. Benchmark Qwen3.6-35B-A3B-FP8 at c=1/4/8/16 vs production cu132 baseline. Key items to validate: (a) #53649 "Blackwell autotuning" — what's the SM121 latency delta? (b) #54048 router-GEMM correctness; (c) b12x FP4 MoE path activation on SM121.
+2. **[WATCH] Qwen3.8-35B-A3B — day 16.** Apsara Conference Sep 22–24 (11 days). Watch: Qwen HF org + `QwenLM/Qwen3.8` GitHub. Trigger recon notification on `Qwen/Qwen3.8-35B-A3B-FP8` HF publication.
+3. **[FLAG] Verify PR #40099 status via direct GitHub check** (not WebSearch). WebSearch returned a suspicious "November 2025 merge" claim that contradicts our tracking and is almost certainly a hallucination. Manually confirm open/closed at next opportunity.
+4. **[CARRY-FORWARD] Driver apt-hold** — `sudo apt-mark hold nvidia-driver-580 ...` before any apt operation. 580.173.02 breaks GPU post-reboot.
+5. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window (Hold Delete → Advanced > Power On Behavior).
+6. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~37 weeks overdue; EC 0x03000508 routing to RMA; LVFS distributes broken EC 0x03000508.

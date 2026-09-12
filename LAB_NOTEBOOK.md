@@ -13911,3 +13911,44 @@ No new action triggers. All baselines from Entry 170 carry forward. Primary acti
 4. **[CARRY-FORWARD] Driver apt-hold** — `sudo apt-mark hold nvidia-driver-580 ...` before any apt operation. 580.173.02 breaks GPU post-reboot.
 5. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window (Hold Delete → Advanced > Power On Behavior).
 6. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~37 weeks overdue; EC 0x03000508 routing to RMA; LVFS distributes broken EC 0x03000508.
+
+## Entry 172 - DGX Spark Recon (2026-09-12)
+
+> **WORTH WATCHING** — SVD trigger fired: new Sep 11 build with FlashInfer 0.7.0 bump and anomalous vLLM version string (`0.1.1.dev7` — versioning scheme change suspected). PR #40099 OPEN confirmed via direct fetch (Entry 171 WebSearch "November 2025 merge" claim resolved as hallucination). Qwen3.8-35B-A3B absent day 17; Apsara Conference 10 days. No Arena movements; vLLM v0.29.0 still latest stable; forum ceiling unchanged.
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. Stojanovic FP8 (sub1779297106805) recipeCopyCount **230** (UNCHANGED from Entry 171). Poveda NVFP4 (sub1782803609803) recipeCopyCount **114** (UNCHANGED). Atlas overall (sub1779495971526) recipyCopyCount **161** (UNCHANGED). No new FP8 vLLM submissions above 80.27 tok/s c1 identified. **10% trigger NOT FIRED** (threshold >88.30 tok/s; FP8 vLLM frontier static ~16.2 weeks since 2026-05-26). LIST not attempted (follows blocked pattern from prior entries).
+2. **vLLM:** GitHub API 403; WebSearch + GitHub releases page confirm **v0.29.0 remains the latest stable** (no v0.30.x found; arch-guard is CARRY-FORWARD from Entry 170). v0.29.0 new models include Qwen3.8-Flash-Next (informational only; Flash-Next rejected Entry 165). **PR #40099 anomaly RESOLVED: confirmed OPEN via direct PR fetch** — last activity Sep 1 2026 (@ weselben mention in related issue); Entry 171 WebSearch claim of "merged November 2025" was a WebSearch hallucination, definitively debunked. Issue #41063 (DeepGEMM SM12.x): no new status.
+3. **SVD (eugr/spark-vllm-docker):** **⚠ NEW BUILD: Sep 11 12:16 UTC** — `0.1.1.dev7+g8c1d1c297.d20260911` + FlashInfer `0.7.0-ac7bce13-d20260911`. Published AFTER Entry 171 recon (which confirmed dev588 Sep 9 as current). **FlashInfer bumped 0.6.18 → 0.7.0** (notable minor version). **⚠ VERSION ANOMALY: `0.1.1.dev7` does NOT follow the prior `0.28.1rc1.devNNN` scheme** — hypothesis: spark-vllm-docker project now uses its own version numbering (0.1.1 = project version), embedded vLLM version TBD. Cannot confirm from release title alone. Arm C eval target updates to this Sep 11 build pending embedded-version verification. SVD trigger FIRED.
+4. **Qwen models:** Qwen3.8-35B-A3B **NOT found — day 17 absent.** WebSearch and QwenLM/Qwen3.8 GitHub both confirm no 35B-A3B variant released. Explicitly stated: "There is no Qwen3.8-35B-A3B on Hugging Face" (as of Sep 12). Apsara Conference Sep 22–24 (10 days) remains primary release window hypothesis. No other new A3B-class MoE models from Qwen or other labs identified.
+5. **Forum:** 719.json EGRESS_BLOCKED **15th consecutive day**; WebSearch fallback. No new threads above ceiling **/t/382522** — highest indexed results remain /t/382068 (Sep 2 GB10 availability, now 4+ pages) and /t/382522 (Sep 7 Flash-Next). OTA2608: **NOT ANNOUNCED** (~38 weeks overdue). EC 0x03000508 fan regression: **UNRESOLVED** (NVIDIA routing to RMA, case 260716-000029). No new driver/firmware/model/SM121 findings.
+
+### Cross-Correlated Findings
+
+1. **PR #40099 OPEN status confirmed by two independent sources (Entry 172):** Direct PR page fetch shows OPEN + last activity Sep 1 2026; v0.29.0 release notes (WebSearch) do not include #40099. Both channels agree. Entry 171 WebSearch "November 2025 merge" claim was a fabrication. Gemma4 structured-output gate remains blocked on #40099 only.
+2. **SVD FlashInfer 0.7.0 bump (single-source, Sep 11 12:16 UTC).** FlashInfer minor version bumps have historically coincided with new SM121-relevant capabilities (e.g., 0.6.14 in v0.26.0 with XQA SM12x; 0.6.18 in v0.28.0). 0.7.0 may carry further MoE or attention improvements — needs investigation. The vLLM version string `0.1.1.dev7` is anomalous across all prior tracking patterns; no second-source corroboration of the new versioning scheme found.
+3. **Qwen3.8-35B-A3B still absent (HF search + community discussion — two channels, day 17).** Consistent with prior daily findings. Apsara Conference (Sep 22–24) remains the primary near-term release window.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 unchanged; frontier static ~16.2 weeks. All recipeCopyCount fields unchanged. |
+| `vllm_release \| SM121 OR GB10` (arch-guard) | **CARRY-FORWARD** from Entry 170 (v0.29.0). No new release this cycle. v0.29.0 confirmed still latest stable. |
+| `svd \| new prebuilt vllm version` | **⚠ FIRED.** Sep 11 12:16 UTC build: `0.1.1.dev7+g8c1d1c297.d20260911` + FlashInfer `0.7.0`. Version string anomalous — scheme may have changed. |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **NOT FIRED.** Day 17 absent. Apsara Conference 10 days. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** OPEN CONFIRMED via direct fetch (last activity Sep 1 2026). Entry 171 hallucination resolved. |
+
+### Overall: WORTH WATCHING
+
+SVD trigger fired but the anomalous `0.1.1.dev7` version string means the actual vLLM content is uncertain — not a clear ACTION case until the embedded version is verified. The FlashInfer 0.7.0 bump is real and worth understanding. PR #40099 hallucination from Entry 171 is definitively closed. No Arena or forum movements. Qwen3.8-35B-A3B absent day 17.
+
+### Recommendations
+
+1. **[UPDATED — PRIORITY 1] Verify Sep 11 SVD build contents before Arm C eval.** Check release notes, README, or `docker run` output to confirm what vLLM version is embedded in `0.1.1.dev7+g8c1d1c297.d20260911`. The version string `0.1.1.dev7` does not follow the prior `0.28.1rc1.devNNN` scheme — need to confirm whether this wraps v0.29.0 content, a post-v0.28.1rc1 fork, or something else. FlashInfer 0.7.0 contents also worth noting for SM121 relevance. Then execute Arm C eval vs production cu132 baseline (c=1/4/8/16; validate #53649 autotuning delta; #54048 router-GEMM).
+2. **[RESOLVED — Entry 171 item 3] PR #40099 confirmed OPEN.** No action needed on the Entry 171 "Flag". Direct fetch confirms OPEN, last Sep 1 2026 activity. Gemma4 gate remains blocked — carry forward without re-checking via WebSearch (which hallucinated the merge status twice).
+3. **[WATCH] Qwen3.8-35B-A3B — day 17.** Apsara Conference Sep 22–24 (10 days). Monitor Qwen HF org + QwenLM/Qwen3.8 GitHub. Trigger immediate recon notification on `Qwen/Qwen3.8-35B-A3B-FP8` HF publication.
+4. **[CARRY-FORWARD] Driver apt-hold** — `sudo apt-mark hold nvidia-driver-580 ...` before any apt operation. 580.173.02 breaks GPU post-reboot.
+5. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** — next physical-access window.
+6. **[CARRY-FORWARD] Do not run fwupdmgr update.** OTA2608 ~38 weeks overdue; EC 0x03000508 routing to RMA; LVFS distributes broken EC 0x03000508.

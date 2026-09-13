@@ -14021,3 +14021,52 @@ Per run instructions, `SPARK_BASELINE.md` was **not modified**. The following ch
 | Watch Items | — | ADD: kernel `7.0.0-101x-nvidia` line HOLD (/t/383023 RoCE, /t/382922 CUDA contexts). ADD: Blackbox forensic tooling to evaluate (/t/383003). ADD: healthcheck blind spot — no new-CUDA-context probe. CLOSE: Qwen3.8-Flash-Next (rejected on measured speed). |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 174 - DGX Spark Recon (2026-09-13)
+
+> **NO ACTION** — Fully static cycle. Forum EGRESS_BLOCKED (day 1 after Entry 173's brief restoration — access remains intermittent). All Arena baselines, vLLM releases, SVD, and Qwen watch items unchanged. Qwen3.8-35B-A3B day 19 absent (Apsara Sep 22–24, 9 days). PR #40099 WebSearch hallucinated "merged" for a third time — confirmed OPEN per Entry 172 direct fetch. Entry 173 findings (5 forum threads, SVD anomaly resolved) carry-forwarded into SPARK_BASELINE.md this cycle.
+
+### Check Results
+
+1. **Arena:** Direct Firestore reads successful. Stojanovic FP8 (sub1779297106805): recipeCopyCount **230 (UNCHANGED)**, tg128_c1 **80.27 tok/s (UNCHANGED)**. Poveda NVFP4 (sub1782803609803): recipeCopyCount **114 (UNCHANGED)**, 118.91 tok/s. Atlas overall (sub1779495971526): recipeCopyCount **161 (UNCHANGED)**. **10% trigger NOT FIRED** (threshold >88.30 tok/s). FP8 vLLM frontier static ~16.5 weeks (last submission 2026-05-26). LIST not attempted.
+
+2. **vLLM:** GitHub releases API blocked (403); WebSearch fallback. **v0.29.0 (2026-09-09) confirmed still latest stable — no v0.30.x found.** Arch-guard items carry forward from Entry 170 (#54048 GB10 router-GEMM, #53649 Blackwell autotuning scope-ambiguous, #52018 FP4 MoE SM120/SM121, #54277 DSpark MLA). PR #40099 (Gemma4 repetition): **⚠ WebSearch hallucinated "merged November 2025" for the THIRD time** — do NOT use WebSearch to verify this PR; confirmed OPEN via direct fetch Entry 172 (last activity Sep 1, 2026). Issue #41063 (DeepGEMM SM12x): no new status, carry forward OPEN/dormant.
+
+3. **SVD (eugr/spark-vllm-docker):** Direct GitHub releases page fetch successful. **No new build since Entry 173 (Sep 12).** Current stable: `prebuilt-vllm-current` = `0.1.1.dev57+g6b153463a.d20260912` (Sep 12 12:18 UTC) + `prebuilt-flashinfer-current` = `0.7.0-7169776e-d20260912` (Sep 12 12:11 UTC). Version anomaly resolved in Entry 173: `0.1.1.devNN` = setuptools-scm tag-fallback for vLLM main; embedded commit `g6b153463a` = vllm-project/vllm main Sep 12, post-v0.29.0. SVD trigger: **NOT FIRED**.
+
+4. **Qwen models:** HuggingFace API EGRESS_BLOCKED; WebSearch fallback. **Qwen3.8-35B-A3B: NOT released — day 19 absent.** No new Qwen models in 17+ days (last: Qwen-Drive-1.0-4B, Aug 27). Informational: `Qwen/Qwen-AgentWorld-35B-A3B` (released June 23, 2026) is a language-world-model for agentic environment simulation — already tracked in Watch Items (Entry 123); NOT a production chat/coding LLM upgrade. No new A3B-class contenders from other labs found this cycle. Apsara Conference Sep 22–24 (9 days) remains the primary hypothesis for Qwen3.8-35B-A3B open weights.
+
+5. **Forum:** 719.json **EGRESS_BLOCKED** — reblocked one day after Entry 173 brief restoration (access pattern is intermittent, not clean). 721.json not queried (sub-category, same egress block). WebSearch fallback: no new threads above /t/383126 ceiling found (highest indexed: /t/382068, Sep 2, still ongoing). OTA2608: **NOT ANNOUNCED** (~39 weeks overdue). EC 0x03000508 fan regression: **UNRESOLVED** (case 260716-000029 OPEN). Classification: **NO ACTION**.
+
+### Cross-Correlated Findings
+
+None this cycle. All five checks returned static results. The substantive findings from Entry 173 (forum restoration: 5 actionable threads, SVD anomaly resolution) are incorporated into SPARK_BASELINE.md as part of this commit since they were "not applied" in the headless Entry 173 run.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 unchanged; threshold >88.30. All recipeCopyCounts unchanged (230/114/161). Frontier static ~16.5 weeks. |
+| `vllm_release \| SM121 OR GB10 OR Blackwell` (arch-guard) | **NOT FIRED.** v0.29.0 still latest stable; no v0.30.x. Carry-forward from Entry 170. |
+| `svd \| new prebuilt vllm version` | **NOT FIRED.** No new build since Sep 12. |
+| `forum \| new GB10 performance/stability finding` | **NOT FIRED.** EGRESS_BLOCKED; ceiling /t/383126 unchanged. |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **NOT FIRED.** Day 19 absent. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** Confirmed OPEN (Entry 172 direct fetch). ⚠ Do NOT verify via WebSearch — hallucinated "merged" three times. |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063) | **NOT FIRED.** No status change. |
+
+### Overall: NO ACTION
+
+Fully static cycle. No new builds, no new releases, no new forum threads above ceiling, no Qwen model publications. The only ongoing countdown is Apsara Sep 22–24 (9 days). Entry 173 findings are applied to SPARK_BASELINE.md in this commit.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] Arm C build/eval.** Target confirmed (Entry 173): `0.1.1.dev57+g6b153463a.d20260912` + FlashInfer `0.7.0-7169776e-d20260912`. Needs approved prod-down window. Validate #54048 GB10 router-GEMM, #53649 autotuning SM121 scope, #52018 FP4 MoE path.
+2. **[CARRY-FORWARD — NEW Entry 173] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.** Current probes only check running containers; miss the /t/382922 failure mode (new CUDA contexts fail while existing containers report green). Low-risk SSH-only change.
+3. **[CARRY-FORWARD — NEW Entry 173] Review Blackbox** (`https://github.com/lcasarin-maker/blackbox`). Forensic tool for the silent-shutdown class (unified memory starvation → hard shutdown). Read source before any install on production unit; requires Troy's approval.
+4. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03. Three forum reports now reinforce: /t/383023 (RoCE failure on 7.0.0-1019), /t/382922 (CUDA context exhaustion on 7.0.0-1016 + 580.173.02), existing CLAUDE.md DKMS/MOK rule.
+5. **[WATCH] Qwen3.8-35B-A3B — day 19.** Apsara Conference Sep 22–24 (9 days). Trigger immediate out-of-cycle recon on publication of `Qwen/Qwen3.8-35B-A3B-FP8` on HuggingFace.
+6. **[CARRY-FORWARD] Do not run `fwupdmgr update`.** OTA2608 ~39 weeks overdue; LVFS still distributes EC 0x03000508 (broken fan curve).
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

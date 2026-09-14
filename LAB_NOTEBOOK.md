@@ -14070,3 +14070,65 @@ Fully static cycle. No new builds, no new releases, no new forum threads above c
 6. **[CARRY-FORWARD] Do not run `fwupdmgr update`.** OTA2608 ~39 weeks overdue; LVFS still distributes EC 0x03000508 (broken fan curve).
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 175 - DGX Spark Recon (2026-09-14)
+
+> ⚠ **ACTION NEEDED** — New DGX OS OTA landed 2026-09-13 (same day as Entry 174). Thread /t/383222 above forum ceiling /t/383126. OTA bundles driver **580.173.02** (known-bad: GPU breaks on reboot per /t/378200 and CLAUDE.md hold rule) + new kernel **6.17.0-1032-nvidia** + UEFI change (5.36_0ACUM018 → 5.36_0ACUM027) + ~7.2 GiB RAM loss at boot + display dead on some units per /t/382452. **DO NOT APPLY.** Secondary: SVD new build (v0.29.1rc1.dev17, Sep 13) — Arm C eval target has shifted. Qwen3.8-35B-A3B watch item permanently closed: Qwen3.8 lineup has no 35B MoE variant.
+
+### Check Results
+
+1. **Arena:** Direct Firestore reads successful. Stojanovic FP8 (sub1779297106805): recipeCopyCount **230 (UNCHANGED)**, tg128@d8192 c1 extracted as **76.61 tok/s** (baseline 80.27 — possible sub-metric difference; recipeCopyCount unchanged confirms no new activity). Poveda NVFP4 (sub1782803609803): recipeCopyCount **114 (UNCHANGED)**, **118.91 tok/s CONFIRMED**. Atlas overall (sub1779495971526): recipeCopyCount **161 (UNCHANGED)**, **218.85 tok/s CONFIRMED**. **10% trigger NOT FIRED** (threshold >88.30). FP8 vLLM frontier static ~16.7 weeks (last submission 2026-05-26). LIST not attempted.
+
+2. **vLLM:** GitHub releases API returned HTTP 403 (same as recent entries); WebSearch fallback. **v0.29.0 (2026-09-09) confirmed still latest stable — no v0.29.1 stable or v0.30.x found.** SVD (Check 3) shows vLLM v0.29.1rc1 is being built — patch release in progress. Arch-guard items carry forward from Entry 170: #54048 GB10 router-GEMM (confirmed shipped in v0.29.0), #53649 Blackwell autotuning (SM121 scope TBD), #52018 FP4 MoE SM120/SM121 (NVFP4 gate), #54277 DSpark MLA. PR #40099 (Gemma4 repetition): no new status — confirmed OPEN via direct fetch Entry 172 (last activity Sep 1, 2026). Issue #41063 (DeepGEMM SM12x): no new status, carry forward OPEN/dormant.
+
+3. **SVD (eugr/spark-vllm-docker):** **⚠ NEW BUILD Sep 13 — TRIGGER FIRED.** `prebuilt-vllm-current` = **`0.29.1rc1.dev17+gd2d649e67.d20260913`** (was `0.1.1.dev57+g6b153463a.d20260912`) + `prebuilt-flashinfer-current` = **`0.7.0-93e9eef0-d20260913`** (was `0.7.0-7169776e-d20260912`). **Critical version-scheme shift:** `0.1.1.devNN` (setuptools-scm tag-fallback for vLLM main post-v0.29.0) → `0.29.1rc1.devNN` — vLLM has tagged a **v0.29.1 release candidate** on Sep 13. The Arm C eval target has moved from vLLM main (post-v0.29.0 main branch) to the v0.29.1rc1 branch. FlashInfer commit also bumped (same 0.7.0 version tag, new commit hash). Staging builds also updated (Aug 18–26 staging builds visible).
+
+4. **Qwen models:** HuggingFace API EGRESS_BLOCKED; WebSearch fallback. **⚠ Qwen3.8-35B-A3B: DOES NOT EXIST — watch item should be PERMANENTLY CLOSED.** Qwen3.8 lineup confirmed: (a) Qwen3.8-27B dense (Aug 13-14, Apache 2.0, 28B with vision encoder); (b) Qwen3.8-Flash-Next (176B/6B-active MoE, Qwen4 architecture preview, open weights on HuggingFace — already rejected Entry 165 on throughput at 19.82 tok/s single-Spark); (c) Qwen3.8-2.4T-A95B Max-class (Aug 12-13, custom Qwen3.8-Max license). **Qwen3.8 skipped the 35B-A3B band entirely** — goes 27B dense → 176B/6B MoE → 2.4T. The Apsara Conference Sep 22-24 hypothesis for Qwen3.8-35B-A3B release is now MOOT. Next watch: Qwen4-35B-A3B (no release timeline). No new ~35B MoE contenders from other labs found.
+
+5. **Forum:** 719.json **EGRESS_BLOCKED** (day 2 post-Entry-173's brief restoration). WebSearch fallback found **NEW thread /t/383222** above ceiling /t/383126: "DGX OS 7.5.0 OTA (UEFI 5.36_0ACUM027): ~7.2 GiB less RAM available at boot" (created ~Sep 13). OTA component details extracted via cross-search: kernel **6.17.0-1032-nvidia** (new), driver **580.173.02** (same problematic driver from /t/378200), UEFI **5.36_0ACUM018 → 5.36_0ACUM027**, DMI product string changed. Additionally surfaced: **/t/382452** "OTA update to DGX OS 7.5.0 kills all display output when nvidia-drm-options-modeset0 installed" (warm reboots did not recover; may be below prior ceiling or newly indexed). DGX Spark User Guide PDF re-dated Sep 10, 2026 (content blocked). OTA2608: **THIS IS LIKELY OTA2608** (~40 weeks after July OTA). New ceiling: **/t/383222**. EC 0x03000508 fan regression: status unknown pending review of /t/383222 content (the new OTA may include EC fix — cannot confirm without full thread text).
+
+### Cross-Correlated Findings
+
+1. **[HIGH] OTA + Forum + CLAUDE.md convergence:** New DGX OS OTA (Sep 13, /t/383222) bundles driver 580.173.02 + new kernel 6.17.0-1032. This is the SAME driver flagged ACTION in Entry 126 (/t/378200 "GPU breaks on reboot"), reinforced in Entry 173 recommendations, and embedded in CLAUDE.md hold rule. Three independent sources (prior forum thread, CLAUDE.md hold, new OTA report) unanimously confirm this driver is hazardous. Production must hold on 580.159.03 + 6.17.0-1021.
+
+2. **[MEDIUM] SVD v0.29.1rc1 + vLLM no-new-stable cross-corr:** The SVD build versioned `0.29.1rc1.devNN` is a leading indicator that vLLM is working on a v0.29.1 patch release. This patch likely targets bugs in v0.29.0 (possibly including GB10-specific items). The Arm C eval should target `0.29.1rc1.dev17+gd2d649e67.d20260913` not the prior main-branch commit.
+
+3. **[MEDIUM] Qwen3.8-35B-A3B absence confirmed definitive:** WebSearch results from two independent sources (Yotta Labs, releasebot.io, QwenLM GitHub) all confirm Qwen3.8 does not have a 35B-A3B variant. Day 20+ "absent" count is permanently closed — this model will never arrive. Next MoE successor in the ~3B-active class is Qwen4-35B-A3B (no release date).
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** All recipeCopyCounts unchanged (230/114/161). tg128 frontier static ~16.7 weeks. |
+| `vllm_release \| SM121 OR GB10 OR Blackwell` (arch-guard) | **NOT FIRED.** v0.29.0 still latest stable; no v0.29.1 stable. v0.29.1rc1 in-progress (SVD signal). |
+| `svd \| new prebuilt vllm version` | **⚠ FIRED.** New build Sep 13: `0.29.1rc1.dev17+gd2d649e67.d20260913`. Version scheme shifted to v0.29.1rc1 branch. |
+| `forum \| new GB10 performance/stability finding` | **⚠ FIRED (via WebSearch).** New OTA /t/383222: driver 580.173.02 + kernel 6.17.0-1032 + UEFI change + RAM loss. DO NOT APPLY. |
+| `huggingface \| Qwen3.8-35B-A3B weights` | **CLOSED PERMANENTLY.** Qwen3.8 has no 35B-A3B variant. Watch replaced with Qwen4-35B-A3B (no release date). |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** Confirmed OPEN (Entry 172 direct fetch, last activity Sep 1). |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063) | **NOT FIRED.** No status change. |
+
+### Overall: ACTION NEEDED
+
+Two simultaneous Sep 13 events demand attention: (1) A new DGX OS OTA with a driver that has a documented GPU-break failure mode — **do not apply this OTA** until NVIDIA issues a fix or community confirms it safe; (2) The Arm C eval target shifted to v0.29.1rc1 on the same day. Also, the Qwen3.8-35B-A3B watch item should be permanently closed.
+
+### Recommendations
+
+1. **[PRIORITY 1 — HOLD OTA] Do NOT apply the new DGX OS OTA.** /t/383222 confirms the Sep 13 OTA bundles driver 580.173.02 which breaks GPU on reboot (per /t/378200, CLAUDE.md hold rule). Until NVIDIA releases a patched OTA or community confirms 580.173.02 is safe in this specific OTA build, keep `apt-mark hold` on all nvidia-driver packages. Watch /t/383222 for NVIDIA's response to the RAM-loss and display-dead reports (/t/382452). Note: the EC firmware status in this OTA is unknown (may fix fan regression — cannot confirm without full /t/383222 thread). Next recon should check for a community verdict.
+
+2. **[UPDATED — Arm C eval target shifted] Use `0.29.1rc1.dev17+gd2d649e67.d20260913` as the Arm C target.** The prior target `0.1.1.dev57+g6b153463a.d20260912` was vLLM main post-v0.29.0. The new target is the v0.29.1rc1 branch — a patch release of v0.29.0, potentially including fixes not in v0.29.0 stable. Benchmark at c=1/4/8/16 vs cu132 baseline. Validate #54048 GB10 router-GEMM, #53649 autotuning scope, #52018 FP4 MoE path. Needs approved prod-down window.
+
+3. **[CLOSE] Qwen3.8-35B-A3B — remove from watch list permanently.** The model does not exist in the Qwen3.8 family. Replace with "Qwen4-35B-A3B" (no announced release date; Qwen4 is the next family, previewed by Flash-Next). Flash-Next already rejected on throughput (Entry 165).
+
+4. **[CARRY-FORWARD — NEW Entry 173] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.** Current probes miss /t/382922 failure mode. Low-risk SSH-only change.
+
+5. **[CARRY-FORWARD — NEW Entry 173] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`). For silent-shutdown investigation. Read source; requires Troy's approval before install.
+
+6. **[CARRY-FORWARD] Kernel and driver hold.** REINFORCED this cycle. Stay on 6.17.0-1021 / 580.159.03. The new Sep 13 OTA brings 580.173.02 + 6.17.0-1032, both known-problematic.
+
+7. **[CARRY-FORWARD] Do not run `fwupdmgr update`.** The new OTA likely distributes via DGX Dashboard; if EC 0x03000508 was fixed in this OTA, the fix comes bundled with the hazardous driver — hold until community confirms safe.
+
+8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

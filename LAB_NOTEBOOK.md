@@ -14132,3 +14132,61 @@ Two simultaneous Sep 13 events demand attention: (1) A new DGX OS OTA with a dri
 8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 176 - DGX Spark Recon (2026-09-15)
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **230 (UNCHANGED)**, tg128@c1 **80.27 tok/s confirmed**. sub1782803609803 (Poveda NVFP4): recipeCopyCount **116** (+2 from Entry 175's 114), 118.91 tok/s confirmed. sub1779495971526 (Atlas overall): recipeCopyCount **161 (UNCHANGED)**, 218.85 tok/s confirmed. **10% FP8 trigger NOT FIRED** (threshold >88.30). FP8 vLLM frontier static ~16.9 weeks (last submission 2026-05-26).
+
+2. **vLLM:** GitHub API 403 (persistent); WebSearch fallback. **v0.29.0 (2026-09-09) confirmed still latest stable — no v0.29.1 stable or v0.30.x found.** SVD (Check 3) confirms v0.29.1rc1 remains in-progress from Sep 13. Arch-guard items carry forward: #54048 (GB10 router-GEMM, shipped v0.29.0), #53649 (Blackwell autotuning, SM121 scope TBD), #52018 (FP4 MoE SM120/SM121), #54277 (DSpark MLA). NEW: PR #55768 "Gemma 4 de-JITification" — optimization PR, not a fix for #40099. **PR #40099 (Gemma4 repetition): CONFIRMED OPEN per Entry 172 direct fetch (last activity Sep 1 2026); WebSearch hallucinated "merged November 2025" again (4th+ recurrence) — disregard, always verify via GitHub API.** Issue #41063 (DeepGEMM SM12x): no new status, OPEN/dormant.
+
+3. **SVD (eugr/spark-vllm-docker):** GitHub API 403; WebSearch fallback surfaced Sep 3 (`0.28.1rc1.dev345+g4cc0cb6f7.d20260903`) and Sep 11 (`0.1.1.dev7+g8c1d1c297.d20260911`) builds — both older than Entry 175's confirmed `0.29.1rc1.dev17+gd2d649e67.d20260913`. **No new builds found since Sep 13.** Current Arm C target unchanged: `0.29.1rc1.dev17+gd2d649e67.d20260913` + FlashInfer `0.7.0-93e9eef0-d20260913`. NOT FIRED.
+
+4. **Qwen models:** HuggingFace API EGRESS_BLOCKED; WebSearch fallback. **No Qwen3.8-35B-A3B release.** Unconfirmed speculation: a ModelScope commit reportedly appeared briefly ~Aug 18 then was deleted — does not reopen the permanently closed watch item. Confirmed Qwen3.8 lineup: 27B dense, Flash-Next (176B/6B-active MoE), 2.4T-A95B Max. No 35B-A3B variant. No other new ~35B MoE models from other labs. NOT FIRED.
+
+5. **Forum:** 719.json EGRESS_BLOCKED (day 3 post-Entry 173 brief restoration). WebSearch fallback. **⚠ NEW THREAD /t/383254** "DGX Spark Update Advisory" above ceiling /t/383222 — NVIDIA officially acknowledges multi-node NCCL/RoCE workload failures after kernel 7.0.0-1019-nvidia (posted ~Sep 14 UTC; same issue as Entry 173 /t/383023). Single-node production unaffected (7.0.0-1019 is a separate upgrade path from Sep 13 OTA's 6.17.0-1032). Also found: /t/383186 "Latest Dashboard Update Issue: Peripherals not recognized. Solved?" (ID 383186 < 383222 ceiling — pre-ceiling or already indexed). New ceiling: **/t/383254**. OTA DO-NOT-APPLY hold unchanged. EC 0x03000508: unknown if addressed in Sep 13 OTA.
+
+### Cross-Correlated Findings
+
+1. **[MEDIUM] /t/383254 NVIDIA advisory + Entry 173 /t/383023 community report:** NVIDIA's "Update Advisory" is the official acknowledgment of the kernel 7.0.0-1019 RoCE failure first reported in Entry 173. Confirms NVIDIA is actively investigating — a kernel 7.0.x fix likely forthcoming. No impact on production (6.17.0-1021) or Sep 13 OTA hold decision.
+
+2. **[LOW] Arena fully static:** All recipyCopyCounts unchanged (Stojanovic 230, Atlas 161; Poveda +2 to 116 is noise). FP8 vLLM frontier frozen ~16.9 weeks. No competitive activity since May 2026.
+
+3. **[RECURRING ISSUE] PR #40099 WebSearch hallucination (4th+ occurrence):** WebSearch claims "#40099 merged November 2025" — this is a hallucination. Authoritative source remains Entry 172 direct GitHub fetch (OPEN, last activity Sep 1 2026). Never trust WebSearch for this PR.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 80.27 static (recipeCopyCount 230 unchanged). Threshold >88.30. |
+| `vllm_release \| SM121 OR GB10 OR Blackwell` (arch-guard) | **NOT FIRED.** v0.29.0 still latest stable; v0.29.1rc1 in-progress. |
+| `svd \| new prebuilt vllm version` | **NOT FIRED.** No new builds since Entry 175 Sep 13 capture. |
+| `huggingface \| new ~35B MoE model` | **NOT FIRED.** Qwen3.8-35B-A3B watch PERMANENTLY CLOSED. No contenders. |
+| `forum \| new GB10 performance/stability finding` | **⚠ WATCH** — /t/383254 NVIDIA Update Advisory (kernel 7.0.0-1019 RoCE; single-node unaffected). |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** OPEN per Entry 172 direct fetch. WebSearch hallucination recurs — disregard. |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063) | **NOT FIRED.** No status change. |
+
+### Overall: WORTH WATCHING
+
+NVIDIA issued an official "Update Advisory" thread (/t/383254) acknowledging the kernel 7.0.0-1019 NCCL/RoCE issue first reported in Entry 173. Single-node production unaffected. All arena, vLLM, SVD, and Qwen checks static.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] Do NOT apply the Sep 13 OTA.** Driver 580.173.02 + kernel 6.17.0-1032 + ~7.2 GiB RAM loss remain blockers (CLAUDE.md hold rule, /t/383222). Watch for NVIDIA's patched OTA response.
+
+2. **[CARRY-FORWARD — PRIORITY 2] Arm C build/eval.** Target: `0.29.1rc1.dev17+gd2d649e67.d20260913` + FlashInfer `0.7.0-93e9eef0-d20260913`. Validate #54048 GB10 router-GEMM, #53649 autotuning scope, #52018 FP4 MoE path. Needs approved prod-down window.
+
+3. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03. /t/383254 NVIDIA advisory confirms 7.0.0-1019 is under investigation; Sep 13 OTA (6.17.0-1032 + 580.173.02) still flagged ACTION from Entry 175.
+
+4. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.** Misses /t/382922 failure mode (CUDA context exhaustion while containers report green).
+
+5. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`). Silent-shutdown forensics. Requires Troy's approval before install.
+
+6. **[CARRY-FORWARD] Do not run `fwupdmgr update`.** Sep 13 OTA EC status unknown; if EC 0x03000508 fix is included it's bundled with hazardous driver. Hold until community confirms safe.
+
+7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

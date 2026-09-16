@@ -14190,3 +14190,63 @@ NVIDIA issued an official "Update Advisory" thread (/t/383254) acknowledging the
 7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 177 - DGX Spark Recon (2026-09-16)
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **230 (UNCHANGED)**, tg128@d8192,c1 **76.61 tok/s confirmed** (consistent with Entry 175/176; prior 80.27 baseline from Entry 129 used a different sub-metric — d8192 metric is consistently 76.61). sub1782803609803 (Poveda NVFP4): recipeCopyCount **116 (UNCHANGED)**, 118.91 tok/s confirmed. sub1779495971526 (Atlas overall): recipeCopyCount **162** (+1 from Entry 176's 161; noise-level), 218.85 tok/s confirmed. **10% FP8 trigger NOT FIRED** (threshold >88.30; frontier static ~17.1 weeks since 2026-05-26). No new submissions found.
+
+2. **vLLM:** GitHub API 403 (persistent). WebSearch fallback. **v0.29.0 (2026-09-09) still latest stable — no v0.29.1 stable or v0.30.x found.** NEW ARCH-GUARD ITEM: **PR #54600** "[Bugfix][CUDA] Exclude SM121 from DeepGEMM support" (by saadz-khan) — explicitly removes SM121 from the DeepGEMM code path that was causing silent FP8 numerical corruption (see Issue #41063). NEW: **Issue #56461** "[Bug]: DeepSeek-V4.1-Flash cannot serve on SM120/SM121 (GB10)" — geometry mismatch during flashinfer_sparse_mla_warmup; informational only for our config (affects DSv4.1-Flash, not Qwen3.6). **Issue #41063 (DeepGEMM SM12x):** STILL OPEN per active community activity; PR #53680 (pins DeepGEMM to restore pure-FP8 1d1d kernels) and PR #54600 (SM121 exclusion) are active workarounds. **PR #40099 (Gemma4 repetition): WebSearch hallucinated "merged November 2025" again — 5th recurrence.** Authoritative source remains Entry 172 direct GitHub fetch (OPEN, last activity Sep 1 2026). Disregard WebSearch on this PR.
+
+3. **SVD (eugr/spark-vllm-docker):** GitHub API 403 (persistent). WebSearch fallback returned Sep 3 (`0.28.1rc1.dev345+g4cc0cb6f7.d20260903`) and Sep 11 (`0.1.1.dev7+g8c1d1c297.d20260911`) builds — both older than Entry 175's Sep 13 capture (likely stale cached results). **No new build found after Sep 13.** Current Arm C target unchanged: `0.29.1rc1.dev17+gd2d649e67.d20260913` + FlashInfer `0.7.0-93e9eef0-d20260913`. NOT FIRED.
+
+4. **Qwen models:** HuggingFace EGRESS_BLOCKED (direct); WebSearch fallback. **No Qwen3.8-35B-A3B release.** Qwen3.8 family confirmed: Qwen3.8-27B dense (Aug 14) and Qwen3.8-2.4T-A95B (Aug 12) — no 35B A3B variant; watch item remains PERMANENTLY CLOSED. **NEW (informational): `Qwen/Qwen-AgentWorld-35B-A3B`** released June 24, 2026 — a language world model for agentic environment simulation (MCP, SWE, Android, Web, OS domains). 35B total / ~3B active MoE architecture. Community variants exist (GGUF, MTP-APEX-GGUF); no FP8/vLLM-ready variant found. **NOT a throughput successor to Qwen3.6-35B-A3B-FP8** — wrong use case; production irrelevant. No other new ~35B MoE models from other labs found. NOT FIRED.
+
+5. **Forum:** 719.json EGRESS_BLOCKED (day 4 post-Entry 173 brief restoration). WebSearch fallback. **No new thread IDs above current ceiling /t/383254 found.** Highest WebSearch-indexed threads remain /t/383222 (Sep 13 OTA RAM loss) and /t/383254 (Sep 14 NVIDIA advisory) — both known. The `/t/381267` "Future of the DXG Spark" thread surfaced (below Entry 173 ceiling, informational). Sep 13 OTA DO-NOT-APPLY hold unchanged. EC 0x03000508: still unresolved. NOT FIRED.
+
+### Cross-Correlated Findings
+
+1. **[MEDIUM — SM121/DeepGEMM] PR #54600 + Issue #41063 + Issue #56461:** Three converging data points confirm active vLLM work to address SM121 DeepGEMM failures. PR #54600 explicitly excludes SM121 from the DeepGEMM code path (prevents silent FP8 corruption). Issue #56461 (V4.1-Flash SM121 failure) is a NEW issue post-v0.29.0. Directly relevant to Arm C eval: on upgrade to v0.29.1rc1, verify that PR #54600 is included and that Qwen3.6-35B-A3B-FP8 remains unaffected (it doesn't use DeepGEMM for its primary MoE path, but good to confirm).
+
+2. **[LOW] Arena fully static:** All recipyCopyCount unchanged or noise (+1 on Atlas). FP8 vLLM frontier frozen ~17.1 weeks. No competitive activity since May 2026.
+
+3. **[RECURRING ISSUE — 5th occurrence] PR #40099 WebSearch hallucination:** WebSearch continues to claim "#40099 merged November 2025" — authoritative source is Entry 172 direct GitHub fetch (OPEN, Sep 1 2026 last activity). Never trust WebSearch for this PR.
+
+4. **[LOW — Qwen-AgentWorld] New model in same architecture class:** `Qwen/Qwen-AgentWorld-35B-A3B` uses the 35B/~3B-active MoE architecture but is a specialized world model, not a general inference candidate. No FP8 variant seen. Not actionable for production.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic 76.61 static (recipeCopyCount 230 unchanged). Threshold >88.30. |
+| `vllm_release \| SM121 OR GB10 OR Blackwell` (arch-guard) | **⚠ WORTH WATCHING** — PR #54600 "Exclude SM121 from DeepGEMM" (new arch-specific item); Issue #56461 V4.1-Flash SM121 failure (new). No new stable release. |
+| `svd \| new prebuilt vllm version` | **NOT FIRED.** No new builds since Sep 13 capture. |
+| `huggingface \| new ~35B MoE model` | **NOT FIRED.** Qwen3.8-35B-A3B watch PERMANENTLY CLOSED; Qwen-AgentWorld-35B-A3B noted (June 2026 release) but is a world model, not a throughput candidate. |
+| `forum \| new GB10 performance/stability finding` | **NOT FIRED.** No new threads above ceiling /t/383254. OTA hold reinforced (unchanged). |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** OPEN per Entry 172 direct fetch. WebSearch hallucination 5th recurrence — disregard. |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063) | **⚠ WORTH WATCHING** — PR #54600 SM121 DeepGEMM exclusion + Issue #56461 V4.1 failure. Issue #41063 still OPEN. |
+
+### Overall: WORTH WATCHING
+
+Two new SM121/DeepGEMM arch-guard items surfaced: PR #54600 explicitly excludes SM121 from DeepGEMM (FP8 corruption fix) and Issue #56461 (V4.1-Flash SM121 geometry failure). Neither directly affects production (Qwen3.6-35B-A3B-FP8 MoE path doesn't rely on DeepGEMM) but both are relevant to Arm C upgrade planning. Arena, SVD, forum, and Qwen checks are all static.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] Do NOT apply the Sep 13 OTA.** Driver 580.173.02 + kernel 6.17.0-1032 + ~7.2 GiB RAM loss remain blockers (/t/383222, CLAUDE.md hold rule). Watch for NVIDIA's patched OTA response. Ceiling unchanged at /t/383254.
+
+2. **[CARRY-FORWARD — PRIORITY 2] Arm C build/eval.** Target: `0.29.1rc1.dev17+gd2d649e67.d20260913` + FlashInfer `0.7.0-93e9eef0-d20260913`. Validate #54048 GB10 router-GEMM, #53649 autotuning scope, #52018 FP4 MoE path. **NEW:** Also verify PR #54600 (Exclude SM121 from DeepGEMM) is included and confirm Qwen3.6-35B-A3B-FP8 MoE path is unaffected. Needs approved prod-down window.
+
+3. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03. Sep 13 OTA (6.17.0-1032 + 580.173.02) still ACTION from Entry 175.
+
+4. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.** Current probes miss /t/382922 failure mode (CUDA context exhaustion while containers report green).
+
+5. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`). Silent-shutdown forensics. Requires Troy's approval before install.
+
+6. **[CARRY-FORWARD] Do not run `fwupdmgr update`.** Sep 13 OTA EC status unknown; hold until community confirms safe.
+
+7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

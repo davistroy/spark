@@ -14250,3 +14250,63 @@ Two new SM121/DeepGEMM arch-guard items surfaced: PR #54600 explicitly excludes 
 7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 178 - DGX Spark Recon (2026-09-17)
+
+**Date:** 2026-09-17 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful (no API key required; benchmarks collection world-readable). sub1779297106805 (Stojanovic FP8): recipeCopyCount **231** (+1 from 230 — noise), tg128@d4096,c1 = **70.40 tok/s** (new sub-metric documented; prior checks reported d8192=76.61; base figure 80.27 from d2048 variant). sub1782803609803 (Poveda NVFP4): recipeCopyCount **116 (UNCHANGED)**, 118.91 tok/s, updateTime 2026-09-15. sub1779495971526 (Atlas overall): recipeCopyCount **162 (UNCHANGED)**, 218.85 tok/s, updateTime 2026-09-15. Arena @spark_arena X post (status/2051083928128414149): "Qwen/Qwen3.6-35B-A3B-FP8 achieved 130 tokens/sec on text generation at concurrency 10, 100K context already in memory, tg128" — higher-concurrency cached-prefix metric, NOT c1 baseline; informational only. **10% FP8 trigger NOT FIRED** (d4096 70.40 vs prod 66.9 = +5.2%; threshold >88.30 from baseline 80.27). FP8 vLLM frontier static ~17.5 weeks (since 2026-05-26). NOT FIRED.
+
+2. **vLLM:** GitHub API 403 (persistent). Releases page WebFetch: **v0.29.0 still latest stable — no v0.29.1 stable or v0.30.x found.** Direct PR fetches successful. **⚠ PR #54600 DIAGNOSIS REVISION (Sep 14 2026):** @ivanusto (actual GB10/SM121 hardware) challenged the original approach — says real issue is "attribute-name mismatch in ModelOptFp8PbWoLinearMethod" rather than capability gate; proposed SM121 exclusion would **break DeepSeek-V4-Flash on GB10**. PR #54600 remains OPEN but under debate; outcome uncertain. This revises Entry 177's read of the SM121 DeepGEMM fix. **PR #40099 (Gemma4 repetition): STILL OPEN**, last visible activity July 8 2026 (Entry 172 direct fetch had Sep 1; this extraction incomplete, not contradictory). **Issue #41063 (DeepGEMM SM12.x): STILL OPEN.** vllm-metal nightly builds through Sep 16 (v0.29.0.dev20260916) confirm active main development. WORTH WATCHING.
+
+3. **SVD (eugr/spark-vllm-docker):** GitHub API 403 (persistent). Releases page WebFetch successful. **No new builds after Sep 13, 2026.** Latest stable confirmed: `prebuilt-vllm-current` = **`0.29.1rc1.dev17+gd2d649e67.d20260913`** + `prebuilt-flashinfer-current` = **`0.7.0-93e9eef0-d20260913`** — UNCHANGED. Arm C eval target unchanged. NOT FIRED.
+
+4. **Qwen models:** WebSearch. **No new 35B MoE model from Qwen or other labs.** Qwen3.8-Max-0902 (Sep 2) = snapshot capability update to existing Qwen3.8-Max model, not new architecture. Qwen3.8-Flash-Next = "Qwen4 architecture preview" (already known/rejected Entry 165). Qwen4: not released. The Qwen3.8-35B-A3B watch remains PERMANENTLY CLOSED (no 35B A3B in the Qwen3.8 family). NOT FIRED.
+
+5. **Forum:** 719.json EGRESS_BLOCKED (day 5 since Entry 173 brief restoration). WebSearch fallback. **No new thread IDs above ceiling /t/383254 found.** Highest surfaced threads: /t/383222 (Sep 13 OTA RAM loss, known) and /t/378200 (580.173.02 GPU break, older known thread). Sep 13 OTA DO-NOT-APPLY hold unchanged. EC 0x03000508: still unresolved. NOT FIRED.
+
+### Cross-Correlated Findings
+
+1. **[WORTH WATCHING — PR #54600 diagnosis revision]:** @ivanusto (Sep 14, GB10 hardware) challenges the SM121 DeepGEMM exclusion approach in PR #54600. Real issue per their testing: `ModelOptFp8PbWoLinearMethod` attribute-name mismatch, not capability gating. This revises Entry 177's summary ("prevents silent FP8 corruption"). The SM121 fix mechanism is now under debate; resolution TBD. Relevant to Arm C eval: verify which approach (attribute fix vs exclusion) is actually merged before upgrading.
+
+2. **[LOW] Arena + SVD + forum all static (5th consecutive day):** recipyCopyCount noise-only. FP8 vLLM frontier frozen 17.5 weeks. No competitive pressure.
+
+3. **[INFORMATIONAL] Arena c=10 cached-prefix metric (130 tok/s):** @spark_arena X post highlights Qwen3.6-35B-A3B-FP8 at higher concurrency with cached 100K context. Not the c1 tg128 metric we track. Indicates ecosystem continues to use the model but no new single-node c1 records.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | **NOT FIRED.** Stojanovic recipeCopyCount 231 (+1 noise); d4096 70.40 tok/s (+5.2% vs prod 66.9; threshold >88.30). |
+| `vllm_release \| SM121 OR GB10 arch-guard` | **⚠ WORTH WATCHING** — PR #54600 diagnosis under revision (Sep 14); issue #41063 open. No new stable release. |
+| `svd \| new prebuilt vllm version` | **NOT FIRED.** Sep 13 build still current. |
+| `huggingface \| new ~35B MoE model` | **NOT FIRED.** No new models; Qwen3.8-35B-A3B watch PERMANENTLY CLOSED. |
+| `forum \| new GB10 performance/stability finding` | **NOT FIRED.** No threads above /t/383254; EGRESS_BLOCKED day 5. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | **NOT FIRED.** OPEN per direct PR fetch. |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063) | **⚠ WORTH WATCHING** — PR #54600 diagnosis revision is new; issue #41063 still open. |
+
+### Overall: WORTH WATCHING
+
+PR #54600's diagnosis was publicly challenged by GB10 hardware testing on Sep 14 — the SM121 DeepGEMM fix mechanism is now under active debate (exclusion vs attribute fix). This changes the Arm C eval picture: monitor PR #54600 resolution before upgrading to understand which DeepGEMM code path actually ships. All other checks static (5th consecutive day without competitive movement).
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] Do NOT apply the Sep 13 OTA.** Driver 580.173.02 + kernel 6.17.0-1032 + ~7.2 GiB RAM loss remain blockers (/t/383222, CLAUDE.md hold rule). Ceiling: /t/383254.
+
+2. **[CARRY-FORWARD — PRIORITY 2] Arm C build/eval.** Target: `0.29.1rc1.dev17+gd2d649e67.d20260913` + FlashInfer `0.7.0-93e9eef0-d20260913`. **NEW CAVEAT:** Monitor PR #54600 resolution first — the SM121 DeepGEMM fix approach is under debate; ensure whichever fix merges (attribute fix vs exclusion) is included in the eval build and confirm Qwen3.6-35B-A3B-FP8 MoE path unaffected.
+
+3. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03.
+
+4. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.** Misses /t/382922 failure mode.
+
+5. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`). Requires Troy's approval.
+
+6. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

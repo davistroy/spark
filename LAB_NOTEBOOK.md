@@ -14310,3 +14310,65 @@ PR #54600's diagnosis was publicly challenged by GB10 hardware testing on Sep 14
 6. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 179 - DGX Spark Recon (2026-09-18)
+
+**Date:** 2026-09-18 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **231** (UNCHANGED from Entry 178), updateTime 2026-09-16. Baseline tg128@d2048 c1 = **80.27 tok/s** (UNCHANGED). tg128@d4096=70.40, @d8192=76.61, @d16384=67.19. 10% trigger threshold >88.30 — **NOT FIRED** (+5.2% vs prod 66.9). sub1782803609803 (Poveda NVFP4): recipeCopyCount **116** (UNCHANGED), updateTime bumped to 2026-09-17T11:59:48 (+2 days from Entry 178 2026-09-15 read — likely minor metadata sync, no new submission). 118.91 tok/s unchanged. sub1779495971526 (Atlas overall): recipeCopyCount **162** (UNCHANGED), updateTime 2026-09-15, 218.85 tok/s. FP8 vLLM frontier static ~17.5 weeks. NOT FIRED.
+
+2. **vLLM:** GitHub releases page WebFetch: **v0.29.0 still latest stable** — no v0.29.1 stable or v0.30.x found. WebSearch confirms no v0.30 release. **PR #54600** (SM121 DeepGEMM): STILL OPEN. Direct PR fetch adds new detail: @ivanusto identified TWO root causes beyond attribute-name mismatch — (1) missing E8M0 scale format handling in CUTLASS; (2) unconditional fp8_einsum calls without consulting support gate. Proposed fix is attribute-name mismatch in weight post-processing. SM121 exclusion approach rejected (breaks DeepSeek-V4-Flash on GB10). Resolution uncertain. **PR #40099** (Gemma4 repetition): STILL OPEN, last activity Sep 1; bot flagged logic error in `_uses_grammar_constraint`. **Issue #41063** (DeepGEMM SM12.x): STILL OPEN, no resolution. WORTH WATCHING.
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **NEW BUILD FOUND (Sep 17, 2026) — SVD TRIGGER FIRED.** `prebuilt-vllm-current` = **`0.3.1.dev19+g08633cb5c.d20260917`** (confirmed via direct tag fetch, Sep 17 11:43 UTC). FlashInfer: **`0.7.0-13db2cfd-d20260917`** (same 0.7.0 semver, commit hash bumped from `93e9eef0`). **Version scheme: `0.29.1rc1.dev17` → `0.3.1.dev19`** — likely `0.30.1.dev19` (setuptools-scm behavior after vLLM tagging v0.30.0 or a new RC; small model may render `0.30` as `0.3` due to digit truncation). New Arm C eval target: `0.3.1.dev19+g08633cb5c.d20260917`. TRIGGERED.
+
+4. **Qwen models:** WebSearch. **No new ~35B MoE base model from Qwen or other labs.** `Qwen/Qwen-AgentWorld-35B-A3B` appeared in HF search results — likely a task-specific agent fine-tune on A3B architecture (not a new base model); same inference cost profile as prod if confirmed; informational pending verification. No Qwen3.7, Qwen4 35B MoE, or new lab contenders found. NOT FIRED.
+
+5. **Forum:** 719.json EGRESS_BLOCKED (day 6 since Entry 173 brief restoration). WebSearch fallback. No new thread IDs above ceiling /t/383254 found — highest indexed threads were /t/382068 (Sep availability), /t/376736 (Jul software updates), /t/368114 (Apr). Sep 13 OTA DO-NOT-APPLY hold unchanged. EC 0x03000508: unresolved. NOT FIRED.
+
+### Cross-Correlated Findings
+
+1. **[SVD TRIGGER — WORTH WATCHING] New SVD build Sep 17, probable post-v0.30.0 dev version:** Version scheme shift (`0.29.1rc1.dev17` → `0.3.1.dev19`) implies vLLM crossed a new version tag boundary. FlashInfer commit also bumped. This updates the Arm C eval target. PR #54600 now has two concrete root causes documented (E8M0 scale format gap + fp8_einsum gate) but neither is fixed yet — Arm C upgrade should remain on hold until PR #54600 resolves.
+
+2. **[LOW] Arena + forum + Qwen all static:** FP8 vLLM frontier frozen 17.5 weeks; no new competitive models; forum ceiling unchanged. No production pressure.
+
+3. **[INFO] Qwen-AgentWorld-35B-A3B appeared in HF search:** New Qwen-family model with A3B architecture. If a released instruct model (same 3B active params = same inference cost as prod), warrants benchmarking interest. Informational only pending confirmation.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. Stojanovic 80.27 (UNCHANGED); d4096 70.40 (+5.2% vs prod 66.9; threshold >88.30). |
+| `vllm_release \| SM121 OR GB10 arch-guard` | WORTH WATCHING — PR #54600 two root causes now documented (E8M0 + fp8_einsum); #41063 open. v0.29.0 still latest stable. |
+| `svd \| new prebuilt vllm version` | **⚠ TRIGGERED.** New build `0.3.1.dev19+g08633cb5c.d20260917` (Sep 17) + FI `0.7.0-13db2cfd-d20260917`. Probable post-v0.30.0 dev version. New Arm C eval target. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen-AgentWorld-35B-A3B appears but likely fine-tune; no new base model confirmed. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. No threads above /t/383254; EGRESS_BLOCKED day 6. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | NOT FIRED. OPEN, bot flagged logic error. |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063) | WORTH WATCHING — PR #54600 two root causes now documented; #41063 still open. |
+
+### Overall: WORTH WATCHING
+
+SVD trigger fired: new build `0.3.1.dev19+g08633cb5c.d20260917` (Sep 17) represents a version boundary crossing (probable post-v0.30.0). Arm C eval target updated. PR #54600 diagnosis now has two concrete root causes (E8M0 scale format + fp8_einsum gate) — neither fixed; hold Arm C upgrade pending resolution. All other checks static.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] Do NOT apply the Sep 13 OTA.** Driver 580.173.02 + kernel 6.17.0-1032 + ~7.2 GiB RAM loss remain blockers (/t/383222). Ceiling: /t/383254.
+
+2. **[UPDATED — PRIORITY 2] Arm C eval target updated to Sep 17 SVD build.** New target: `0.3.1.dev19+g08633cb5c.d20260917` + FlashInfer `0.7.0-13db2cfd-d20260917`. **CONTINUE HOLD** until PR #54600 resolves — E8M0 scale format and fp8_einsum root causes documented but not yet fixed. Monitor PR #54600 for merge with confirmed SM121 attribute fix.
+
+3. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03.
+
+4. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.** Misses /t/382922 failure mode.
+
+5. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`). Requires Troy's approval.
+
+6. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+7. **[NEW — INFO] Investigate Qwen-AgentWorld-35B-A3B.** Confirm if released instruct model vs fine-tune. If new instruct model at 3B active params, benchmark interest vs prod.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -14372,3 +14372,78 @@ SVD trigger fired: new build `0.3.1.dev19+g08633cb5c.d20260917` (Sep 17) represe
 7. **[NEW — INFO] Investigate Qwen-AgentWorld-35B-A3B.** Confirm if released instruct model vs fine-tune. If new instruct model at 3B active params, benchmark interest vs prod.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 180 - DGX Spark Recon (2026-09-19)
+
+**⚠ ACTION NEEDED**
+
+**Date:** 2026-09-19 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **231 UNCHANGED**, updateTime 2026-09-16 UNCHANGED, tg128 d2048 c1 = **80.27 tok/s** (d4096=70.40, d8192=76.61, d16384=67.19, d32768=55.96, d65535=40.98). 10% trigger >88.30 — **NOT FIRED** (+5.2% vs prod 66.9). FP8 vLLM frontier static ~17.5 weeks. sub1782803609803 (Poveda NVFP4): recipeCopyCount **116 UNCHANGED**, updateTime 2026-09-17 (unchanged), 118.91 tok/s. sub1779495971526 (Atlas overall): recipeCopyCount **163** (+1 from 162), updateTime **2026-09-18T21:27:48** (bumped from 2026-09-15). Minor metadata activity; 218.85 tok/s unchanged. Not fired.
+
+2. **vLLM:** GitHub API 403; WebFetch + WebSearch fallback. v0.29.0 **confirmed still latest stable** — no v0.29.1 stable or v0.30.0 found. **⚠ NEW Issue #57486** (created **2026-09-18** — yesterday): "[Bug]: On SM12x, fp8 block linear still selects DeepGEMM when E8M0 is disabled, which now hard-fails after the a6bbb80 pin." Affects `v0.29.1rc1.dev9+` and later — GPU: SM12x/GB10, FP8 block linear. Before a6bbb80: silent NaN corruption in 6–38% of outputs; after: `RuntimeError` host-side assertion failure. **⚠ Arm C eval target (`0.3.1.dev19`, Sep 17) postdates a6bbb80** — this target will hard-fail on this code path. **NEW PR #57512** (OPEN, awaiting mgoin/pavanimajety/zyongye review): "Do not select DeepGEMM with float32 scales on SM12x" — scale-format-aware selection gate fix. Not merged; no target release. PR #54600: STILL OPEN (two root causes documented: E8M0 scale format gap + fp8_einsum gate; attribute-name mismatch fix direction). PR #40099 (Gemma4 repetition): STILL OPEN. Issue #41063 (DeepGEMM SM12x gaps): STILL OPEN. **ARCH-GUARD FIRED** (Issue #57486 + PR #57512).
+
+3. **SVD (eugr/spark-vllm-docker):** No new tagged build since Sep 17 (`0.3.1.dev19`). Sep 18 main commits: "fix memory regression in b12x lane", "Instanttensor memory buffer fix", "Fix instanttensor memory reporting" — b12x (SM12x) code in active rapid-fix cycle. Sep 17 commits: "Re-enable B12X autotune", "switch deepseek to b12x loader", "Remove b12x patch as the PR is merged" (upstream PR merged; patch no longer needed), "switching to new branch". SVD is actively integrating SM12x-native kernels. Arm C eval target unchanged: `0.3.1.dev19+g08633cb5c.d20260917`. NOT triggered (no new tag/build).
+
+4. **Qwen models:** WebSearch. No Qwen3.8-35B-A3B model (Qwen3.8 series skips 35B MoE: 27B dense → 180B → 2.4T). Qwen3.8-Flash-Next open weights available (multimodal MoE, Qwen4 architecture preview — already rejected Entry 165 on throughput ~19.8 tok/s). Qwen3.8-Max-0902 (Sep 2): proprietary coding upgrade. No new ~35B MoE drop-in successor to Qwen3.6-35B-A3B-FP8 from Qwen or other labs. Watch item already closed Entry 175 (SPARK_BASELINE line 273). NOT FIRED.
+
+5. **Forum:** 719.json EGRESS_BLOCKED (day 7). WebSearch fallback. **⚠ 6+ NEW THREADS above prior ceiling /t/383254:**
+   - **/t/383312** "Latest update pulls in mis-matched kernel/driver": nvidia-smi `exit status 9` / GPU telemetry broken after DGX Spark + Dell Promax GB10 update; fixed by user. Confirms Sep 13 OTA instability.
+   - **/t/383362** "Why RoCE and GID index 3 change to index 4?": INFO only.
+   - **/t/383450** "DGX Spark kernel panic after OOBE/update – missing initrd for 7.0.0-1019-nvidia and DKMS arm64/aarch64 conflict": **CRITICAL** — brand-new unit panics at boot ("VFS: Unable to mount root fs on unknown-block(0,0)") after 7.0.0-1019 OTA update; missing initrd + DKMS arm64/aarch64 double-autoinstall abort. Exactly matches CLAUDE.md "dist-upgrade flips nvidia to DKMS with UNENROLLED MOK key" failure pattern.
+   - **/t/383563** "DGX Spark regression: After updating to kernel 7.0.0-1019-nvidia, gdm no longer boots correctly [FIXED]": INFO, gdm regression in new kernel, community fix found.
+   - **/t/383624** "DGX Spark silent hard-freeze under sustained llama.cpp inference, no Xid/OOM/panic, 10-second telemetry captured, warranty ends Oct 14": **⚠ HIGH** — hard freeze during sustained inference, no OS-visible error signals, warranty critical path. Potentially distinct from thermal shutdowns (/t/379195). Could overlap /t/381415 EC/PD power-cut class. Kernel version unconfirmed — must determine if on 6.17.0-1021 (our kernel) or 7.0.0-101x.
+   - **/t/383649** "Super slow connection between 2 sparks": INFO, multi-node RoCE.
+   - **/t/383780** "Please add GB10 (10de:2e12) to the signed nvgrace-gpu-vfio-pci in the DGX Spark kernel": INFO, kernel signing request.
+   - `/t/383023` page 3-4, post #43 by **eugr_nv** (spark-vllm-docker maintainer): `kho=off` added to `GRUB_CMDLINE_LINUX_DEFAULT` as workaround for 7.0.0-1019 NCCL/RoCE issue; workaround partially effective for some users.
+   - New ceiling: **/t/383780**
+
+### Cross-Correlated Findings
+
+1. **[ACTION — HIGH] /t/383450 kernel panic + DKMS aarch64 conflict CONFIRMS Sep 13 OTA danger.** Three-threat convergence: (a) driver 580.173.02 (known GPU-break on reboot, /t/378200); (b) kernel 7.0.0-1019-nvidia DKMS conflict (missing initrd, unbootable — /t/383450 is the first concrete DKMS-aarch64 bootloop report); (c) ~7.2 GiB RAM carved out. OTA DO NOT APPLY hold is **strongly confirmed**. Any apt operation must be preceded by `apt-mark hold` on all nvidia packages. No new trigger to act on — hold was already in force.
+
+2. **[NEW ACTION — HIGH] Issue #57486 (SM12x FP8 DeepGEMM hard-fail) + PR #57512 (open fix) = new explicit Arm C eval blocker.** Issue #57486 postdates PR #54600's diagnosis and addresses a distinct (but related) DeepGEMM routing failure on SM12x that turns from silent NaN to RuntimeError in `v0.29.1rc1.dev9+`. The Sep 17 eval target is in this version range. SVD Sep 18 b12x memory-regression commits show the affected code area is still in flux. Arm C eval must wait for **both** PR #54600 AND PR #57512 to merge before proceeding.
+
+3. **[INVESTIGATE — MEDIUM] /t/383624 silent hard-freeze under sustained inference.** New occurrence of no-Xid/no-OOM/no-panic hard freeze during sustained LLM inference — same diagnostic signature as the /t/381415 EC/PD power-protection class. Kernel version not yet confirmed. If manifesting on 6.17.0-1021 (our kernel), this is a direct production risk. If 7.0.0-101x specific, our OTA hold protects us. Needs thread monitoring to determine kernel version.
+
+4. **[LOW] Arena + Qwen both static.** No competitive model pressure or new performance frontier in 2 weeks.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. Stojanovic 80.27 tok/s UNCHANGED; threshold >88.30. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | **⚠ FIRED.** NEW Issue #57486 (SM12x FP8 DeepGEMM hard-fail, Sep 18) + NEW PR #57512 (open fix). Arm C eval target directly affected. |
+| `svd \| new prebuilt vllm version` | NOT TRIGGERED. No new build since Sep 17 (Entry 179 carried forward). Sep 18: b12x memory regression fixes only. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. No Qwen3.8-35B-A3B (confirmed skipped). No other lab contenders. |
+| `forum \| new GB10 performance/stability finding` | **⚠ FIRED.** 6+ new threads above ceiling /t/383254: /t/383450 (kernel panic), /t/383624 (silent hard-freeze), /t/383312 (driver mismatch), /t/383563 (gdm fix). New ceiling /t/383780. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | NOT FIRED. OPEN, no new activity. |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063, #54600) | **⚠ FIRED.** Issue #57486 (new, Sep 18) + PR #57512 (new, open). #54600 still open. |
+
+### Overall: ACTION NEEDED
+
+**Two independent fires:** (1) vLLM SM12x arch-guard — new Issue #57486 (hard-fail in eval target, Sep 18) + new PR #57512 (open fix) blocks Arm C eval alongside #54600; (2) Forum — 6+ new threads including /t/383450 (OTA kernel panic confirmed) and /t/383624 (new silent hard-freeze report during sustained inference). OTA hold **strongly confirmed**. Production system is safe on current kernel/driver; Arm C eval on hold pending both #54600 + #57512.
+
+### Recommendations
+
+1. **[CONFIRMED — PRIORITY 1] Do NOT apply the Sep 13 OTA.** /t/383450 kernel panic + DKMS aarch64 conflict is a concrete bootloop failure case. Triple threat: driver 580.173.02 + kernel 7.0.0-1019 DKMS panic + ~7.2 GiB RAM loss. New ceiling /t/383780. OTA hold stands.
+
+2. **[UPDATED — PRIORITY 2] Arm C eval: now blocked by BOTH PR #54600 AND Issue #57486/PR #57512.** Do not start eval until both merge. Monitor PR #57512 (SM12x float32-scale DeepGEMM fix) and PR #54600 (E8M0 + fp8_einsum gate fix). Check both are in the SVD build before scheduling eval window.
+
+3. **[NEW — PRIORITY 3] Investigate /t/383624 "silent hard-freeze under sustained llama.cpp inference."** Determine kernel version in that report. If on 6.17.0-1021 (our kernel), review Prometheus power-draw history against sustained-inference events and assess if /t/381415 EC/PD power-cut mitigation applies. If on 7.0.0-101x only, OTA hold covers us.
+
+4. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03.
+
+5. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.** Misses /t/382922 failure mode.
+
+6. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`). Requires Troy's approval.
+
+7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

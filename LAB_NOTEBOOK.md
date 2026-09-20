@@ -14447,3 +14447,69 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 181 - DGX Spark Recon (2026-09-20)
+
+**WORTH WATCHING**
+
+**Date:** 2026-09-20 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **231 UNCHANGED**, updateTime 2026-09-16 UNCHANGED, tg128 c1 = **80.27 tok/s UNCHANGED**. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~17.5 weeks (no submissions since 2026-05-26). sub1782803609803 (Poveda NVFP4): recipeCopyCount **116 UNCHANGED**, updateTime 2026-09-17 UNCHANGED, 118.91 tok/s. sub1779495971526 (Atlas overall): recipeCopyCount **163 UNCHANGED**, updateTime **bumped to 2026-09-20T05:40:15 UTC** (from 2026-09-18T21:27:48), score 218.85 UNCHANGED — minor metadata activity, not a new submission. **NOT FIRED.**
+
+2. **vLLM:** GitHub API 403; WebFetch/WebSearch fallback. v0.29.0 **confirmed still latest stable**. No v0.29.1 stable or v0.30.x found. **PR #57512** (SM12x float32-scale DeepGEMM fix, fixes #57486): **STILL OPEN**. Last activity Sep 18 — validation completed on GB10 hardware by ivanusto; awaiting review/approval from mgoin, pavanimajety, zyongye. No approvals yet. **PR #54600** (SM121 DeepGEMM exclusion): **STILL OPEN**. Last updated Sep 14 (unchanged from Entry 180). PR #40099 (Gemma4 repetition): STILL OPEN, no new activity. Issue #57486 (SM12x hard-fail): OPEN. **No new SM121/GB10 arch-guard issues.** ARCH-GUARD: NOT NEWLY FIRED. Arm C eval block carried forward.
+
+3. **SVD (eugr/spark-vllm-docker):** **NO NEW BUILD.** Tags page: prebuilt-vllm-current = Sep 16/17 (timezone-adjusted, consistent with Entry 180 `0.3.1.dev19+g08633cb5c.d20260917`). Commits page: last commit Sep 18 ("fix memory regression in b12x lane" — same as Entry 180). Arm C eval target unchanged: `0.3.1.dev19+g08633cb5c.d20260917` + FI `0.7.0-13db2cfd-d20260917`. NOT TRIGGERED.
+
+4. **Qwen models:** No Qwen3.7 (confirmed — series went 3.6→3.8, no 3.7). **Qwen3.8-35B-A3B NOT released** — only Qwen3.8-27B (dense) and Qwen3.8-Flash-Next (multimodal MoE). Community HuggingFace discussions actively requesting 35B-A3B (threads #120, #43 on Qwen3.8-27B page). Possible Aug 18 ModelScope accidental commit/delete suggests internal work in progress — no official release. No other lab ~35B MoE drop-in contenders. NOT FIRED.
+
+5. **Forum (cat 719 + 721):** 719.json EGRESS_BLOCKED (day 8). WebSearch fallback. **No new threads above ceiling /t/383780 found.** Search for thread IDs 383800–384000 returned no results. Supplemental WebSearch surfaced **below-ceiling thread /t/380238** "2× DGX Spark FE: silent hard-locks under sustained inference - units RMA'd in 48h. Full diagnosis and process notes" (thread ID 380238 < ceiling 383780; appears not previously explicitly tracked, now visible via WebSearch). Corroborates /t/383624 cluster (Entry 180). OTA hold unchanged. **Ceiling holds at /t/383780.**
+
+### Cross-Correlated Findings
+
+1. **[CARRY-FORWARD — HIGH] Arm C eval double-blocked.** PR #57512 (last activity Sep 18, awaiting 3 reviewers; GB10 validation done) + PR #54600 (last activity Sep 14) both still open. No progress in 2 days (PR #57512) / 6 days (PR #54600). Eval cannot proceed until both merge and appear in SVD build. Block state unchanged from Entry 180.
+
+2. **[SUPPLEMENTAL — MEDIUM] Sustained-inference hard-freeze cluster now at least 3 known threads.** /t/383624 (Entry 180 HIGH, Sep 2026), /t/381655 (below ceiling, RCU stall + kdump-fail, kernel 6.17.0-1008), /t/380238 (newly surfaced via WebSearch, multiple FE units RMA'd in 48h after sustained inference hard-locks). Pattern: silent hard-freeze during sustained inference with no OS-visible error signals, affecting multiple users/units. /t/383624 kernel version (6.17.0-1021 vs 7.0.0-101x) still unresolved — determines if our kernel is exposed. /t/380238 "Full diagnosis and process notes" may clarify the failure class.
+
+3. **[INFO] Atlas top-overall metadata bump.** sub1779495971526 updateTime bumped to 2026-09-20T05:40:15 (likely recipe view, not new submission). Score and recipeCopyCount unchanged. Not a performance trigger.
+
+4. **[INFO] Qwen3.8-35B-A3B community demand high, possible internal work.** Aug 18 ModelScope accidental commit (deleted) + HuggingFace discussion activity suggests Qwen is working on it. No release timeline. Watch item remains open.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. Stojanovic 80.27 tok/s UNCHANGED; threshold >88.30. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | NOT FIRED (no new issues/PRs). Carry-forward: PR #57512 OPEN, PR #54600 OPEN. |
+| `svd \| new prebuilt vllm version` | NOT TRIGGERED. No new build since Sep 17. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen3.8-35B-A3B NOT released; no other contenders. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. No new threads above ceiling /t/383780. Supplemental /t/380238 below ceiling. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | NOT FIRED. OPEN, no new activity. |
+| `vllm_release \| DeepGEMM AND SM12x` (#41063, #54600, #57486) | NOT FIRED (no new bugs; existing PRs still open, no merges). |
+
+### Overall: WORTH WATCHING
+
+**No new fires since Entry 180.** Existing blocks carry forward: (1) Arm C eval on hold pending PR #57512 + PR #54600 merge — PR #57512 has GB10 validation complete (Sep 18), reviewers pending; could merge this week if approved; (2) OTA hold confirmed, ceiling /t/383780; (3) Sustained-inference hard-freeze cluster now 3 threads (supplemental /t/380238 newly visible via WebSearch). Production system safe on current kernel/driver.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] Do NOT apply the Sep 13 OTA.** Hold unchanged.
+
+2. **[CARRY-FORWARD — PRIORITY 2] Arm C eval: blocked by PR #54600 AND PR #57512.** PR #57512 has GB10 hardware validation done (Sep 18) and needs 3 reviewer approvals. Could merge mid-week. Monitor daily — if both merge and land in a new SVD build, eval window opens. Check PRs again tomorrow.
+
+3. **[NEW — PRIORITY 3] Read /t/380238 "2× DGX Spark FE: silent hard-locks - RMA'd in 48h" diagnosis notes.** This is the most complete forensic analysis of the sustained-inference hard-freeze class visible via WebSearch. Determine if the failure mode and kernel version match /t/383624 (our relevant thread). URL: https://forums.developer.nvidia.com/t/380238
+
+4. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03.
+
+5. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+6. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -14513,3 +14513,71 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 7. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 182 - DGX Spark Recon (2026-09-21)
+
+**WORTH WATCHING**
+
+**Date:** 2026-09-21 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **231 UNCHANGED**, updateTime Sep 16 UNCHANGED, tg128 c1 = **80.27 tok/s UNCHANGED**. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~17.5 weeks (no submissions since 2026-05-26). sub1782803609803 (Poveda NVFP4): recipeCopyCount **117** (+1 from 116 in Entry 181), updateTime **Sep 21 09:34:23 UTC** (bumped from Sep 17). Score 118.91 UNCHANGED. sub1779495971526 (Atlas overall): recipeCopyCount **165** (+2 from 163), updateTime **Sep 21 05:40:09 UTC** (bumped from Sep 20 05:40:15). Score 218.85 UNCHANGED. No new submissions visible. **NOT FIRED.**
+
+2. **vLLM:** GitHub API 403; WebFetch/WebSearch fallback. **v0.29.0 confirmed still latest stable.** No v0.30.x found. **PR #57512** (SM12x float32-scale DeepGEMM fix, fixes #57486): **STILL OPEN.** Last activity Sep 18 (UNCHANGED from Entry 181) — awaiting mgoin/pavanimajety/zyongye review, no approvals. GB10 hardware validation done by @ivanusto (Sep 18) but reviewers have not engaged in 3 days. **PR #54600** (SM121 DeepGEMM exclusion): **STILL OPEN.** Last activity Sep 14 (UNCHANGED from Entry 181). Unresolved technical approach dispute (@ivanusto: real fix is attribute-name mismatch, not capability gate). **PR #40099** (Gemma4 repetition): STILL OPEN, last activity Sep 1 — stalled. **Issue #41063** (SM12.x DeepGEMM coverage): STILL OPEN, no new activity. ARCH-GUARD: NOT NEWLY FIRED. Arm C eval block UNCHANGED.
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **TRIGGER FIRED — new prebuilt build.** Tags page confirms prebuilt-vllm-current = **Sep 18, 2026** (commit `a33f4b5`, message "fix memory regression in b12x lane"). Entry 181 had tags pointing to Sep 16/17 (commit `08633cb5c`). Tags have been promoted to the Sep 18 commit. Three Sep 18 commits in total: `a33f4b5` (fix memory regression in b12x lane), `f247397` (Instanttensor memory buffer fix), `fe09415` (Fix instanttensor memory reporting) — all b12x stability fixes. No commits after Sep 18. Estimated new version: **`0.3.1.devNN+ga33f4b5.d20260918`** (exact dev counter unknown without Docker pull). prebuilt-flashinfer-current not separately checked — likely Sep 18 also. Arm C eval still blocked by PR #57512 + PR #54600 regardless of new build.
+
+4. **Qwen models:** **Qwen3.8-35B-A3B NOT released.** Confirmed via WebSearch + HuggingFace community discussions. Qwen3.8 lineup = Qwen3.8-27B (dense, Aug 2026) + Qwen3.8-Flash-Next (multimodal, rejected Entry 165) + Qwen3.8-2.4T-A95B (custom license). No 35B-A3B variant. Community actively requesting it (HuggingFace discussions #43 and #120 on Qwen3.8-27B page). QwenLM/Qwen3.8 GitHub repo exists but refers to existing models only. No new ~35B MoE contenders from other labs identified. **NOT FIRED.** Watch item status: "CLOSED PERMANENTLY 2026-09-14 — Entry 175" confirmed — Qwen3.8 definitively skipped the 35B-A3B slot; Qwen4-35B-A3B remains the replacement watch trigger.
+
+5. **Forum (cat 719 + 721):** 719.json **EGRESS_BLOCKED** (day 9). WebSearch fallback. **No new threads above ceiling /t/383780 found.** Thread /t/382725 "DeepSeek v4.1 Flash" (page 2) surfaced in search (ID 382725 < ceiling 383780 — pre-ceiling). No new forum IDs in 383800–384000 range found. OTA hold unchanged. Ceiling holds: **/t/383780.** NOT FIRED.
+
+### Cross-Correlated Findings
+
+1. **[TRIGGERED — MEDIUM] SVD new Sep 18 prebuilt build + Arm C eval still blocked.** Tags promoted to Sep 18 commit (3 b12x memory regression fixes). This is an incremental stability build, not a capability bump. Eval gate unchanged: PR #57512 needs reviewer engagement (3 days quiet since GB10 validation), PR #54600 has unresolved design dispute. SVD note: the Sep 18 build will be the eval target once both PRs merge and a new SVD build incorporates them.
+
+2. **[CARRY-FORWARD — HIGH] Arm C eval double-blocked.** PR #57512: GB10 hardware validation done Sep 18, needs 3 reviewer approvals, zero engagement since. PR #54600: last Sep 14, actively contested. No forward movement in 3–7 days. Block status unchanged from Entry 180.
+
+3. **[INFO] Arena metadata activity.** Poveda NVFP4 recipe +1 copy (116→117), Sep 21 updateTime bump. Atlas +2 copies (163→165), Sep 21 updateTime bump. Scores unchanged. Consistent with recipe views/copies, not new performance submissions.
+
+4. **[CARRY-FORWARD — MEDIUM] Sustained-inference hard-freeze cluster.** /t/383624 (Entry 180 HIGH) kernel version still unresolved — determines if production kernel 6.17.0-1021 is exposed. /t/380238 (below ceiling, Entry 181 supplemental) not re-checked. OTA hold covers the 7.0.0-1019 exposure class. Uncertainty remains for 6.17.0-1021 exposure.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. Stojanovic 80.27 tok/s UNCHANGED; threshold >88.30. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | NOT FIRED (no new releases/PRs/issues). Carry-forward: PR #57512 + PR #54600 OPEN, block unchanged. |
+| `svd \| new prebuilt vllm version` | **FIRED.** prebuilt-vllm-current bumped to Sep 18 (commit `a33f4b5`, b12x memory fixes). Eval still blocked — does not advance timeline. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen3.8-35B-A3B confirmed non-existent; no other contenders. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. No new threads above ceiling /t/383780. EGRESS_BLOCKED day 9. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (PR #40099) | NOT FIRED. OPEN, last activity Sep 1. |
+| `vllm_release \| DeepGEMM AND SM12x` (#57486, #57512, #54600) | NOT FIRED (no new bugs; existing PRs still open, no merges). |
+
+### Overall: WORTH WATCHING
+
+**No new fires since Entry 180.** One trigger fired (SVD new Sep 18 build) but does not unblock eval — both guard PRs (#57512, #54600) remain open and unmoved. Arm C eval block is now entering day 4–8 of stall. Arena, Qwen, and Forum all static. Production system safe on current kernel/driver.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1] DO NOT apply the Sep 13 OTA.** Hold unchanged. OTA kernel panic (/t/383450) + driver regression (/t/378200) both active.
+
+2. **[CARRY-FORWARD — PRIORITY 2] Arm C eval: blocked by PR #54600 + PR #57512.** PR #57512 has GB10 hardware validation done (Sep 18) and needs 3 reviewer approvals — now day 3 of reviewer silence. Escalation path: PR author (hclsys) could ping reviewers directly or ask @ivanusto to add a formal approval (they validated on hardware). Monitor. If #57512 merges and #54600 also clears, a new SVD build incorporating both would be the next eval gate.
+
+3. **[UPDATED — PRIORITY 3] SVD Sep 18 build available** (`a33f4b5`, b12x memory regression fixes) — note as new Arm C eval target base, but blocked. When both PRs merge, check for a subsequent SVD build before scheduling eval window.
+
+4. **[CARRY-FORWARD] Investigate /t/383624 kernel version.** Warranty expires Oct 14 — user has incentive to update. If kernel 6.17.0-1021, production is at risk; if 7.0.0-1019, OTA hold covers it.
+
+5. **[CARRY-FORWARD] Kernel and driver hold.** Stay on 6.17.0-1021 / 580.159.03.
+
+6. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+7. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

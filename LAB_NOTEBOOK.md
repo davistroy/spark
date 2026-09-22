@@ -14581,3 +14581,75 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 183 - DGX Spark Recon (2026-09-22)
+
+**⚠ ACTION NEEDED — vLLM v0.30.0 RELEASED TODAY: ARCH-GUARD FIRED (4+ GB10/SM121 items)**
+
+**Date:** 2026-09-22 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **233** (+2 from 231 in Entry 182), updateTime **2026-09-22T01:25:44Z** (bumped from Sep 16 — same-day metadata activity). tg128 sub-metrics unchanged: d4096=70.40, d8192=76.61, d16384=67.19, d32768=55.96, d65535=40.98, d100000=29.51. Baseline score tg128 d2048 c1 = **80.27 tok/s** not directly returned in summary but sub-metrics consistent with prior tracking. 10% trigger (>88.30) **NOT FIRED.** FP8 vLLM frontier static ~17.6 weeks (no new submissions since 2026-05-26). sub1782803609803 (Poveda NVFP4): recipeCopyCount **117 UNCHANGED**, updateTime **2026-09-21 UNCHANGED**. sub1779495971526 (Atlas overall): recipeCopyCount **168** (+3 from 165), updateTime **2026-09-22** (bumped). Score 218.85 UNCHANGED. No new submissions visible in direct reads.
+
+2. **vLLM:** ⚠ **v0.30.0 STABLE RELEASED 2026-09-22.** 762 commits, 315 contributors. **ARCH-GUARD FIRED — 4+ direct GB10/SM121 items:** (1) **#55180** "SM12x blockwise FP8 CTA raster swizzle for GB10/DGX Spark" — explicitly named, direct throughput improvement for production config; (2) **#52017** "B12X causal paged attention for SM120/SM121 via `--attention-backend B12X_ATTN`" — new dedicated attention backend; (3) **#55715** "FlashInfer GDN prefill on SM12x"; (4) **#56876** "DeepGEMM pinned to vllm-project fork 2.8.0 with SM120 and SM90 paged-MQA ports" — DeepGEMM fork upgrade, potentially fixing SM12x scale-format NaN issues independently of pending PRs. Also: #55170 "W4A4 NVFP4 preferred on SM120/121"; DSpark MTP under pipeline parallelism (#50514). **PR #57512** (SM12x float32-scale DeepGEMM fix): **STILL OPEN**, awaiting reviewers — NOT in v0.30.0. **PR #54600** (SM121 DeepGEMM exclusion): **STILL OPEN**, last activity Sep 14 — NOT in v0.30.0. **PR #40099** (Gemma4 repetition): STILL OPEN, last activity Jul 8. **Issue #41063** (SM12.x DeepGEMM coverage): STILL OPEN.
+
+3. **SVD (eugr/spark-vllm-docker):** prebuilt-vllm-current = **Sep 18 UNCHANGED** (commit `a33f4b5`). v0.30.0 released today — SVD build expected imminently but not yet available. Arm C eval target remains Sep 18 build pending SVD v0.30.0 build + PR guard review.
+
+4. **Qwen models:** No Qwen3.7-35B-A3B or Qwen4-35B-A3B released. Qwen3.8 lineup confirmed complete (Qwen3.8-27B dense, Qwen3.8-Flash-Next multimodal, no 35B-A3B slot). Watch item remains: Qwen4-35B-A3B. **NOT FIRED.**
+
+5. **Forum (cat 719 + 721):** 719.json **EGRESS_BLOCKED** (day 10). WebSearch fallback. **No new threads above ceiling /t/383780.** Surfaced in search: /t/383406 "DGPP: a GB10-optimized C++/CUDA inference engine" (ID < ceiling, previously untracked — informational); /t/382251 "vLLM Inference Boost? IFA 2026 Announcement" (ID < ceiling, ~1.2× DeepSeek gains announced ~early Sep — informational, predates v0.30.0). OTA hold unchanged. Ceiling **/t/383780** holds.
+
+### Cross-Correlated Findings
+
+1. **[HIGH — NEW] v0.30.0 #55180 "SM12x blockwise FP8 CTA raster swizzle for GB10/DGX Spark."** This is a compute kernel optimization directly named for our production config (FP8 MoE, SM121, vLLM). Likely throughput improvement at our operating point; magnitude unknown without benchmarking. Highest-priority item for Arm C eval window.
+
+2. **[HIGH — NEW] v0.30.0 #56876 "DeepGEMM pinned to fork 2.8.0 with SM120 ports."** If fork 2.8.0 handles SM12x scale-format (E8M0) correctly, this may make PR #57512 and PR #54600 moot for the Arm C eval gate. Needs verification: does the 2.8.0 fork fix the scale-format selection bug described in issue #57486? If yes, the Arm C eval block is substantially lifted once SVD builds v0.30.0.
+
+3. **[HIGH — NEW] v0.30.0 #52017 "B12X causal paged attention for SM120/SM121."** New attention backend option (`--attention-backend B12X_ATTN`) specifically for GB10. Our production uses FLASH_ATTN (auto-selected). B12X_ATTN may offer better latency or throughput for causal decode on SM121 — evaluate alongside #55180 in Arm C.
+
+4. **[MEDIUM] SVD not yet updated to v0.30.0; expect build within days.** The Sep 18 build (`a33f4b5`, b12x memory fixes) remains current. v0.30.0 day-of release means SVD will likely build imminently. Once available, shift Arm C eval target from Sep 18 to v0.30.0-based SVD build.
+
+5. **[CARRY-FORWARD — MEDIUM] Arm C eval still double-blocked by PR #54600 + PR #57512.** However, #56876 in v0.30.0 may resolve the root cause independently (point 2 above). The block status may change materially once a v0.30.0-based SVD build is available and tested against the DeepGEMM 2.8.0 fork.
+
+6. **[INFO] Arena metadata activity.** Stojanovic updateTime bumped to Sep 22 (same-day as recon), copyCount +2. Atlas copyCount +3, updateTime Sep 22. Poveda unchanged. No performance score changes.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. Stojanovic 80.27 UNCHANGED; threshold >88.30. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | **⚠ FIRED.** v0.30.0 stable released 2026-09-22 with 4+ direct GB10/SM121 items (#55180, #52017, #55715, #56876). |
+| `svd \| new prebuilt vllm version` | NOT FIRED. prebuilt-vllm-current = Sep 18 UNCHANGED. Expect v0.30.0 build imminently. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen3.7/Qwen4-35B-A3B absent. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. No new threads above ceiling /t/383780. EGRESS_BLOCKED day 10. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (#40099) | NOT FIRED. OPEN, last activity Jul 8. |
+| `vllm_release \| DeepGEMM AND SM12x` | **⚠ PARTIAL FIRED.** #56876 DeepGEMM fork 2.8.0 with SM120 ports in v0.30.0 — may resolve SM12x NaN issue. PR #57512 and #54600 still open and not in v0.30.0. |
+
+### Overall: ACTION NEEDED
+
+**vLLM v0.30.0 released today with 4+ direct GB10/SM121 improvements.** #55180 (FP8 raster swizzle for DGX Spark) targets our exact production config. #56876 (DeepGEMM fork 2.8.0 with SM120 ports) may resolve the SM12x NaN issue that blocks Arm C eval. Track SVD for v0.30.0 build; when available, prioritize Arm C eval with focus on #55180 throughput gain and #56876 DeepGEMM safety verification.
+
+### Recommendations
+
+1. **[ACTION — PRIORITY 1] Monitor SVD for v0.30.0-based prebuilt build.** v0.30.0 released today; SVD builds typically lag 1–3 days. When available, this becomes the new Arm C eval target.
+
+2. **[ACTION — PRIORITY 2] Verify if DeepGEMM fork 2.8.0 (#56876) fixes SM12x scale-format NaN.** Read the vllm-project fork 2.8.0 changelog to determine if E8M0/float32 scale handling for SM12x is addressed. If yes, PRs #54600 and #57512 may be moot for eval gating and Arm C eval can proceed once SVD ships v0.30.0.
+
+3. **[ACTION — PRIORITY 3] Plan Arm C eval with v0.30.0 once SVD build available.** Primary eval targets: (a) throughput gain from #55180 FP8 raster swizzle; (b) B12X_ATTN attention backend vs production FLASH_ATTN; (c) NVFP4 path via #55170 now that SM120/121 is explicitly preferred; (d) confirm DeepGEMM safety on our FP8 pre-quant model.
+
+4. **[CARRY-FORWARD — PRIORITY 4] DO NOT apply the Sep 13 OTA.** Hold on 6.17.0-1021 / 580.159.03 unchanged. OTA kernel panic (/t/383450) + driver regression (/t/378200) both active.
+
+5. **[CARRY-FORWARD] Investigate /t/383624 kernel version.** Hard-freeze under sustained inference; warranty expires Oct 14. Kernel version unresolved — determines if 6.17.0-1021 is exposed.
+
+6. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+7. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

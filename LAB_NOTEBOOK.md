@@ -14653,3 +14653,71 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 184 - DGX Spark Recon (2026-09-23)
+
+**Overall: WORTH WATCHING — SVD Sep 21 build (new, pre-v0.30.0); forum /t/383926 new (50-60% inference slowdown from kernel 7.0.0-1019); PR #58157 new; v0.30.0 SVD build still pending**
+
+**Date:** 2026-09-23 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** Firestore direct reads successful. sub1779297106805 (Stojanovic FP8): recipeCopyCount **233 UNCHANGED**, updateTime **2026-09-22T01:25:44Z UNCHANGED**. d4096 c1=70.40, d8192 c1=76.61, d16384 c1=67.19 — all UNCHANGED. Baseline ~80.27 tg128 NOT FIRED (threshold >88.30). FP8 vLLM frontier static ~17.7 weeks (no new submissions since 2026-05-26). sub1782803609803 (Poveda NVFP4): recipeCopyCount **117 UNCHANGED**, updateTime **2026-09-21 UNCHANGED**, score 118.91 UNCHANGED. sub1779495971526 (Atlas overall): recipeCopyCount **168 UNCHANGED**, updateTime **2026-09-22 UNCHANGED**, score 218.85 UNCHANGED. **No new submissions. Arena fully static.**
+
+2. **vLLM:** v0.30.0 confirmed as latest stable (released 2026-09-22). No v0.30.1 released. PR #57512 and PR #54600 STILL OPEN (not in v0.30.0). **NEW: PR #58157** "[Bugfix][Quantization] Warn when DeepGEMM requantizes fp32 block scales to UE8M0 by jschmied" — a "warn" approach as an alternative/complement to #57512's "block/exclude" approach; both open, suggests ongoing debate about the right fix for SM12x DeepGEMM scale-format. PR #40099 (Gemma4 repetition) STILL OPEN. Issue #41063 STILL OPEN.
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **NEW BUILD Sep 21 — TRIGGER FIRED.** Releases page shows: `prebuilt-vllm-current` = **`0.29.1rc1.dev467+g0aee727ff.d20260921`** + FlashInfer `0.7.0-c6ec2cce-d20260921` (Sep 21). Version prefix reverted from `0.3.1.devNN` to `0.29.1rc1.devNNN`; large dev number jump (.dev19→.dev467). This build was released after Entry 183's check window (Sep 22 check saw Sep 18 unchanged). Predates v0.30.0 (Sep 22) by one day. **No v0.30.0-based SVD build yet** (lag typically 1–3 days; expect Sep 23-25). Arm C eval target updates to Sep 21 build provisionally; v0.30.0-based build is the real target.
+
+4. **Qwen models:** No Qwen3.7-35B-A3B or Qwen4 production models found. Qwen4-Exp referenced in Transformers docs (Aug 2026, architectural preview only). Qwen3.8-Flash-Next remains latest in the 35B slot. **NOT FIRED.**
+
+5. **Forum (cat 719 + 721):** 719.json **EGRESS_BLOCKED** (day 11). WebSearch fallback. **⚠ NEW THREAD /t/383926 above ceiling — TRIGGER FIRED.** /t/383926 "Upgrade to 7.6.0 / kernel 7.0.0-1019-nvidia system wide slowdown 50/60%" (ID 383926 > prior ceiling 383780): user reports 50-60% inference throughput drop and 5× warmup time after applying the Sep 13 OTA (kernel 7.0.0-1019). This adds a 5th distinct failure mode for 7.0.0-1019 (prior 4: NCCL/RoCE /t/383023, kernel panic /t/383450, GDM /t/383563, hard-freeze /t/383624). OTA DO NOT APPLY hold confirmed. New ceiling: **/t/383926.**
+
+### Cross-Correlated Findings
+
+1. **[HIGH — CONFIRMED × 5] Kernel 7.0.0-1019 (Sep 13 OTA) has 5+ distinct failure modes.** /t/383926 adds inference performance (-50-60%) and warmup regression (5×). Combined with NCCL/RoCE, kernel panic, GDM break, and sustained hard-freeze from prior entries, this OTA is definitively unsafe at every level. OTA hold requires no further analysis — hold until NVIDIA releases a clean OTA.
+
+2. **[MEDIUM — SVD Sep 21 build] Newer SVD build available but pre-v0.30.0.** The Sep 21 build (`0.29.1rc1.dev467`) contains more recent fixes than Entry 183's Sep 18 build. It was missed in prior cycles. However, the operative Arm C eval target should be the first v0.30.0-based SVD build (expected imminently: Sep 23-25), not the Sep 21 pre-release build.
+
+3. **[MEDIUM — DeepGEMM PRs] Two open PRs addressing SM12x scale-format issue.** PR #57512 (block DeepGEMM on float32 scales) and PR #58157 (warn on fp32→UE8M0 requantize) both open. The "warn" approach in #58157 suggests a less disruptive fix path may be preferred — this could accelerate Arm C eval unblocking if #58157 merges first.
+
+4. **[INFO — v0.30.0 SVD build pending] v0.30.0 arch-guard items (#55180 FP8 raster swizzle, #52017 B12X_ATTN, #55715 FlashInfer GDN SM12x, #56876 DeepGEMM 2.8.0) remain actionable upon SVD build availability.** Cross-carried from Entry 183.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All scores UNCHANGED. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | NOT FIRED. v0.30.0 still latest; no v0.30.1. (Carry-forward from Entry 183.) |
+| `svd \| new prebuilt vllm version` | **⚠ FIRED.** Sep 21 build `0.29.1rc1.dev467` found (was Sep 18 in Entry 183). |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. No Qwen3.7/Qwen4-35B-A3B. |
+| `forum \| new GB10 performance/stability finding` | **⚠ FIRED.** /t/383926 "50-60% inference slowdown on kernel 7.0.0-1019." |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (#40099) | NOT FIRED. Still open. |
+| `vllm_release \| DeepGEMM AND SM12x` | NOT FIRED (new release). PR #58157 new but no release. |
+
+### Overall: WORTH WATCHING
+
+**Two triggers fired (SVD new build, forum performance regression) but no new urgent decisions required.** Forum /t/383926 adds inference throughput data to the OTA hold (which was already established). SVD Sep 21 build is available but pre-v0.30.0 and the real eval target is the pending v0.30.0 SVD build. PR #58157 is a new signal on SM12x fix momentum.
+
+### Recommendations
+
+1. **[WATCH — PRIORITY 1] Monitor SVD for v0.30.0-based prebuilt build.** v0.30.0 released Sep 22; SVD build expected Sep 23-25. When available, that becomes the Arm C eval target (superseding the Sep 21 pre-release build).
+
+2. **[WATCH — PRIORITY 2] Track PR #58157 ("warn" approach for DeepGEMM SM12x).** If #58157 merges before #57512, the "warn but allow" path may unblock Arm C eval sooner than the "hard-exclude" approach. Monitor both PRs.
+
+3. **[CARRY-FORWARD — PRIORITY 3] Arm C eval plan (from Entry 183).** Target: first v0.30.0-based SVD build; focus on #55180 FP8 raster swizzle throughput gain, B12X_ATTN backend, NVFP4 via #55170, DeepGEMM safety.
+
+4. **[CONFIRMED — PRIORITY 4] DO NOT apply the Sep 13 OTA.** /t/383926 adds 50-60% inference regression to the already-established hold (NCCL, panic, GDM, hard-freeze). Hold on 6.17.0-1021 / 580.159.03 until NVIDIA releases a safe OTA.
+
+5. **[CARRY-FORWARD] Investigate /t/383624 hard-freeze kernel version.** Warranty expires Oct 14. Kernel version vs 6.17.0-1021 exposure unresolved.
+
+6. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+7. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

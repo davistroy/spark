@@ -14721,3 +14721,78 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 8. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 185 - DGX Spark Recon (2026-09-24)
+
+**Overall: WORTH WATCHING — KHO root cause confirmed for all 7.0.0-1019 regressions (NVIDIA/NV-Kernels PR #590, fix in progress); Qwen4 announced Sep 22 at Apsara Conference ("very soon"); v0.30.0 SVD build still pending (Sep 25 check); two new forum threads (/t/383939 CPU overheating = 6th 7.0.0-1019 failure mode; /t/383988 product-risk sentiment); Qwen3.7 watch item retired; Arena static**
+
+**Date:** 2026-09-24 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked documents UNCHANGED. sub1779297106805 (Stojanovic FP8 vLLM): 80.27 tok/s tg128 c1, recipeCopyCount 233, updateTime 2026-09-22T01:25:44Z — all UNCHANGED. sub1782803609803 (Poveda NVFP4): 118.91 tok/s, copyCount 117, updateTime 2026-09-21 — UNCHANGED. sub1779495971526 (Atlas): 218.85 tok/s, copyCount 168, updateTime 2026-09-22T07:30:23Z (full timestamp now confirmed, score unchanged). Firestore LIST returned 2 docs (gpt-oss-120b MXFP4, updateTime 2026-09-23 — unrelated). No new FP8 Qwen3.6 vLLM submissions. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~17.9 weeks.
+
+2. **vLLM:** v0.30.0 remains latest stable (no v0.30.1). All SM12x open items unchanged: PR #57512 (float32-scale DeepGEMM gate) STILL OPEN; PR #58157 (warn-path for UE8M0 requantize) STILL OPEN; PR #54600 (SM121 exclusion approach — disputed) STILL OPEN; PR #40099 (Gemma4 repetition) STILL OPEN; Issue #41063 STILL OPEN (DeepGEMM 2.8.0 in v0.30.0 = partial progress). Classification: HIGH (carry-forward, no new release today).
+
+3. **SVD (eugr/spark-vllm-docker):** No new release since Sep 21 (`0.29.1rc1.dev467+g0aee727ff.d20260921` + FlashInfer `0.7.0-c6ec2cce-d20260921`). v0.30.0-based SVD build NOT YET DROPPED (window Sep 23-25; check Sep 25). **Notable Sep 23 commit `00837c8`:** added `VLLM_B12X_MOE_FP4_LAYER_MAX_INPUT_SCALE` env var to Qwen3.8 Flash Next NVFP4 solo recipe — active iteration on FP4 MoE input scaling for SM121 (b12x). Relevant to NVFP4 eval in v0.30.x. No production impact.
+
+4. **Qwen models:** **Qwen3.7 watch item RETIRED — confirmed no open weights, ever.** Qwen3.7-Max launched May 20-21 as API-only (Alibaba Cloud); open-weight line skipped 3.7 entirely. No Qwen3.8-35B-A3B MoE (community-requested; possible retracted ModelScope leak Aug 18; unconfirmed). Qwen3.8-27B (dense 27B, Aug 13) ~50-60% slower than production — not a replacement. **Qwen4 announced Sep 22 at Apsara Conference:** four tiers (Max, Plus, Flash, 27B open-weights), "very soon" timeline. No weights released. No new 30-40B MoE with ~3B active from other labs.
+
+5. **Forum (719 + 721):** 719.json EGRESS_BLOCKED day 12. WebSearch fallback. **⚠ 2 NEW THREADS above prior ceiling /t/383926:** /t/383939 "7.0.0-1019-nvidia CPU overheating" — CPU hitting 100°C under inference after upgrading; dgx-spark-fan-control workaround applied. This is the **6th distinct failure mode** for kernel 7.0.0-1019 (prior 5: NCCL/RoCE /t/383023, kernel panic /t/383450, GDM /t/383563, hard-freeze /t/383624, 50-60% inference slowdown /t/383926). /t/383988 "Is NVIDIA Abandoning DGX Spark?" — rumors about FE production stopping, NVIDIA pivoting to RTX Spark (Windows/ARM64); 2+ pages active (sentiment/product risk). **⚠ ROOT CAUSE CONFIRMED (NVIDIA/NV-Kernels PR #590):** KHO (Kexec Handover) enabled by default in kernel 7.0.0-1019-nvidia reserves ~9.3 GiB as MIGRATE_CMA pageblocks, excludes from CmaTotal (CmaFree=9.7 GiB, CmaTotal=0); under GPU memory pressure, FOLL_LONGTERM page migration fails → NCCL ENOMEM + 50-60% inference slowdown + CPU overheating cascade. **Official fix:** NVIDIA/NV-Kernels PR #590 (disable KHO by default on arm64-nvidia; opt-in via `kho=on`). Not yet shipped. **Workaround:** add `kho=off` to GRUB_CMDLINE_LINUX_DEFAULT → `sudo update-grub` → reboot. /t/383624 (hard-freeze under llama.cpp): still active (Sep 12, Sep 17 freezes), warranty expires Oct 14. Also: NVIDIA PAIR launched (open-source DGX Spark + RTX PC distributed inference pooling tool). New ceiling: **/t/383988.**
+
+### Cross-Correlated Findings
+
+1. **[HIGH — NEW] KHO root cause confirmed — unified explanation for all 7.0.0-1019 failures.** NVIDIA/NV-Kernels PR #590 identifies KHO as the mechanism behind NCCL failures (/t/383023), inference slowdown (/t/383926), and CPU overheating (/t/383939). OTA DO NOT APPLY hold is now pinned to a specific tracked upstream PR rather than open-ended "unstable OTA." Monitor PR #590 for merge + new OTA shipment.
+
+2. **[MEDIUM — CARRY-FORWARD] v0.30.0 SVD build still expected.** vLLM (no v0.30.1) and SVD (no new build since Sep 21) checks agree. End of window: Sep 25 — check then.
+
+3. **[MEDIUM] NVFP4 readiness signals converging in v0.30.x.** v0.30.0 shipped NVFP4 preferred on SM120/121 (#55170). SVD Sep 23 commit adds `VLLM_B12X_MOE_FP4_LAYER_MAX_INPUT_SCALE` to SM121 NVFP4 recipe. Original blocking schema gap (Entry 094, KeyError in v0.19.x) is now 3 major vLLM versions stale.
+
+4. **[INFO] Qwen4 announced Sep 22 but no weights.** "Very soon" timeline; 27B open-weights tier only potentially GB10-friendly. Production model remains best-in-class for MoE 35B-A3B form factor.
+
+5. **[INFO] Product risk: "Is NVIDIA Abandoning DGX Spark?"** Active sentiment thread /t/383988. Not immediately actionable but warrants monitoring.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All scores UNCHANGED. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | NOT FIRED. v0.30.0 still latest; no v0.30.1. (Carry-forward from Entry 183.) |
+| `svd \| new prebuilt vllm version` | NOT FIRED. Sep 21 build still current. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. No Qwen3.8-35B-A3B; Qwen4 announced, no weights yet. |
+| `forum \| new GB10 performance/stability finding` | **⚠ FIRED.** /t/383939 (CPU overheating = 6th 7.0.0-1019 failure). KHO root cause confirmed (NVIDIA/NV-Kernels PR #590). |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (#40099) | NOT FIRED. Still open. |
+
+### Overall: WORTH WATCHING
+
+**One trigger fired (forum). Arena static. v0.30.0 SVD build still pending. Key new signal: KHO root cause confirmed for all 7.0.0-1019 failures, official fix in progress (NVIDIA/NV-Kernels PR #590). Qwen4 announced but no weights. Qwen3.7 watch retired.**
+
+### Recommendations
+
+1. **[WATCH — PRIORITY 1] Monitor SVD for v0.30.0-based prebuilt build.** Sep 25 = end of window. When available, becomes Arm C eval target. Focus: #55180 FP8 raster swizzle, B12X_ATTN backend, NVFP4 (#55170 + `VLLM_B12X_MOE_FP4_LAYER_MAX_INPUT_SCALE`), DeepGEMM 2.8.0 safety.
+
+2. **[WATCH — PRIORITY 2] Track NVIDIA/NV-Kernels PR #590.** Merge + shipment in new OTA = condition to lift OTA hold (/t/383254). Now the specific gate for any future DGX OS upgrade.
+
+3. **[CARRY-FORWARD — PRIORITY 3] Track PRs #57512 and #58157.** Both open; either merging unblocks full Arm C eval confidence. PR #58157 (warn path) may merge first.
+
+4. **[CONFIRMED — PRIORITY 4] DO NOT apply the Sep 13 OTA.** KHO root cause confirmed across all 6 failure modes. `kho=off` GRUB workaround available if needed. Hold until PR #590 ships in a clean OTA.
+
+5. **[WATCH — PRIORITY 5] Qwen4 open-weights.** Announced "very soon" Sep 22. If a 35B-A3B-FP8 tier materializes, it is a direct production upgrade candidate.
+
+6. **[NEW] Qwen3.7 watch item retired.** No open weights coming.
+
+7. **[NEW] Add Qwen3.8-35B-A3B to watch list.** Community-requested MoE version; possible checkpoint exists (retracted ModelScope leak Aug 18). Natural production successor if released.
+
+8. **[CARRY-FORWARD] Investigate /t/383624 hard-freeze kernel version.** Warranty expires Oct 14. Kernel version vs 6.17.0-1021 exposure unresolved.
+
+9. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+10. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

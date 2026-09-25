@@ -14796,3 +14796,74 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 186 - DGX Spark Recon (2026-09-25)
+
+**Overall: WORTH WATCHING — SVD TRIGGER FIRED: first v0.30.x build (0.30.1rc1.dev85, Sep 24); NEW SM12x ~15% MoE decode regression (Issue #58624 + PR #58681, open) complicates Arm C eval; vLLM v0.30.1rc0 pre-release appeared Sep 23; Arena static; Forum no new threads above ceiling; Qwen4 announced, no weights**
+
+**Date:** 2026-09-25 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents UNCHANGED. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233**, updateTime 2026-09-22T01:25:44Z — UNCHANGED from Entry 185. sub1782803609803 (Poveda NVFP4, 118.91 tok/s): copyCount **117**, updateTime 2026-09-21T09:34:23Z — UNCHANGED. sub1779495971526 (Atlas, 218.85 tok/s): copyCount **168**, updateTime 2026-09-22T07:30:23Z — UNCHANGED. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~18+ weeks (last submission 2026-05-26).
+
+2. **vLLM:** v0.30.0 = latest stable (Sep 22). v0.30.1rc0 = pre-release (Sep 23; body not retrievable; title commit references MI355 ROCm work). PRs #57512 (SM12x float32-scale DeepGEMM guard), #58157 (UE8M0 warn path), #54600 (SM121 exclusion), #40099 (Gemma4 repetition): ALL still open, NOT in v0.30.0. **⚠️ NEW: Issue #58624** "MoE decode ~15% slower on SM12x since #56876 (DeepGEMM contiguous-layout alignment 128 instead of 64)" — filed 2026-09-24. Root cause: DeepGEMM fork 2.8.0 (merged via #56876 into v0.30.0) returns alignment 128 on SM12x where prior 2.6.1 returned 64 for small expert batches → ~12.7% c=1 regression, ~18.6% c=16 regression on SM121. **⚠️ NEW: PR #58681** "[Bugfix][DeepGEMM] Restore SM12x alignment behavior for grouped GEMMs" — fix for #58624, SM12x-specific, **STILL OPEN/UNMERGED**. Classification: HIGH carry-forward + new SM12x regression.
+
+3. **SVD (eugr/spark-vllm-docker):** **⚠️ TRIGGER FIRED — NEW BUILD Sep 24.** `prebuilt-vllm-current` = **`0.30.1rc1.dev85+g8b84e1506.d20260924`** (Sep 24 18:30 UTC); `prebuilt-flashinfer-current` = **`0.7.0-28ae778e-d20260924`** (Sep 24 18:24 UTC). **First v0.30.x SVD build.** Version scheme: 0.29.1rc1.dev467 → 0.30.1rc1.dev85 (vLLM tagged v0.30.1rc0 Sep 23 → setuptools-scm renders as 0.30.1rc1). Sep 24 commits: `ddfe8a6` "Adjusted SWA block size patch" (SWA = Sliding Window Attention; relevant to Qwen3-series MoE); Sep 23 commits: `7ce5946` "b12x integrity patch" (SM12x-specific), `de7978a` "Fix autoround mod", `00837c8` "Earlyoom support + updated Qwen3.8 Flash Next solo recipe". `ce175a5` "Remove merged PR from patch list" = **PR #54788** (MRv2 honor MoE backend for MTP/EAGLE drafter — confirmed merged upstream; VLLM_PRESET_PRS now empty). `5d388cc` "Support new HF cache layout" (Sep 22). **CAUTION: PR #58681 (SM12x alignment regression fix) is NOT confirmed included in this build.** Arm C eval target updated to this build.
+
+4. **Qwen models:** Qwen4 27B remains announced (Sep 22 Apsara) but NOT RELEASED — no HuggingFace weights. No Qwen3.8-35B-A3B MoE (no confirmed open-weight release; Aug 18 ModelScope possible-leak unconfirmed). No new 35B-A3B candidates from other labs. Qwen3.8-27B (dense, Aug 13) ~50-60% slower than production — not a replacement. UNCHANGED / WORTH WATCHING.
+
+5. **Forum (719 + 721):** 719.json EGRESS_BLOCKED day 13. WebSearch fallback. **NO NEW THREADS found above ceiling /t/383988.** No thread IDs in 384000+ range found. OTA DO NOT APPLY hold unchanged — PR #590 (NV-Kernels KHO fix) not shipped. Sep 13 OTA failure modes remain unaddressed by any new release. Forum ceiling: **still /t/383988.** Classification: NO ACTION.
+
+### Cross-Correlated Findings
+
+1. **[HIGH — NEW] SM12x ~15% MoE decode regression confirmed via vLLM releases + SVD build (Checks 2+3):** Issue #58624 (filed Sep 24) documents the regression from #56876 (DeepGEMM 2.8.0 fork, in v0.30.0). The new SVD build (v0.30.1rc1.dev85, Sep 24) is based on v0.30.1rc1 which includes v0.30.0 and therefore includes #56876. PR #58681 (fix) is still open in mainline. Until #58681 merges and lands in SVD, any eval on the Sep 24 SVD build may show ~15% lower c=1 and ~18% lower c=16 vs production **from this regression alone**, on top of any real gains from other v0.30.x improvements. **Arm C eval plan must benchmark this explicitly.**
+
+2. **[HIGH] SVD v0.30.x build + vLLM v0.30.1rc0 converge (Checks 2+3):** Both appeared within 24h (Sep 23 vLLM pre-release, Sep 24 SVD build). Arm C eval target is now confirmed: `0.30.1rc1.dev85+g8b84e1506.d20260924`. Key pending items before confident upgrade recommendation: (a) PR #58681 merge (SM12x alignment regression), (b) PR #57512 merge (float32-scale DeepGEMM guard). Both affect SM121/production config directly.
+
+3. **[MEDIUM] PR #54788 merged upstream (checks 2+3):** SVD commit `ce175a5` removed #54788 from preset list → it is now in vLLM mainline. Confirms MRv2 MoE backend inheritance fix for MTP/EAGLE drafters is in the production code path. Not a new regression; a carried-forward fix now confirmed upstream.
+
+4. **[INFO] Arena static + v0.30.x shipped (Checks 1+2):** FP8 frontier (80.27 tok/s) unchanged ~18+ weeks. Community hasn't posted v0.30.x-based Arena results yet. Once #58681 merges, new FP8 submissions could appear given the v0.30.x b12x improvements (#55180, #55170, B12X_ATTN). Watch for new entries.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All scores UNCHANGED. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. v0.30.1rc0 pre-release Sep 23; v0.30.0 stable carries all arch-guard items. **NEW: Issue #58624 + PR #58681** (SM12x ~15% regression) added to tracking. |
+| `svd \| new prebuilt vllm version` | **⚠️ FIRED.** `0.30.1rc1.dev85+g8b84e1506.d20260924` — first v0.30.x build. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen4 27B announced, no weights. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. No new threads above /t/383988. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (#40099) | NOT FIRED. Still open. |
+
+### Overall: WORTH WATCHING
+
+**SVD trigger fired — first v0.30.x build available (Sep 24). New SM12x ~15% MoE decode regression (Issue #58624) from DeepGEMM #56876 is in this build; fix PR #58681 is still open. Arm C eval target confirmed but two SM12x fix PRs (#58681 + #57512) must gate confident upgrade recommendation. Arena static, forum quiet.**
+
+### Recommendations
+
+1. **[WATCH — PRIORITY 1] PR #58681 is the new Arm C eval gate.** SM12x alignment regression (~15% c=1, ~18.6% c=16) from DeepGEMM #56876 is active in v0.30.0 and the Sep 24 SVD build. Arm C eval can proceed on `0.30.1rc1.dev85` but results must be interpreted as "post-regression baseline" — not a fair head-to-head vs production until #58681 merges. Monitor daily for merge. Alternatively: if eugr adds the #58681 fix as a patch in a subsequent SVD build (as with prior SM12x patches), that build becomes the cleaner eval target.
+
+2. **[WATCH — PRIORITY 2] Monitor SVD for #58681 inclusion.** eugr has historically patched SM12x issues in the Dockerfile (see VLLM_PRESET_PRS pattern, b12x commits). Check if a follow-up commit adds #58681 as a patch. If so, that build supersedes Sep 24 for Arm C eval.
+
+3. **[CARRY-FORWARD — PRIORITY 3] Track PR #57512.** SM12x float32-scale DeepGEMM guard still open. Both #57512 and #58681 must be in the build (or proven non-applicable) before recommending the upgrade.
+
+4. **[CONFIRMED — PRIORITY 4] DO NOT apply the Sep 13 OTA.** PR #590 (NV-Kernels KHO fix) not yet shipped. Hold unchanged.
+
+5. **[WATCH — PRIORITY 5] Qwen4 27B open-weights.** "Very soon" from Sep 22. If a Qwen4-35B-A3B-FP8 tier materializes it is a direct production upgrade candidate. Check daily.
+
+6. **[CARRY-FORWARD] Add #58624/#58681 to CLAUDE.md.** New SM12x regression from DeepGEMM 2.8.0 alignment change is a known hazard for v0.30.x eval — document before Arm C eval session.
+
+7. **[CARRY-FORWARD] Investigate /t/383624 hard-freeze kernel version.** Warranty expires Oct 14.
+
+8. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+9. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+10. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

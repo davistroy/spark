@@ -14867,3 +14867,74 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 10. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 187 - DGX Spark Recon (2026-09-26)
+
+**Overall: WORTH WATCHING — PR #58681 (SM12x ~15% regression fix) validated on GB10 Sep 25, one codeowner approval from merge; SVD has 5 new commits Sep 25-26 (next build imminent but not yet released); Arena static; Forum quiet; Qwen4-Exp architecture in transformers but no open weights**
+
+**Date:** 2026-09-26 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents UNCHANGED vs Entry 186. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233** (UNCHANGED), updateTime 2026-09-22T01:25:44Z (UNCHANGED). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): copyCount **117** (UNCHANGED), updateTime 2026-09-21T09:34:23Z (UNCHANGED). sub1779495971526 (Atlas, 218.85 tok/s): recipyCopyCount **168** (UNCHANGED), updateTime 2026-09-22T07:30:23Z (UNCHANGED). 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~18+ weeks (last submission 2026-05-26). No new runtimes detected.
+
+2. **vLLM:** v0.30.0 = latest stable (Sep 22). v0.30.1rc0 pre-release (Sep 23). No v0.30.1 stable yet. **PR #58681** (SM12x alignment regression fix, Issue #58624): STILL OPEN but progressing — @hclsys validated fix on GB10 hardware Sep 25, confirmed "boundary behavior works as intended." Needs 1 approving review from a codeowner before merge. **PR #57512** (float32-scale DeepGEMM guard): STILL OPEN. Last activity Sep 23, awaiting codeowner reviews (mgoin, pavanimajety, zyongye). **PR #40099** (Gemma4 repetition): no new activity found; STILL OPEN assumed. **NEW: Issue #55397** "[Bug]: NVFP4 dense linear kernel selection on SM12x picks FlashInferCuteDslNvFp4W4A16LinearKernel over W4A4 Cutlass kernel (prefill regression on GB10)" — affects NVFP4 eval path, not production config. vllm-metal dev builds Sep 26 (`v0.30.0.dev20260926...`) are Apple Silicon-only, not relevant to SM121.
+
+3. **SVD (eugr/spark-vllm-docker):** Latest build still **Sep 24 `0.30.1rc1.dev85+g8b84e1506.d20260924`** (NO new release since Entry 186). New commits Sep 25-26: `dec6c14` "Capacity checker" (Sep 26), `be0d45d` "Added memory profiling mod" (Sep 25), `3691b4f` "Free unused memory upon profiling" (Sep 25), `f8c9fd3` "retain structured_server.py" (Sep 25), `d1969a0` "Support new vLLM repo layout" (Sep 25) — 5 commits, no build yet. Next SVD build expected imminently. PR #58681 NOT yet patched in. Trigger: NO NEW BUILD today.
+
+4. **Qwen models:** **Qwen4-Exp architecture** added to HuggingFace transformers (v5.16.0, Aug 26): new hybrid architecture (GatedResidual + Qwen Sparse Attention + Per-Layer Embedding), same family as Qwen3.8-Flash-Next. **No open-weight release** for any Qwen4 35B or Qwen3.7 35B model confirmed. `Qwen/Qwen-AgentWorld-35B-A3B` exists on HuggingFace — same parameter class (35B/A3B) but a task-specific fine-tune for agentic environment simulation (not a general inference upgrade candidate; previously noted in Watch Items). `QwenLM/Qwen3.8` GitHub repo confirmed. No new NVFP4 quantization of successor models found. Classification: NO ACTION (no production upgrade candidate emerged).
+
+5. **Forum (719 + 721):** 719.json EGRESS_BLOCKED day 14. WebSearch fallback. **NO NEW THREADS found above ceiling /t/383988.** Highest threads in search: /t/383926 (50-60% slowdown after OTA, below ceiling). OTA DO NOT APPLY hold unchanged — NV-Kernels PR #590 (KHO fix) not yet shipped. Forum ceiling: **still /t/383988.** EC 0x03000508: STILL UNRESOLVED. Classification: NO ACTION.
+
+### Cross-Correlated Findings
+
+1. **[HIGH — WATCH] PR #58681 close to merge (Checks 2+3):** @hclsys (GB10 hardware owner) validated fix on hardware Sep 25 — closest this PR has been to merge. Needs 1 codeowner approval. Once merged, check if eugr patches it into next SVD build (5 new commits Sep 25-26 suggest imminent build). A patched SVD build becomes the cleanest Arm C eval target vs current Sep 24 build.
+
+2. **[MEDIUM] SVD new build imminent (Check 3):** 5 new commits Sep 25-26 (capacity checker, memory profiling, vLLM repo layout support). No build yet as of today. If PR #58681 merges before the next SVD build, it may be patched in by eugr. Monitor tomorrow.
+
+3. **[MEDIUM — NEW] Issue #55397 new SM12x NVFP4 prefill regression (Check 2):** Wrong kernel selection on SM12x (FlashInfer over W4A4 Cutlass) for NVFP4 dense linear ops. Adds to the list of SM12x-specific bugs in vLLM mainline. Not a production concern (production = FP8 MoE, not NVFP4 dense). Relevant when planning NVFP4 eval after Arm C — add to pre-eval checklist.
+
+4. **[INFO] Qwen4-Exp architecture preview + Qwen-AgentWorld-35B-A3B (Check 4):** Qwen4-Exp architecture defined in transformers (Aug 26) but no weights released. Qwen-AgentWorld-35B-A3B exists but is a fine-tune, not a base upgrade. No production successor candidate materialized today.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All scores UNCHANGED. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. PR #58681 progressing (validated Sep 25, 1 approval needed). PR #57512 + #40099 still open. NEW: Issue #55397 (NVFP4 prefill regression SM12x). |
+| `svd \| new prebuilt vllm version` | NOT FIRED. Still Sep 24 build. 5 new commits indicate next build approaching. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen4-Exp architecture in transformers but no weights. No Qwen3.7 or Qwen4 35B A3B open weights. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. No new threads above /t/383988. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (#40099) | NOT FIRED. Still open. |
+
+### Overall: WORTH WATCHING
+
+**PR #58681 (SM12x ~15% regression fix) validated on GB10 Sep 25 by @hclsys — one codeowner approval from merge. SVD has 5 new commits Sep 25-26, next build expected imminently. Arena static ~18+ weeks. Forum quiet (ceiling /t/383988 holds). No new Qwen open weights.**
+
+### Recommendations
+
+1. **[WATCH — PRIORITY 1] PR #58681 approaching merge.** @hclsys (GB10 hardware owner) confirmed fix is correct. Single codeowner approval is the last blocker. Monitor daily — when merged, check immediately if eugr patches it into the next SVD build. That patched SVD build is the target for clean Arm C eval.
+
+2. **[WATCH — PRIORITY 2] SVD next build imminent.** 5 new commits Sep 25-26. Check tomorrow. If PR #58681 merges before the build cut, it may appear; if not, the next build after #58681 merge becomes Arm C target.
+
+3. **[NEW — PRIORITY 3] Add Issue #55397 to NVFP4 pre-eval checklist.** Wrong kernel selection (FlashInfer over W4A4 Cutlass) for NVFP4 dense linear on SM12x. Verify fix status before NVFP4 eval stage.
+
+4. **[CONFIRMED — PRIORITY 4] DO NOT apply the Sep 13 OTA.** PR #590 (NV-Kernels KHO fix) not yet shipped. Hold unchanged.
+
+5. **[WATCH — PRIORITY 5] Qwen4 open weights.** Qwen4-Exp architecture is in transformers. First open-weight 35B-A3B-class release would be a direct production upgrade candidate.
+
+6. **[CARRY-FORWARD] Track PR #57512** (float32-scale DeepGEMM guard). Still awaiting codeowner reviews since Sep 23.
+
+7. **[CARRY-FORWARD] Investigate /t/383624 hard-freeze kernel version.** Warranty expires Oct 14.
+
+8. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+9. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+10. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -14938,3 +14938,78 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 10. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 188 - DGX Spark Recon (2026-09-27)
+
+**Overall: WORTH WATCHING — ⚠ NEW SVD build Sep 26 (dev195, +110 commits, missed by Entry 187 post-check); Qwen4 announced Sep 22 at Apsara (27B open weights "very soon"); NV-Kernels PR #591 discovered (OTA hold now requires BOTH PR #590 AND #591); /t/383624 warranty 17 days; PR #58681 still 1 approval away**
+
+**Date:** 2026-09-27 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents confirmed UNCHANGED via direct REST fetch. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233** (UNCHANGED), updateTime 2026-09-22T01:25:44Z (UNCHANGED). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): copyCount **117** (UNCHANGED), updateTime 2026-09-21T09:34:23Z (UNCHANGED). sub1779495971526 (Atlas, 218.85 tok/s): recipyCopyCount **168** (UNCHANGED), updateTime 2026-09-22T07:30:23Z (UNCHANGED). 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~18+ weeks (last submission 2026-05-26). Classification: NO ACTION.
+
+2. **vLLM:** v0.30.0 = latest stable (Sep 22); v0.30.1rc0 pre-release (Sep 23). No v0.30.1 stable. **PR #58681** (SM12x DeepGEMM alignment regression fix, ~15% decode impact): STILL OPEN — last activity Sep 25 hclsys GB10 hardware validation, confirmed fix is correct. Needs 1 codeowner approval; no approvals yet. **PR #57512** (float32-scale DeepGEMM guard): STILL OPEN, last activity Sep 23 (DCO sign-off force-push). **PR #40099** (Gemma4 repetition): STILL OPEN, stalled since Jul 8. **Issue #55397** (NVFP4 dense linear wrong kernel SM12x): OPEN, last updated Sep 4. **NEW CONFIRMED WORKAROUND for Issue #55397:** `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` fully recovers prefill performance on SM12x. Add to NVFP4 pre-eval checklist. Classification: WORTH WATCHING (carry-forward, no new releases).
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **TRIGGER FIRED — NEW BUILD Sep 26** (released after Entry 187's check window): prebuilt-vllm-current = **`0.30.1rc1.dev195+ga4eb3f25d.d20260926`** (Sep 26, 12:20 PM UTC) + prebuilt-flashinfer-current = **`0.7.0-78c6e1fb-d20260926`** (Sep 26). **110 more vLLM nightly commits** ahead of prior dev85 build. This is the new Arm C eval target. PR #58681 NOT yet patched in (still open). No Sep 27 build released. No sep-27 activity in repo (last commit Sep 26 "Capacity checker" dec6c14 by eugr). GitHub API access restricted to davistroy/spark — this check done via WebSearch fallback.
+
+4. **Qwen models:** **Qwen3.7 35B: CONFIRMED NEVER RELEASED** — Alibaba skipped Qwen3.7 open weights entirely; close this watch item. **Qwen3.8 landscape:** Qwen3.8-27B (dense, not MoE, August 14), Qwen3.8-2.4T-A95B (too large for single Spark), Qwen3.8-Flash-Next (125B/6B-active MoE, 172.78 GiB FP8 checkpoint — exceeds single Spark memory). No Qwen3.8-35B-A3B released. **Qwen4: ANNOUNCED Sep 22 at Alibaba Apsara Conference** — four-tier family, 27B open-weights local-deployment tier "very soon", no weights yet. Qwen3.8-Flash-Next confirmed as Qwen4 architecture preview. **NEW ACTIONABLE: `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark`** (DGX Spark-specific NVFP4 checkpoint + companion spec-decode draft model): community benchmarks 115.75 tok/s c1 (+55% vs prod 66.9?), 421.85 tok/s c8 agg (~flat vs prod 427.7). Hybrid Mamba-MoE architecture. NVFP4 weight-schema gap from Entry 094 was Qwen-specific — Nemotron schema may differ. B1 probe recommended (one idle window, ~15 min, zero GPU risk if schema fails). Requires `--trust-remote-code` for Mamba arch. Classification: WORTH WATCHING.
+
+5. **Forum (719 + 721):** 719.json EGRESS_BLOCKED day 15. WebSearch fallback. **NO NEW THREADS above ceiling /t/383988** (third consecutive day ceiling holds). /t/383988 page 2 active (abandonment discussion, FE production stop rumors, RTX Spark pivot concerns — no NVIDIA official response). **NEW FINDING: NV-Kernels PR #591** "UBUNTU: [Config] nvidia: disable KHO by default on arm64-nvidia" (SloptimistPrime, Sep 14) — companion to PR #590, targets `arm64-nvidia` kernel flavor specifically (PR #590 targets `arm64`). Both flavors needed. PR #591 has "help wanted" label, arm64 build partially failing. **OTA hold now requires BOTH PR #590 AND PR #591** — extends hold timeline vs prior single-PR understanding. New below-ceiling: /t/383940 "What happened with CUDA 13.2 on DGX Spark?" (content inaccessible, ID 383940). OTA hold UNCHANGED. EC 0x03000508: STILL UNRESOLVED (case 260716-000029). /t/383624 hard-freeze: STILL ACTIVE, **warranty expires Oct 14 (17 days)**. Classification: WORTH WATCHING.
+
+### Cross-Correlated Findings
+
+1. **[HIGH — WATCH] PR #58681 + SVD Sep 26 new build (Checks 2+3):** PR validated on GB10 Sep 25, 1 approval from merge. Sep 26 SVD build (dev195, +110 commits) is the new Arm C eval target. Once PR #58681 merges, next SVD build after that = clean eval target with full ~15% regression restored. Monitor both daily.
+
+2. **[MEDIUM — NEW] Qwen4 announcement + SVD build (Checks 3+4):** Qwen4 open weights "very soon" as of Sep 22. A Qwen4-35B-A3B-FP8, if released, would be the natural production successor and would need a new SVD build to test. Sep 26 build is the correct base to wait on.
+
+3. **[MEDIUM — NEW] NV-Kernels PR #591 + /t/383624 warranty urgency (Check 5):** OTA hold now requires both PR #590 and PR #591. PR #591 arm64 build still failing — may lag PR #590 by days/weeks. /t/383624 warranty expires Oct 14. Cannot safely apply Sep 13 OTA (which includes kernel 7.0.0-1019-nvidia + KHO bug) to get NVIDIA to service the hard-freeze unit. Tension between hold and warranty deadline is now sharper.
+
+4. **[MEDIUM — ACTIONABLE] Issue #55397 workaround + NVFP4 eval path (Check 2+4):** `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` confirmed workaround for SM12x prefill regression. Should be added to Nemotron NVFP4-DSpark B1 probe recipe AND to any future NVFP4 Qwen eval profile.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All scores UNCHANGED. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. PR #58681 progressing (validated Sep 25, 1 approval needed). PR #57512 + #40099 still open. Issue #55397 workaround confirmed. |
+| `svd \| new prebuilt vllm version` | ⚠ FIRED (retroactive — Sep 26 build dev195 was after Entry 187 check window). New Arm C eval target: `0.30.1rc1.dev195+ga4eb3f25d.d20260926` + FI `0.7.0-78c6e1fb-d20260926`. |
+| `huggingface \| new ~35B MoE model` | PARTIALLY FIRED — Qwen4 announced Sep 22, 27B open-weights "very soon" but no weights released. Qwen3.7 35B confirmed never released (close watch item). |
+| `forum \| new GB10 performance/stability finding` | FIRED (NV-Kernels PR #591 extends OTA hold; /t/383624 warranty 17 days). No new inference performance threads. |
+| `vllm_release \| gemma4 AND (guided OR grammar)` (#40099) | NOT FIRED. Still open, stalled. |
+
+### Overall: WORTH WATCHING
+
+**⚠ NEW SVD build Sep 26 (dev195, missed by Entry 187); Qwen4 27B open weights imminent; NV-Kernels PR #591 discovered (OTA hold requires BOTH PRs); /t/383624 warranty 17 days; PR #58681 still 1 approval away; Nemotron NVFP4-DSpark B1 probe candidate. Arena/production config unchanged.**
+
+### Recommendations
+
+1. **[WATCH — PRIORITY 1] PR #58681 approaching merge (1 codeowner approval).** Monitor daily. Once merged, the next SVD build after Sep 26 dev195 = clean Arm C eval target. Sep 26 build is current target.
+
+2. **[NEW — PRIORITY 2] OTA hold now requires BOTH NV-Kernels PR #590 AND PR #591.** PR #591 arm64 build was failing as of Sep 14. Track both: PR #590 (arm64 flavor) and PR #591 (arm64-nvidia flavor). Cannot lift OTA hold until both clear.
+
+3. **[URGENT — PRIORITY 3] /t/383624 warranty clock — 17 days (expires Oct 14).** If no NVIDIA response on hard-freeze case by ~Oct 7, escalate before expiry. Cannot apply the Sep 13 OTA to force NVIDIA's hand (that OTA carries kernel 7.0.0-1019 + KHO bug).
+
+4. **[NEW — PRIORITY 4] Nemotron 3.5 Lightning NVFP4-DSpark B1 probe.** `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark` — attempt weight load on current cu132 build in one idle window (~15 min). If schema succeeds (Nemotron schema differs from Qwen), run standard harness. Claimed c1 +55% vs prod. Requires `--trust-remote-code`. Add `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` to recipe.
+
+5. **[CONFIRMED — PRIORITY 5] OTA hold UNCHANGED.** DO NOT apply Sep 13 OTA. Sep 26 SVD build is current Arm C eval target; hold upgrade until PR #58681 merges and a subsequent build picks it up.
+
+6. **[WATCH — PRIORITY 6] Qwen4 open weights imminent.** "Very soon" as of Sep 22 Apsara announcement. 27B open-weights local tier confirmed. If Qwen4-35B-A3B-FP8 materializes (not yet announced), it's the natural production successor. Subscribe to QwenLM/Qwen3.8 GitHub and qwen.ai blog.
+
+7. **[NEW — ADD TO CHECKLIST] Issue #55397 workaround.** `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` recovers -31% prefill regression on SM12x for NVFP4. Add to all NVFP4 test profiles (Nemotron probe, future Qwen4 NVFP4).
+
+8. **[CARRY-FORWARD] Track PR #57512** (float32-scale DeepGEMM guard, 3 codeowner approvals needed).
+
+9. **[CARRY-FORWARD] Investigate /t/383624 hard-freeze kernel version.** Warranty expires Oct 14.
+
+10. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+11. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+12. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -15013,3 +15013,71 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 12. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 189 - DGX Spark Recon (2026-09-28)
+
+**Overall: WORTH WATCHING — ⚠ NEW SVD build Sep 27 (dev220, +25 commits over Entry 188 target); PR #58681 still 1 codeowner approval from merge; /t/383624 warranty 16 days; Arena/Qwen4 unchanged**
+
+**Date:** 2026-09-28 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents confirmed UNCHANGED via direct REST fetch. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233** (UNCHANGED), updateTime 2026-09-22T01:25:44Z (UNCHANGED). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): copyCount **117** (UNCHANGED), updateTime 2026-09-21T09:34:23Z (UNCHANGED). sub1779495971526 (Atlas, 218.85 tok/s): recipyCopyCount **168** (UNCHANGED), updateTime 2026-09-22T07:30:23Z (UNCHANGED). 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~19 weeks (last submission 2026-05-26). Classification: NO ACTION.
+
+2. **vLLM:** v0.30.0 = latest stable (Sep 22) — **NO NEW STABLE RELEASE**. **PR #58681** (SM12x DeepGEMM alignment regression fix, ~15% decode impact): STILL OPEN — latest activity Sep 25 (hclsys GB10 hardware validation, no codeowner approval). No change from Entry 188. **PR #57512** (float32-scale DeepGEMM guard): STILL OPEN. **PR #40099** (Gemma4 repetition): STILL OPEN. Classification: WORTH WATCHING (carry-forward).
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **TRIGGER FIRED — NEW BUILD Sep 27.** prebuilt-vllm-current = **`0.30.1rc1.dev220+g24c9772d1.d20260927`** (Sep 27, 17:40 UTC) + prebuilt-flashinfer-current = **`0.7.0-8589d49b-d20260927`** (Sep 27). +25 vLLM nightly commits vs prior Sep 26 dev195 (Entry 188 target). **New Arm C eval target: Sep 27 build.** PR #58681 NOT yet patched in — eval will still show ~15% lower than true potential until it merges. FlashInfer commit bumped: `78c6e1fb` → `8589d49b` (same 0.7.0 semver). Classification: WORTH WATCHING (new eval target).
+
+4. **Qwen models:** Qwen4 still **NOT RELEASED** as open weights. "Very soon" as of Sep 22 Apsara — now 6 days later, no weights. No new 35B-class MoE models from other labs above existing watch items. Nemotron 3.5 Lightning NVFP4-DSpark B1 probe candidate unchanged (Entry 188 Priority 4). Classification: NO ACTION.
+
+5. **Forum (719 + 721):** 719.json EGRESS_BLOCKED day 16. WebSearch fallback. **NO NEW THREADS above ceiling /t/383988.** Ceiling holds for second consecutive day. /t/382725 "DeepSeek v4.1 Flash" page 2 returned in search (ID 382725 < 383988 — below ceiling). /t/383624 warranty: Oct 14 (~16 days, -1 day from Entry 188). No new driver/firmware/OTA findings. No new inference performance threads. Classification: NO ACTION.
+
+### Cross-Correlated Findings
+
+1. **[HIGH — WATCH] PR #58681 + SVD Sep 27 new build (Checks 2+3):** PR validated Sep 25, still 1 approval away. Sep 27 SVD build (dev220) is the new Arm C eval target — but ~15% regression still present. First SVD build AFTER PR #58681 merges = clean eval target. Monitor both daily; sequence is PR merge → next SVD build → eval.
+
+2. **[LOW — INFORMATIONAL] SVD FlashInfer commit bump (Check 3):** FI commit `78c6e1fb` → `8589d49b` (same 0.7.0 semver). Likely minor patch; no known SM121-specific FlashInfer changes expected between these commits.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All scores UNCHANGED. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. No new release. PR #58681 progressing but not merged. |
+| `svd \| new prebuilt vllm version` | ⚠ FIRED. Sep 27 build dev220 (`0.30.1rc1.dev220+g24c9772d1.d20260927` + FI `0.7.0-8589d49b-d20260927`). New Arm C eval target. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen4 still unweighted. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. No new threads above /t/383988. |
+
+### Overall: WORTH WATCHING
+
+**⚠ NEW SVD build Sep 27 (dev220, +25 commits); PR #58681 still 1 codeowner approval from merge; /t/383624 warranty 16 days. Arena static, Qwen4 weights still pending, production config unchanged.**
+
+### Recommendations
+
+1. **[WATCH — PRIORITY 1] PR #58681 approaching merge (1 codeowner approval).** Sep 27 SVD build is current eval target but runs with ~15% regression. Monitor PR #58681 daily. Once merged: next SVD build after that = clean eval target for Arm C.
+
+2. **[CARRY-FORWARD — PRIORITY 2] OTA hold: requires BOTH NV-Kernels PR #590 AND PR #591 before lifting.** PR #591 arm64 build was still failing as of Sep 14 — track separately.
+
+3. **[URGENT — PRIORITY 3] /t/383624 warranty clock — 16 days (expires Oct 14).** If no NVIDIA response on hard-freeze case by ~Oct 7, escalate before expiry. Cannot apply Sep 13 OTA (kernel 7.0.0-1019 + KHO bug).
+
+4. **[CARRY-FORWARD — PRIORITY 4] Nemotron 3.5 Lightning NVFP4-DSpark B1 probe.** `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark` — one idle window (~15 min), `--trust-remote-code`, add `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel`.
+
+5. **[CONFIRMED — PRIORITY 5] OTA hold UNCHANGED.** DO NOT apply Sep 13 OTA. Sep 27 SVD build is current Arm C eval target.
+
+6. **[WATCH — PRIORITY 6] Qwen4 open weights.** 6 days since Apsara "very soon" (Sep 22). Check HuggingFace qwen.ai/QwenLM daily for 27B release.
+
+7. **[CARRY-FORWARD] Track PR #57512** (float32-scale DeepGEMM guard).
+
+8. **[CARRY-FORWARD] Issue #55397 workaround:** `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` for NVFP4 eval profiles.
+
+9. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+10. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -15081,3 +15081,71 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 190 - DGX Spark Recon (2026-09-29)
+
+**Overall: WORTH WATCHING — ⚠ NEW SVD build Sep 28 (dev254, +34 commits; local `VLLM_PATCH_B12X_C128A_ALIGNMENT` likely resolves ~15% SM12x regression); KHO PRs #623/#624 confirmed as OTA gate; /t/383624 warranty 15 days; Arena static; Qwen4 still no weights**
+
+**Date:** 2026-09-29 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents confirmed UNCHANGED via direct REST fetch. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233** (UNCHANGED), updateTime 2026-09-22T01:25:44Z (UNCHANGED). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): copyCount **117** (UNCHANGED). sub1779495971526 (Atlas, 218.85 tok/s): recipyCopyCount **168** (UNCHANGED), updateTime 2026-09-22T07:30:23Z (UNCHANGED). LIST = `{}` (blocked). Leaderboard direct page: proxy-blocked. 10% trigger (>88.30 tok/s) NOT FIRED. FP8 vLLM frontier static ~19 weeks (last submission 2026-05-26). Classification: NO ACTION.
+
+2. **vLLM:** v0.30.0 still latest stable — NO NEW RELEASE (unchanged from Sep 22). **PR #58681** (SM12x DeepGEMM alignment regression fix): STILL OPEN, last activity Sep 25 (GB10 hardware-validated by @hclsys; 1 codeowner approval needed). **PR #57512** (float32-scale guard): STILL OPEN, last activity Sep 23. **PR #40099** (Gemma4 repetition): STILL OPEN, stalled 83+ days (last activity Jul 8). **Issue #58624** (SM12x ~15% regression): STILL OPEN. Classification: WORTH WATCHING (carry-forward).
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **TRIGGER FIRED — NEW BUILD Sep 28.** prebuilt-vllm-current = **`0.30.1rc1.dev254+gccfd1cea7.d20260928`** + prebuilt-flashinfer-current = **`0.7.0-85bfa5e4-d20260928`**. +34 vLLM nightly commits vs Sep 27 dev220. Notable: `VLLM_PATCH_B12X_C128A_ALIGNMENT` local patch (see Cross-Correlated below), solo mode networking fixes (Sep 27), capacity checker added (Sep 26). FlashInfer commit: `8589d49b` → `85bfa5e4` (same 0.7.0 semver). New Arm C eval target: Sep 28 build. Classification: WORTH WATCHING (new eval target; local alignment patch changes eval guidance).
+
+4. **Qwen models:** Qwen4 still **NOT RELEASED** as open weights — 7 days since Apsara "very soon" (Sep 22). Architecture preview (`Qwen4-Exp` in HF Transformers Aug 26; GatedResidual, Qwen Sparse Attention, Per-Layer Embedding). `Qwen/Qwen3.8-27B`: open since Aug 13-14, dense 28B NOT MoE — not a production candidate. `Qwen/Qwen4-35B-A3B-FP8`: does not exist. No new 35B-class MoE FP8 models. Classification: WORTH WATCHING (Qwen4 window still open).
+
+5. **Forum (719 + 721):** 719.json + 721.json EGRESS_BLOCKED Day 17. WebSearch fallback. ⚠ **NEW FINDING: Thread /t/383926 (DGX OS 7.6.0/kernel 7.0.0-1019 KHO inference regression) confirmed: prefill 1022→631 tok/s (−38%), decode 37.1→15.7 tok/s (−58%); NVIDIA advisory /t/383254 corroborates. NEW: NV-Kernels PRs #623/#624** (nvmochs "default KHO off on arm64") confirmed as additional gate PRs alongside #590/#591. Production kernel 6.17.0-1021: SAFE. /t/383624 warranty: Oct 14 (15 days), no confirmed NV CAS response. No new threads above ceiling /t/383988. Classification: INFO (production safe; OTA hold already in force).
+
+### Cross-Correlated Findings
+
+1. **[HIGH — CHANGES ARM C EVAL GUIDANCE] SVD local `VLLM_PATCH_B12X_C128A_ALIGNMENT` (Check 3) + PR #58681 OPEN (Check 2):** eugr independently applied a local fix for the same SM12x grouped-GEMM alignment regression targeted by PR #58681. The Sep 28 SVD build (`dev254`) likely already recovers the ~15% throughput regression noted in Entries 185-189. **Arm C eval can proceed on Sep 28 build without waiting for PR #58681 merge.** Verify during eval by confirming the patch activates in startup logs.
+
+2. **[MEDIUM — VALIDATES OTA HOLD] KHO regression (Forum Check 5) + existing OTA hold:** Forum/NVIDIA advisory confirm 50-60% inference throughput regression on 7.0.0-1019-nvidia. OTA gate now expanded: PRs #590, #591, #623, #624 all required. Production 6.17.0-1021 unaffected. No action needed today; hold already in force.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All 3 docs UNCHANGED. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. No new release. PR #58681 still open (Sep 25). |
+| `svd \| new prebuilt vllm version` | ⚠ FIRED. Sep 28 build `0.30.1rc1.dev254+gccfd1cea7.d20260928` + FI `0.7.0-85bfa5e4-d20260928`. |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen4 still no weights (day 7 post-Apsara). |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED (no new threads above ceiling /t/383988). NOTE: KHO inference regression + PRs #623/#624 confirmed via known-thread updates. |
+
+### Overall: WORTH WATCHING
+
+**⚠ NEW SVD build Sep 28 (dev254, local B12X alignment patch changes eval guidance); KHO PRs #623/#624 confirmed as OTA gate additions; /t/383624 warranty 15 days. Arena static 19+ weeks, Qwen4 weights still pending.**
+
+### Recommendations
+
+1. **[PRIORITY 1 — UPDATED GUIDANCE] Proceed with Arm C eval on Sep 28 SVD build.** `VLLM_PATCH_B12X_C128A_ALIGNMENT` local patch likely already addresses ~15% SM12x regression. At eval start: confirm patch activates in startup logs. If confirmed, Sep 28 build yields full v0.30.x potential without waiting for PR #58681 upstream merge.
+
+2. **[CARRY-FORWARD — PRIORITY 2] OTA hold: now requires PRs #590, #591, #623, AND #624.** Track NV-Kernels repo for merges. All four must merge and ship in a kernel package before lifting.
+
+3. **[URGENT — PRIORITY 3] /t/383624 warranty clock — 15 days (expires Oct 14).** No confirmed NV CAS response. If no response by ~Oct 7, escalate. KHO link: thread predates 7.6.0 release, likely distinct hardware fault; but if system is on 7.0.0-1019, `kho=off` worth trying first.
+
+4. **[CARRY-FORWARD — PRIORITY 4] Nemotron 3.5 Lightning NVFP4-DSpark B1 probe.** `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark` — one idle window (~15 min), `--trust-remote-code`, `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel`.
+
+5. **[CONFIRMED — PRIORITY 5] OTA hold UNCHANGED.** DO NOT apply DGX OS 7.6.0/kernel 7.0.0-1019-nvidia.
+
+6. **[WATCH — PRIORITY 6] Qwen4 open weights — 7 days since "very soon" (Sep 22).** Check `Qwen/` HuggingFace org and `@QwenLM` for 27B+ release.
+
+7. **[CARRY-FORWARD] Track PR #57512** (float32-scale DeepGEMM guard, last activity Sep 23).
+
+8. **[CARRY-FORWARD] Issue #55397 workaround:** `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` for NVFP4 eval profiles.
+
+9. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+10. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

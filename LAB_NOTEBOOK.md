@@ -15217,3 +15217,71 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 192 - DGX Spark Recon (2026-10-01)
+
+**Overall: WORTH WATCHING — ⚠ NEW SVD build Sep 30 `0.30.1rc1.dev420+gd71f66260.d20260930` (+84 commits vs Sep 29 dev336); Qwen4 timeline refined to "Dec 2026 open-weights" per leaks; PR #58681 merge status uncertain in dev420 window; Arena static 21 weeks; /t/383624 warranty 13 days**
+
+**Date:** 2026-10-01 11:18 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents confirmed via direct REST reads. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233** (UNCHANGED), updateTime **2026-09-30T14:57:39.653871Z** (bumped from 2026-09-22 — metadata-only Sep 30 activity, score **80.27 UNCHANGED**). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): recipeCopyCount **117** (UNCHANGED), updateTime 2026-09-21T09:34:23Z (UNCHANGED), score UNCHANGED. sub1779495971526 (Atlas, 218.85 tok/s): recipyCopyCount **169** (UNCHANGED), updateTime **2026-10-01T02:30:29.540063Z** (bumped from 2026-09-29T20:48:18Z — metadata-only Oct 1 activity, score **218.85 UNCHANGED**). Arena LIST still blocked. 10% trigger (>88.30 tok/s) NOT FIRED. FP8 vLLM frontier static ~21 weeks (last submission 2026-05-26). Classification: NO ACTION.
+
+2. **vLLM:** v0.30.0 still latest stable — NO NEW STABLE RELEASE (v0.30.1 not yet tagged). **PR #58681** (SM12x DeepGEMM alignment regression fix): STILL OPEN per search results — PR page remains active; last confirmed activity Sep 25. Window between Sep 25 and Sep 30 dev420 SVD cut means upstream merge status uncertain (may have merged and been included). **PR #57512** (float32-scale guard): STILL OPEN, last activity Sep 23. **PR #40099** (Gemma4 repetition): STILL OPEN, stalled. **Issue #58624** (SM12x ~15% regression): STILL OPEN. No new issues or PRs with SM121/GB10 arch-guard keywords. Classification: WORTH WATCHING (carry-forward).
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **TRIGGER FIRED — NEW BUILD Sep 30.** prebuilt-vllm-current = **`0.30.1rc1.dev420+gd71f66260.d20260930`** (Sep 30, 13:03 UTC, "New stable build"). **+84 vLLM nightly commits** vs Sep 29 dev336. FlashInfer version not confirmed in this check (prior: `0.7.0-4a638133-d20260929`). PR #58681 merge status in this build uncertain — Sep 25 last known activity vs Sep 30 cut. Local `VLLM_PATCH_B12X_C128A_ALIGNMENT` from Sep 28/29 expected to carry forward. **New Arm C eval target: Sep 30 build.** Classification: WORTH WATCHING (new eval target, +84 commits).
+
+4. **Qwen models:** Qwen4 **NOT RELEASED** as open weights — still "in training" per Apsara Conference Sep 22. **Timeline refined:** leaks from ModelScope registry commits / docs target "late Q4 2026 launch window, enterprise API Nov 2026, open-weights HuggingFace Dec 2026" — more specific than Entry 191's "early 2027" framing. Architecture confirmed: 125B total params, 6B active (MoE), 51B-param embedding component, 262K native context. Qwen3.8-Flash-Next confirmed as Qwen4 architecture preview (rejected Entry 165 on throughput). No new 35B-class MoE FP8 models from any lab. Qwen3.7 confirmed as skipped open-weight generation. Classification: WORTH WATCHING (timeline refined to Dec 2026).
+
+5. **Forum (719 + 721):** 719.json EGRESS_BLOCKED day 19. WebSearch fallback. **NO NEW THREADS above ceiling /t/383988.** Highest search-indexed thread: /t/383780 (below ceiling — previously tracked). /t/383624 warranty: Oct 14 (**13 days**). OTA hold: PRs #590, #591, #623, #624 — all unmerged (carry-forward from Entry 191). No new GB10 performance/stability/firmware findings above ceiling. Forum search returned only previously-tracked content. Classification: NO ACTION (forum).
+
+### Cross-Correlated Findings
+
+1. **[MEDIUM — EVAL TARGET UPDATED] SVD Sep 30 dev420 (Check 3) as new Arm C eval target.** +84 commits vs Sep 29 dev336. PR #58681 STILL OPEN per search (Check 2) — but Sep 25→Sep 30 window leaves open possibility it merged and is included in dev420. Key action at eval start: check startup logs for both `VLLM_PATCH_B12X_C128A_ALIGNMENT` activation AND upstream PR #58681 presence.
+
+2. **[LOW — TIMELINE UPDATE] Qwen4 "Dec 2026 open-weights" per leaks (Check 4)** — more specific than Entry 191's "early 2027." If accurate, a Qwen4-35B-A3B-FP8 could land ~8 weeks out. Weekly watch cadence appropriate; no product urgency this week.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All 3 docs UNCHANGED in score. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. v0.30.0 still latest stable, no new release. |
+| `svd \| new prebuilt vllm version` | ⚠ FIRED. Sep 30 build `0.30.1rc1.dev420+gd71f66260.d20260930` (+84 commits vs Sep 29 dev336). |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen4 in training, Dec 2026 open-weights target per leaks. |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED. EGRESS_BLOCKED day 19; no new threads above /t/383988. |
+
+### Overall: WORTH WATCHING
+
+**⚠ NEW SVD build Sep 30 (dev420, +84 commits — new Arm C eval target); Qwen4 timeline refined to Dec 2026 open-weights; PR #58681 merge status uncertain in dev420 window; Arena static 21 weeks; /t/383624 warranty 13 days.**
+
+### Recommendations
+
+1. **[PRIORITY 1 — UPDATED EVAL TARGET] Arm C eval target updated to Sep 30 SVD build** (`0.30.1rc1.dev420+gd71f66260.d20260930`). +84 commits over Sep 29 dev336. At eval start: confirm `VLLM_PATCH_B12X_C128A_ALIGNMENT` activates in startup logs. If PR #58681 also merged upstream and included in dev420, regression fix is doubly covered — check startup logs for both.
+
+2. **[CARRY-FORWARD — PRIORITY 2] OTA hold: requires PRs #590, #591, #623, AND #624.** Track NV-Kernels repo for merges. All four must merge before lifting.
+
+3. **[URGENT — PRIORITY 3] /t/383624 warranty clock — 13 days (expires Oct 14).** No confirmed NV CAS response as of Entry 192. If no response by ~Oct 7, escalate directly.
+
+4. **[CARRY-FORWARD — PRIORITY 4] Nemotron 3.5 Lightning NVFP4-DSpark B1 probe.** `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark` — one idle window (~15 min), `--trust-remote-code`, `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel`.
+
+5. **[CONFIRMED — PRIORITY 5] OTA hold UNCHANGED.** DO NOT apply DGX OS 7.6.0/kernel 7.0.0-1019-nvidia.
+
+6. **[UPDATED — PRIORITY 6] Qwen4 open weights — Dec 2026 per leaks.** Enterprise API Nov 2026, open-weights HuggingFace Dec 2026 per ModelScope registry leak. Watch `Qwen/` HuggingFace org weekly. A Qwen4-35B-A3B-FP8 could land ~8 weeks out — flag at first sign of release.
+
+7. **[CARRY-FORWARD] Track PR #57512** (float32-scale DeepGEMM guard) and PR #58681 (SM12x alignment fix) for merge — both potentially relevant to dev420 content.
+
+8. **[CARRY-FORWARD] Issue #55397 workaround:** `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` for NVFP4 eval profiles.
+
+9. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+10. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

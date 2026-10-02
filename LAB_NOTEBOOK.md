@@ -15285,3 +15285,79 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 11. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 193 - DGX Spark Recon (2026-10-02)
+
+**⚠⚠ ACTION NEEDED — NVFP4 EVAL UNBLOCKED: community AEON v0.23.0 build confirmed for Qwen3.6-35B-A3B-NVFP4 on SM121 (+55% c1 vs prod); warranty /t/383624 at 12 days; NEW SVD build Oct 1 dev511 (+91 commits, FlashInfer 0.7.1); CORRECTION: `VLLM_PATCH_B12X_C128A_ALIGNMENT` is B12X-ONLY (prior entries misstated this)**
+
+**Date:** 2026-10-02 11:19 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents confirmed via direct REST reads. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (bumped from Sep 30 — metadata-only update, score **80.27 UNCHANGED**). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): recipeCopyCount **119** (**+2 from 117** — organic recipe copy activity Oct 1), updateTime 2026-10-01T18:07:59.381407Z (bumped from Sep 21). sub1779495971526 (Atlas, 218.85 tok/s): recipyCopyCount **169** (UNCHANGED), updateTime 2026-10-01T02:30:29.540063Z (UNCHANGED). LIST returned 50 older docs (sub1770xxx–sub1774xxx only; newest range not accessible). 10% trigger (>88.30 tok/s) NOT FIRED. FP8 vLLM frontier static ~21.5 weeks (last submission 2026-05-26). Classification: **NO ACTION**.
+
+2. **vLLM:** v0.30.0 still latest stable — NO NEW STABLE RELEASE (v0.30.1 not yet tagged). **PR #58681** (SM12x alignment fix, ~15% regression): STILL OPEN, last confirmed activity Sep 25, 2026 — GB10 hardware-validated by reviewer. **PR #57512** (float32-scale guard): STILL OPEN, last activity Sep 23. **PR #40099** (Gemma4 repetition): STILL OPEN, stalled since Apr 21. **Issue #58624** (SM12x ~15% regression): STILL OPEN, last activity Sep 24. Whether PR #58681 landed in SVD dev511 (+91 commits since dev420) is uncertain — check startup logs at eval time. Classification: **MEDIUM** (carry-forward).
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **TRIGGER FIRED — NEW BUILD Oct 1.** prebuilt-vllm-current = **`0.30.1rc1.dev511+gcb6458c5c.d20261001`** (Oct 1, ~12:45 UTC, FlashInfer **`0.7.1-36ad74ad-d20261001`**). **+91 vLLM upstream commits** vs Sep 30 dev420. FlashInfer bumped from 0.7.0 to 0.7.1. Docker Hub: `eugr/spark-vllm:latest` updated 2026-10-01T13:36:39Z; `nightly-20261001` tags for both regular and b12x images. No SM121-specific kernel changes in SVD commits; DeepGEMM MXFP4 pin still in place (`DEEPGEMM_REF` pinned, "investigating SM121 regression"). **CRITICAL CORRECTION:** `VLLM_PATCH_B12X_C128A_ALIGNMENT` is applied only when `VLLM_PATCH_B12X_C128A_ALIGNMENT=1`, set **only for `--exp-b12x` builds** — does NOT apply to `eugr/spark-vllm:latest`. Entry 192's recommendation to "confirm patch activates in startup logs" was incorrect for the regular image. **New Arm C eval target: Oct 1 dev511.** Classification: **WORTH WATCHING** (new eval target, +91 commits, FlashInfer 0.7.1).
+
+4. **Qwen models:** Qwen4 **NOT RELEASED** — still in training per Apsara Sep 22. Architecture: four tiers (Max, Plus, Flash, **27B open-weight dense — NOT 35B-A3B MoE**). Qwen3.8 open weights: `Qwen/Qwen3.8-2.4T-A95B` (MoE, 95B active) and `Qwen/Qwen3.8-27B` (dense) released Aug 2026 — **no 35B-A3B-FP8 tier**. `Qwen/Qwen3.7-35B-A3B-FP8` does not exist (skipped gen). **Nemotron 3.5 Lightning DSpark** (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark`, Aug 11): hybrid Mamba-2+MoE, community ~90–116 tok/s c1 with DSpark (+35–73% vs prod), gated on vLLM upgrade. Classification: **WORTH WATCHING**.
+
+5. **Forum (719 + 721):** EGRESS_BLOCKED **day 20**. WebSearch fallback. **⚠ ACTION FINDINGS:** (A) **NVFP4 unblocked on SM121** — `AEON-7/Qwen3.6-35B-A3B-heretic-NVFP4` (HF) on AEON vLLM 0.23.0 for GB10; bjk110 recipe (`bjk110/SPARK_Qwen3.5-122B-A10B-NVFP4`) documents 3 required patches, confirms `VLLM_USE_FLASHINFER_MOE_FP4=0` forces CUTLASS MoE (SM121-compatible); `r0b0tlab/vllm-v0250-cu130-sm121` (v0.25.0 source-built for CUDA 13.0+ARM64+SM121). vLLM PR #52708 CLOSED Sep 14 — SM121 confirmed compatible with sm_120f family binaries, official wheels v0.23+ work. (B) New community builders: getrefined, tonyd2wild, bjk110, jilycn, r0b0tlab. (C) **New thread /t/384861** ("New DGX Spark Production?") — availability concern, FE prices +50%, sold out. New ceiling: **/t/384861**. (D) **/t/383624 warranty**: Oct 14 (**12 days**), **NO NV CAS response visible**. Classification: **ACTION**.
+
+### Cross-Correlated Findings
+
+1. **⚠ [HIGH — ACTION NEEDED] NVFP4 EVAL NOW UNBLOCKED (Checks 4 + 5 + Arena):** Forum finds AEON v0.23.0 image running `Qwen3.6-35B-A3B-heretic-NVFP4` on SM121 with documented patch set. Arena confirms `unsloth/Qwen3.6-35B-A3B-NVFP4-Fast` at 103.96 tok/s (+55% vs prod). Qwen check confirms Nemotron DSpark NVFP4 at ~116 tok/s c1. The v0.19 "KeyError: w2_input_scale" schema gap is version-specific — resolved in v0.23+. **NVFP4 eval can proceed via AEON v0.23.0 image without a new from-scratch build.**
+
+2. **⚠ [MEDIUM] NEW SVD EVAL TARGET Oct 1 dev511 (Check 3):** +91 vLLM commits, FlashInfer 0.7.1. PR #58681 merge window uncertain (open Sep 25, dev511 cut Oct 1). Check startup logs at eval start.
+
+3. **[MEDIUM — CORRECTION] `VLLM_PATCH_B12X_C128A_ALIGNMENT` IS B12X-ONLY (Check 3):** Regular `eugr/spark-vllm:latest` does NOT include it. Entry 192 recommendation to check startup logs for this patch was incorrect.
+
+4. **[LOW — ARCHITECTURE SHIFT] Qwen4 open-weight tier is 27B dense, not 35B-A3B MoE (Checks 4 + 5):** No direct drop-in upgrade path from current production model.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All 3 docs UNCHANGED in score. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. v0.30.0 still latest, no v0.30.1. |
+| `svd \| new prebuilt vllm version` | ⚠ FIRED. Oct 1 build `0.30.1rc1.dev511` (+91 commits, FlashInfer 0.7.1). |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen4 not released; Qwen3.8 has no 35B-A3B-FP8. |
+| `forum \| new GB10 performance/stability finding` | ⚠ FIRED (WebSearch). NVFP4 on SM121 unblocked via AEON v0.23.0 community builds. |
+
+### Overall: ACTION NEEDED
+
+**⚠ NVFP4 eval now unblocked via community AEON v0.23.0 builds (Qwen3.6-35B-A3B-heretic-NVFP4, `VLLM_USE_FLASHINFER_MOE_FP4=0`) — +55% c1 ceiling confirmed in Arena; warranty /t/383624 at 12 days with no NV response; new SVD build Oct 1 dev511 (+91 commits, FlashInfer 0.7.1); CORRECTION: B12X alignment patch is B12X-only.**
+
+### Recommendations
+
+1. **[PRIORITY 1 — ACTION NOW] NVFP4 eval unblocked.** Research AEON vLLM 0.23.0 image. Plan B1 probe during next idle window: pull `nvidia/Qwen3.6-35B-A3B-NVFP4` (or `unsloth/Qwen3.6-35B-A3B-NVFP4-Fast`) against AEON v0.23.0 image with `VLLM_USE_FLASHINFER_MOE_FP4=0`. Three required patches per bjk110: (a) remove deprecated `tile_tokens_dim` for FlashInfer 0.6.1; (b) disable `VLLM_USE_FLASHINFER_MOE_FP4`; (c) add regex quant-ignore patterns for GDN layers. Expected c1 ceiling: 103–119 tok/s (+55–78% vs prod 66.9). Nemotron 3.5 Lightning DSpark (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark`) can also be planned for same window once Mamba-2 compatibility confirmed.
+
+2. **[PRIORITY 2 — URGENT] /t/383624 warranty expires Oct 14 (12 days), no NV CAS response visible.** If no response by ~Oct 7, escalate directly.
+
+3. **[PRIORITY 3 — UPDATED EVAL TARGET] Arm C eval target updated to Oct 1 SVD build** (`0.30.1rc1.dev511+gcb6458c5c.d20261001`, FlashInfer `0.7.1-36ad74ad-d20261001`). CORRECTION vs Entry 192: `VLLM_PATCH_B12X_C128A_ALIGNMENT` will NOT appear in startup logs for the regular image — expected, correct.
+
+4. **[CARRY-FORWARD — PRIORITY 4] OTA hold: requires PRs #590, #591, #623, AND #624.** All four must merge before lifting.
+
+5. **[CARRY-FORWARD — PRIORITY 5] Track PR #58681** (SM12x alignment, STILL OPEN Sep 25 — check if merged in dev511) and **PR #57512** (float32-scale guard, STILL OPEN Sep 23).
+
+6. **[UPDATED — PRIORITY 6] Qwen4 open weights — Dec 2026 per leaks. Architecture: 27B dense tier confirmed (NOT 35B-A3B MoE drop-in).** Re-evaluate upgrade case when architecture specs are public. Watch `Qwen/` HuggingFace org weekly.
+
+7. **[NEW] Add community builders to monitor list:** getrefined, tonyd2wild, bjk110, jilycn, r0b0tlab (active SM121 NVFP4/new-model recipes; not previously tracked).
+
+8. **[CARRY-FORWARD] PR #40099** (Gemma4 repetition): stalled since Apr 21. No new activity.
+
+9. **[CARRY-FORWARD] Issue #55397 workaround:** `VLLM_DISABLED_KERNELS=FlashInferCuteDslNvFp4W4A16LinearKernel` for NVFP4 eval profiles.
+
+10. **[CARRY-FORWARD] Add CUDA-context-creation probe to `ops/spark-healthcheck.sh`.**
+
+11. **[CARRY-FORWARD] Review Blackbox forensic tool** (`https://github.com/lcasarin-maker/blackbox`).
+
+12. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -15361,3 +15361,72 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 12. **[CARRY-FORWARD] BIOS `Power On Behavior` auto-on** at next physical-access window.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+---
+
+## Entry 194 - DGX Spark Recon (2026-10-03)
+
+**WORTH WATCHING — NEW SVD build nightly-20261002 dev565 (+54 commits); DGX Spark 64GB announced Oct 2 (new 128GB OEM tier at $4,999, avail Oct 23); firmware Sep 2026 +4-8% LLM perf claim (8-unit test, OTA hold still applies); warranty /t/383624 now 11 days; Arena and Qwen static; PRs #58681/#57512 STILL OPEN.**
+
+**Date:** 2026-10-03 ~11:00 UTC
+**Operator:** Claude Code (spark-recon scheduled task)
+**Status:** RECON — no changes made to Spark system
+
+### Check Results
+
+1. **Arena:** All three tracked Firestore documents confirmed UNCHANGED via direct REST reads. sub1779297106805 (Stojanovic FP8 vLLM, 80.27 tok/s tg128 c1): recipeCopyCount **233** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (bumped Oct 2 in Entry 193 — no further activity). sub1782803609803 (Poveda NVFP4, 118.91 tok/s): recipeCopyCount **119** (UNCHANGED since Entry 193), updateTime 2026-10-01T18:07:59Z (UNCHANGED). sub1779495971526 (Atlas, 218.85 tok/s): recipyCopyCount **169** (UNCHANGED), updateTime 2026-10-01T02:30:29Z (UNCHANGED). LIST returned `{}` (access fluctuates; direct reads unaffected). 10% trigger (>88.30 tok/s) NOT FIRED. FP8 vLLM frontier static ~22 weeks (last submission 2026-05-26). Classification: **NO ACTION**.
+
+2. **vLLM:** v0.30.0 still latest stable — NO NEW STABLE RELEASE (v0.30.1 not yet tagged). **PR #58681** (SM12x alignment fix, ~15% regression): STILL OPEN, last activity Sep 25 — 8 days stale. **PR #57512** (float32-scale guard): STILL OPEN, last activity Sep 23 — 10 days stale. Both absent from dev565 eval target. **PR #40099** (Gemma4 repetition): STILL OPEN, stalled ~165 days. **Issue #58624** (SM12x regression): STILL OPEN, 8 days stale. No new vLLM release activity since v0.30.0 (Sep 22). Classification: **MEDIUM** (carry-forward, no change).
+
+3. **SVD (eugr/spark-vllm-docker):** ⚠ **TRIGGER FIRED — NEW BUILD Oct 2.** prebuilt-vllm-current = **`0.30.1rc1.dev565+g8e58ac22a.d20261002`** (Oct 2, ~13:14 UTC). prebuilt-flashinfer-current = **`0.7.1-1b578de5-d20261002`** (new FlashInfer commit, same 0.7.1 semver). **+54 vLLM upstream commits** vs Oct 1 dev511. Docker Hub `eugr/spark-vllm:latest` updated 2026-10-02T16:45:26Z; `nightly-20261002` tag confirmed. **NEW: `station-20261002` tag** appeared for first time (also `station-20261001`) — new naming scheme, purpose unknown (possibly per-named-device builds). Oct 1–2 repo commits: infrastructure only — removed `--trust-remote-code` from Qwen3.8-Flash-Next-NVFP4 recipes (Oct 2), new API key auth patch for all vLLM endpoints (Oct 1), HF model management additions. **No SM121-specific kernel changes in SVD.** `VLLM_PATCH_B12X_C128A_ALIGNMENT` confirmed B12X-only (Entry 193 correction stands). PR #58681 not referenced in SVD repo; DEEPGEMM_REF pin unchanged. **New Arm C eval target: dev565.** Classification: **WORTH WATCHING** (incremental build, no SM121-targeted changes).
+
+4. **Qwen models:** Qwen4 **NOT RELEASED** — still in training as of Sep 29, 2026. Architecture confirmed: four tiers (Max, Plus, Flash, 27B open-weight dense). Open-weight release timing: follows prior Qwen3.8 pattern (~1-2 weeks post-Max launch); if announcement was Sep 22, 27B weights ETA Oct ~6-10. No 35B-A3B-FP8 tier in Qwen4 family. No `Qwen/Qwen4-35B-A3B-FP8` or `Qwen/Qwen3.7-35B-A3B-FP8` exist (gen skipped). Community activity: `nvidia/Qwen3.8-Flash-Next-NVFP4` benchmarks on single Spark: **~41-44 tok/s c=1 median** (below prod 65.9; tonyd2wild/sggin1 recipes). Classification: **WORTH WATCHING** (Qwen4 open-weight 27B imminent, not a production successor).
+
+5. **Forum (719 + 721):** EGRESS_BLOCKED **day 21**. WebSearch fallback. **NEW FINDINGS:** (A) **DGX Spark 64GB announced Oct 2** — official NVIDIA forum /t/384838 (below prior ceiling 384861 but surfaced in today's search; likely posted after Entry 193 search window). New OEM tier at **$4,999**, available **Oct 23** from Acer, ASUS, Dell, Gigabyte, HP, MSI. Same GB10/SM121/DGX-OS. Clusters to 128GB via two units. (B) New tips thread **/t/384878** ("Tips & Tricks for DGX Spark newbie", Oct 1) — **new ceiling: /t/384878**. (C) **Firmware Sep 2026**: community test on 8 units (4 FE + 4 MSI EdgeXpert, Sep 25) reports **+4-8% LLM serving** post-firmware (EC, TPM, UEFI CA, USB-PD controller). Windows UEFI CA cert added in same firmware update — RTX Spark Windows boot imminent. **NOTE: OTA hold still applies** — whether this firmware-only push is bundled with the problematic 7.0.0-1019 kernel must be verified before applying. (D) **NVFP4 PTX clarification**: community guide confirms `VLLM_USE_FLASHINFER_MOE_FP4=0 VLLM_NVFP4_GEMM_BACKEND=marlin VLLM_MXFP4_USE_MARLIN=1` fixes SM121 NVFP4 garbage output (PTX `cvt .e2m1x2` incompatibility). **Distinct from Entry 094 schema KeyError** (`layers.0.mlp.experts.w2_input_scale`) — the PTX fix addresses inference corruption; the schema gap blocks weight loading on v0.19.x. Both must be addressed; confirm which vLLM build resolves the schema gap. (E) **/t/383624 warranty**: **11 days remaining** (Oct 14), **no NV CAS response visible**. Classification: **WORTH WATCHING** (DGX Spark 64GB new hardware, firmware perf claim, NVFP4 clarification).
+
+### Cross-Correlated Findings
+
+1. **[MEDIUM] DGX Spark 64GB resolves /t/384861 availability concern (Checks 5 + prior):** Thread /t/384861 ("New DGX Spark Production?") from Entry 193 expressed FE +50% pricing concern. Today's /t/384838 announcement confirms NVIDIA is actively expanding the product line with a new $4,999 64GB OEM tier. Platform commitment confirmed; availability concern partially addressed (FE pricing still elevated).
+
+2. **[MEDIUM] SVD dev565 + vLLM carry-forward = Arm C eval target advances without regression fix:** +54 vLLM commits since dev511 but PRs #58681/#57512 still unmerged. Eval on dev565 will show the same ~15% alignment regression as dev511. Tag the throughput numbers accordingly.
+
+3. **[MEDIUM] NVFP4 Marlin env vars + Schema gap = two distinct blockers (Checks 4 + 5):** Forum clarifies PTX corruption fix (env vars) vs weight schema fix (loader, v0.19.x-specific). Community Qwen3.8-Flash-Next NVFP4 at ~41-44 tok/s c=1 uses a build that has both fixes. For production NVFP4 eval on Qwen3.6-35B-A3B-NVFP4: a newer vLLM build (v0.23+) with schema fix remains the primary gating requirement (Entry 094 schema gap).
+
+4. **[INFO] Firmware +4-8% perf + Windows UEFI CA = new OTA considerations (Check 5):** If the Sep 2026 firmware-only push (EC/UEFI/TPM) is decoupled from the problematic kernel 7.0.0-1019, it may be applicable under the current OTA hold. Needs explicit verification that firmware-only update doesn't pull the 7.0.0-1019-nvidia kernel.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline * 1.10` | NOT FIRED. All 3 docs UNCHANGED from Entry 193. |
+| `vllm_release \| SM121 OR GB10 arch-guard` | CARRY-FORWARD. v0.30.0 latest stable; no v0.30.1. |
+| `svd \| new prebuilt vllm version` | ⚠ FIRED. Oct 2 build `0.30.1rc1.dev565` (+54 commits, FI 0.7.1 new commit). |
+| `huggingface \| new ~35B MoE model` | NOT FIRED. Qwen4 not released; no 35B-A3B-FP8 successor. |
+| `forum \| new GB10 performance/stability finding` | INFO. DGX Spark 64GB /t/384838; firmware +4-8% perf claim; NVFP4 PTX/schema distinction. |
+
+### Overall: WORTH WATCHING
+
+**New SVD build dev565 (Oct 2); DGX Spark 64GB announced Oct 2 (new lower-tier OEM); firmware Sep 2026 +4-8% LLM perf claim on 8 units (OTA hold still applies); warranty /t/383624 now 11 days. Arena and Qwen static; PRs #58681/#57512 stale; Arm C eval target now dev565.**
+
+### Recommendations
+
+1. **[PRIORITY 1 — UPDATED EVAL TARGET] Arm C eval target advances to dev565** (`eugr/spark-vllm:nightly-20261002` = `0.30.1rc1.dev565+g8e58ac22a.d20261002`, FlashInfer `0.7.1-1b578de5-d20261002`). Same regression caveat: PR #58681 (SM12x alignment ~15%) likely absent in dev565 (not confirmed merged). Tag eval throughput numbers as "regression-affected baseline."
+
+2. **[PRIORITY 2 — URGENT] /t/383624 warranty expires Oct 14 (11 days), no NV CAS response.** If no response by Oct 7, escalate directly via NV Enterprise Support or account contact.
+
+3. **[PRIORITY 3 — VERIFY BEFORE ACTION] Firmware Sep 2026 +4-8% LLM perf claim.** Confirm whether the Sep 25 firmware update (EC/TPM/UEFI CA/USB-PD) is decoupled from kernel 7.0.0-1019. If it IS a firmware-only push that bypasses the problematic kernel, may be applicable under OTA hold. Ask forum or check DGX OS release notes before applying.
+
+4. **[CARRY-FORWARD — PRIORITY 4] OTA software hold: requires PRs #590, #591, #623, AND #624.** All four must merge before lifting OS OTA.
+
+5. **[CARRY-FORWARD — PRIORITY 5] NVFP4 eval path:** Marlin env vars fix PTX corruption (not weight schema). Entry 094 weight schema KeyError requires newer vLLM (v0.23+). **AEON image upgraded to vLLM 0.27.1 sm_121a** (`ghcr.io/aeon-7/aeon-vllm-ultimate:latest`, Aug 16 2026) — eval path from Entry 193 is stronger; use this build (not v0.23.0). Three bjk110 patches still required. Reference: sggin1/DGX-SPARK/nvfp4/guide.md.
+
+6. **[CARRY-FORWARD — PRIORITY 6] Track PR #58681** (SM12x alignment, STILL OPEN 8 days) and **PR #57512** (float32-scale guard, STILL OPEN 10 days).
+
+7. **[NEW — PRIORITY 7] Investigate `station-20261001/2` Docker tag type** in eugr/spark-vllm. New naming scheme — may indicate per-device or cluster-optimized builds.
+
+8. **[WORTH NOTING] DGX Spark 64GB ($4,999, Oct 23):** New lower-tier OEM unit at 64GB unified memory. No impact on current 128GB FE production. NVFP4 recipes for 64GB will have different memory constraints than our setup.
+
+9. **[CARRY-FORWARD — PRIORITY 8] Qwen4 open-weight 27B:** If announcement pattern follows Qwen3.8 (~1-2 weeks after Max), weights could land ~Oct 6-10. Monitor Qwen HuggingFace org. Not a production successor (27B dense, not 35B-A3B MoE).
+
+10–13. **[CARRY-FORWARD]** PR #40099 stalled; Issue #55397 workaround; CUDA-context probe; Blackbox forensic tool; BIOS auto-on.
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

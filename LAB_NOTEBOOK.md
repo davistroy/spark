@@ -15430,3 +15430,103 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 10–13. **[CARRY-FORWARD]** PR #40099 stalled; Issue #55397 workaround; CUDA-context probe; Blackbox forensic tool; BIOS auto-on.
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 195 - DGX Spark Recon (2026-10-03, weekly)
+
+**WORTH WATCHING — Arena full LIST access restored (347 docs) with tracked frontiers unchanged; forum direct-JSON egress restored (ends 21-day EGRESS_BLOCKED streak); three corrections to recent daily entries (64GB pricing unverified, /t/383624 is a third-party thread, Arena "static 22 weeks" scope); no new vLLM stable, SVD build, or Qwen LLM since Entry 194.**
+
+**Date:** 2026-10-03 ~16:30 UTC
+**Operator:** Claude Code (spark-recon skill, weekly headless run, no user present)
+**Status:** RECON — no changes made to the Spark system. SPARK_BASELINE.md NOT updated (headless; proposed diffs listed below).
+
+Second recon of 2026-10-03 (Entry 194 ran ~11:00 UTC), so the delta window is ~5 hours. This run used direct API reads for all five checks (no WebSearch fallback needed except for Qwen4 news and 64GB pricing).
+
+### Arena Check: NO ACTION
+
+- **Firestore `benchmarks` LIST works again in full:** paginated `pageSize=300` returned **347 docs (346 approved)**. Recent entries reported LIST as `{}` or 2 docs; that restriction is gone as of this run.
+- Tracked docs, direct reads (all UNCHANGED vs Entry 194):
+
+  | Doc ID | Model | Runtime | tg128 c1 | recipeCopyCount | updateTime |
+  |---|---|---|---|---|---|
+  | sub1779297106805 (Stojanovic) | Qwen/Qwen3.6-35B-A3B-FP8 | vLLM | 80.27 | 233 | 2026-10-02T07:37:35Z |
+  | sub1782803609803 (Poveda) | nvidia/Qwen3.6-35B-A3B-NVFP4 | vLLM | 118.91 | 119 | 2026-10-01T18:07:59Z |
+  | sub1779495971526 (Rawat) | RedHatAI/Qwen3.6-35B-A3B-NVFP4 | Atlas | 218.85 | 169 | 2026-10-01T02:30:29Z |
+
+- Top FP8 Qwen3.6-35B-A3B single-node **on vLLM: 80.27 tok/s** (+20.0% vs prod 66.9; 10% trigger >88.30 NOT FIRED). Top FP8 Qwen3.6 single-node any runtime: 172.03 (Atlas, sub1779640157109, already known).
+- **Scope correction:** "frontier static ~22 weeks" holds only for the FP8-Qwen3.6-on-vLLM frontier. The Arena itself is active: 9 submissions Sep 26 – Oct 3, all off-class or multi-node (GLM-5.3-Flash-NVFP4 4-node vLLM-Ray 87.1; DeepSeek-V4.1-Flash 4-node SGLang 43.7; Qwen3.8-Flash-Next variants 35-40; Qwen3.8-Flash-Next-125B-A5B INT4 single 59.1; Qwen3.8-27B-FP8 single 13.0).
+- Previously untracked in-class doc found via full LIST: **sub1787592034252** `nvidia/Qwen3.6-35B-A3B-NVFP4` W4A16 vLLM single **104.0** (2026-08-24) and sub1787890202654 same model **97.2** (2026-08-28). Both below Poveda 118.91; no tracking change.
+- Top 5 single-node overall by raw tg128 are LiquidAI LFM2.5 230M/350M (465.6 / 366.1 / 364.4 / 228.0 / 222.8) — sub-1B toy models, not comparable; `arena_top_overall` stays the Atlas 218.85 35B-class entry.
+
+### vLLM Release Check: LOW (carry-forward)
+
+- Latest stable **v0.30.0** (2026-09-22). No v0.30.1.
+- PR #58681 (SM12x DeepGEMM alignment): OPEN, last update 2026-09-25. PR #57512 (float32-scale guard SM12x): OPEN, last update 2026-09-23. PR #40099: OPEN, last update 2026-07-08.
+
+### spark-vllm-docker Check: NO NEW BUILD
+
+- `prebuilt-vllm-current` = `0.30.1rc1.dev565+g8e58ac22a.d20261002` (2026-10-02T13:20Z) and `prebuilt-flashinfer-current` = `0.7.1-1b578de5-d20261002` — same as Entry 194.
+- Commits after Entry 194's window (Oct 2 15:56 → 23:20 UTC): hf-utils merge, `hf-download.sh` features, hf backup symlink fix for external drives, `--trust-remote-code` removed from Qwen recipe. All tooling; no kernel/SM121 changes.
+
+### Qwen Model Check: NO NEW MODELS
+
+- Official `Qwen` org on HF: newest LLM is still `Qwen/Qwen3.8-Flash-Next(-FP8)` (2026-08-24). Since then only Qwen-Image-2.1 variants (Sep 14/20) and Qwen-Drive-1.0-4B (Aug 27).
+- Qwen4: still announced-not-released. Qwen4 27B named at Apsara Sep 22, no specs/date ([yottalabs](https://www.yottalabs.ai/post/qwen-4-27b-release-date-specs-hardware-what-is-known-2026)). Manifold prices launch before Nov 1 at 74%.
+- Name-squats seen: `QwennAI/Qwen3.9-245B-A29B`, `QwennAI/Qwen3.9-NSFW` (not official). New `Qwen3.6-35B-A3B` repos today are community uncensored/GGUF/MLX derivatives only.
+
+### NVIDIA Forum Check: INFO (egress restored)
+
+- **Direct Discourse JSON for category 719 works again** (HTTP 200). This ends the EGRESS_BLOCKED streak (day 21 in Entry 194). Category 721 JSON returned a non-JSON body this run; 719 is sufficient. **New ceiling: /t/384931** (2026-10-03).
+- New since Sep 30: 9 topics. Notable:
+  - **/t/384838** (aniculescu, NVIDIA, Oct 2) — DGX Spark 64GB config, avail Oct 23 from Acer, Dell, Gigabyte, HP, MSI; two units cluster via Sync Cluster Assistant. **Post gives no price.** INFO.
+  - **/t/384907** (xne0n, Oct 2, 15 posts) — community backlash against NVIDIA 64GB marketing that mixes 128GB/64GB cluster bandwidth claims. SKIP for ops.
+  - **/t/384884** (christopher_owen, Oct 2) — "DGX Spark Memory Saver": UVM driver patch, recovers ~1.8 GiB/node on **64 KiB-page kernels only**; requires MOK enrollment (out-of-tree module). INFO — our kernel is the stock 4 KiB build, and MOK enrollment is barred on this box without console access.
+  - **/t/384853** (matthew16, Oct 2) — "Kindling Spark OS": alternative boot OS claiming ~4 GB more free RAM and up to ~10% decode. INFO — new OS/boot path, out of scope for production.
+  - **/t/384765** (stav_kats) — veloGB10 v0.7.x: Qwen3.8-Flash-Next EXL3 at 137 tok/s single / 186 TP=2 (code workload). INFO — custom runtime, EXL3 quant, different model.
+  - **/t/384789** — TensorFold runtime discussion (GLM-5.3-Flash). INFO.
+  - **/t/383624** — no new posts since 2026-09-24.
+
+### Corrections to recent daily entries
+
+1. **DGX Spark 64GB "$4,999" (Entry 194) is unverified.** The official post /t/384838 has no price and does not list ASUS. The $4,999.99 figure in search results is a reseller listing for the 128GB FE (NVIDIA list $4,699) ([digitalcitizen](https://www.digitalcitizen.life/dgx-spark-prices-rise-above-nvidia-list-price-ahead-of-rtx-spark-launch/)).
+2. **/t/383624 is a third-party thread** (OP 8libra, FE serial 1983925020501, kernel **7.0.0-1019-nvidia**, driver 580.173.02). Entries 193-194 listed it as "URGENT: escalate via NV Enterprise Support before Oct 14". That warranty deadline belongs to the thread's author, not this Spark. Its value to us is as a stability signal: it occurs on the 7.0.0-1019 kernel our OTA hold avoids (one reply adds an ASUS GX10 on 6.17.0-1008 with a non-firing watchdog). Reclassify: INFO / watch, no escalation action for us.
+3. **Arena "static 22 weeks"** applies only to the FP8-Qwen3.6-vLLM frontier (see Arena Check).
+
+### Cross-Correlated Findings
+
+1. **[INFO] Memory-headroom tooling cluster (Forum ×3):** Memory Saver (UVM patch), Kindling Spark OS, and the firmware display-scanout reserve finding all target the same 2-8 GB of reclaimable memory. Relevant to us only if BF16-KV headroom becomes binding (3.85x at 131K; see the Aug 3 concurrency outage). All three need MOK or a boot change — blocked for headless operation.
+2. **[INFO] Arena + HF agree:** no new 35B-A3B-class FP8 Qwen release; in-class competitors (Nemotron-3.5-Lightning-30B-A3B NVFP4 ~115-120, Ornith-1.5-35B-A3B NVFP4 ~91-104) are NVFP4-only and already tracked.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED. All 3 tracked docs unchanged. |
+| `vllm_release \| SM121 OR Blackwell OR GB10` | NOT FIRED. v0.30.0 still latest. |
+| `svd \| new prebuilt vllm version` | NOT FIRED. dev565 unchanged since Entry 194. |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED. |
+| `forum \| new GB10 performance/stability finding` | INFO. Memory Saver, Kindling OS, 64GB SKU. |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[ACCURACY] Drop the "/t/383624 warranty escalation" item** from daily-recon priorities. Keep the thread as a kernel-7.0.0-1019 stability signal.
+2. **[CARRY-FORWARD] Arm C eval target** stays `eugr/spark-vllm:nightly-20261002` (dev565), regression-affected until PR #58681 merges.
+3. **[CARRY-FORWARD] NVFP4 eval path** (AEON image, Entry 193-194) unchanged. Arena NVFP4 single-node in-class ceiling on vLLM remains Poveda 118.91.
+4. **[RECON TOOLING] Daily recon can use direct Arena LIST and direct forum 719 JSON again.** Re-verify each run; access has fluctuated.
+5. **[WATCH] Qwen4 27B open weights.** Dense 27B, not a 35B-A3B drop-in.
+
+### Proposed SPARK_BASELINE.md diffs (NOT applied — headless run, needs Troy's confirmation)
+
+| Field | Current | Proposed |
+|---|---|---|
+| arena_top_fp8_qwen35_tok_s | 80.27 | 80.27 (no change; refresh "checked" note to Entry 195) |
+| arena_top_overall_tok_s | 218.85 | 218.85 (no change) |
+| vllm_last_checked_version | v0.30.0 | v0.30.0 (no change) |
+| svd_last_checked_date | 2026-10-02 build | 2026-10-03 (commit cb51860d) |
+| forum_last_checked_date | EGRESS_BLOCKED day 21 | 2026-10-03, ceiling /t/384931, egress restored |
+| Watch Items | "/t/383624 warranty URGENT" | reclassify to INFO stability signal; correct 64GB price note |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

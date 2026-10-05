@@ -15917,3 +15917,91 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `vllm_last_checked_version` | 2026-10-03 (Entry 195) | 2026-10-04 (Entry 196), v0.30.0 still latest, PR #58681 OPEN |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 197 - DGX Spark Recon (2026-10-05)
+**Date:** 2026-10-05 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made to Spark system
+
+---
+## ⚠ ACTION NEEDED — vLLM v0.31.0 released 2026-10-05 with SM120/DeepGEMM improvements
+---
+
+### Arena Check: NO CHANGE
+
+- **sub1779297106805** (Stojanovic, FP8 vLLM, 80.27 tok/s): updateTime 2026-10-02T07:37:35Z, recipeCopyCount **233** — UNCHANGED from Entry 196
+- **sub1782803609803** (Poveda, NVFP4 vLLM, 118.91 tok/s): updateTime **2026-10-04T20:44:20Z** (bumped since Entry 196's 2026-10-01T18:07:59Z), recipeCopyCount **119** — metadata-only update; scores UNCHANGED
+- **sub1779495971526** (Rawat, Atlas overall, 218.85 tok/s): updateTime 2026-10-01T02:30:29Z, recipyCopyCount **169** — UNCHANGED
+- 10% trigger (>88.30 tok/s): NOT FIRED. FP8-vLLM frontier static ~22+ weeks (last submission 2026-05-26).
+- Firestore LIST returned `{}`. WebSearch: no new high-scoring submissions found.
+
+### vLLM Release Check: ⚠ NEW RELEASE — v0.31.0 (2026-10-05) — TRIGGER FIRED
+
+- **v0.31.0 released 2026-10-05** — first major stable release since v0.30.0 (Sep 22). No v0.30.1 patch; upstream went directly to v0.31.0.
+- **SM121-relevant content:**
+  - "SM120 batch-invariant matmul configs" — directly targets SM12x family (GB10/SM121)
+  - "DeepGEMM SM120 pin bump with SM120 fixes (#57218)" — pin bump for SM120 in DeepGEMM
+  - FlashInfer bumped to **0.7.0.post1** (#58069, #59323) — SVD already at 0.7.1 (ahead)
+  - MTP adaptive verification improvements (#59235), union residency kernel
+  - DFlash async scheduling (#58065)
+- **PR #58681** (SM12x DeepGEMM alignment ~15% regression fix): NOT explicitly mentioned in release notes excerpt — merge status in v0.31.0 uncertain; SM120 DeepGEMM pin bump may address the same root cause independently.
+- **PR #57512** (float32-scale guard SM12x): NOT explicitly mentioned — status uncertain.
+- RECON TRIGGER FIRED: `vllm_release | DeepGEMM AND (SM12 OR SM121 OR Blackwell OR GB10)` → SM120 batch-invariant matmul + SM120 DeepGEMM pin bump confirmed in v0.31.0.
+
+### spark-vllm-docker Check: WATCH — new SVD build expected imminently
+
+- Last confirmed build: `0.30.1rc1.dev565+g8e58ac22a.d20261002` + FlashInfer `0.7.1-1b578de5-d20261002` (Oct 2, Entry 194/196) — **unchanged at check time**.
+- GitHub API restricted to davistroy/spark; WebSearch fallback data is stale (shows Aug 25 release as "most recent" — releasealert.dev EGRESS_BLOCKED).
+- **v0.31.0 released today (Oct 5) → SVD v0.31.0-based build expected within 1–3 days.** When it drops, it becomes the new Arm C eval target.
+- Note: Entry 193 correction holds — `VLLM_PATCH_B12X_C128A_ALIGNMENT` is B12X-ONLY (`--exp-b12x`); NOT present in regular `spark-vllm:latest`.
+
+### Qwen Model Check: NO NEW PROD-RELEVANT MODELS
+
+- **Qwen3.8 family confirmed** (Aug 2026): Qwen3.8-27B dense (released Aug 14) + Qwen3.8-2.4T-A95B MoE (released Aug 12). Neither is a 35B-A3B MoE drop-in.
+- **Qwen3.8-35B-A3B**: NOT released. Watch item from Entry 185 still active (community-requested; no confirmed leak).
+- **Qwen4**: NOT released. Still "in training". 27B dense open-weights tier is the only planned local tier (architecture: GDN class, NOT 35B-A3B MoE). Prediction market: ~74% before Nov 1 (unchanged).
+- Production model `Qwen/Qwen3.6-35B-A3B-FP8` remains correct.
+
+### NVIDIA Forum Check: EGRESS_BLOCKED (day 2 of re-block)
+
+- Category 719.json: EGRESS_BLOCKED. Category 721.json: EGRESS_BLOCKED.
+- Forum re-blocked after single-day restoration (Entry 195, Oct 3). Now day 2.
+- Ceiling unchanged at **/t/384931**. Cannot advance.
+- WebSearch: no new DGX Spark threads above /t/384931 found.
+- **/t/383624 warranty countdown**: expires **2026-10-14 (9 days)**. Still no confirmed NVIDIA CAS response per last check.
+
+### Cross-Correlated Findings
+
+1. **vLLM v0.31.0 + SVD (2 sources):** v0.31.0 SM120/DeepGEMM improvements + SVD build pipeline → new Arm C eval target expected within 1–3 days. Higher-confidence than single-source; production not at risk but eval planning actionable now.
+2. **SM120 DeepGEMM fixes in v0.31.0 may subsume PR #58681 root cause:** SM120 batch-invariant matmul + pin bump address the same SM12x alignment issue that #58681 targeted. Evaluate when SVD builds from v0.31.0.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED. All 3 docs unchanged. |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | **FIRED** — v0.31.0: SM120 batch-invariant matmul + DeepGEMM SM120 pin bump (#57218) |
+| `vllm_release \| DeepGEMM AND (SM12 OR SM121 OR Blackwell OR GB10)` | **FIRED** — SM120 DeepGEMM fixes confirmed in v0.31.0 |
+| `svd \| new prebuilt vllm version` | NOT FIRED at check time. New build expected within 1–3 days (v0.31.0 released today). |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED. |
+| `forum \| new GB10 performance/stability finding` | BLOCKED (EGRESS day 2). WebSearch: no new threads above /t/384931. |
+
+### Overall: ACTION NEEDED
+
+### Recommendations
+
+1. **[ACTION — TODAY]** vLLM v0.31.0 released 2026-10-05 with SM120/DeepGEMM improvements. Monitor SVD (`eugr/spark-vllm-docker`) for a v0.31.0-based build (expected 1–3 days). When it drops, it becomes the new Arm C eval target.
+2. **[ACTION — WHEN SVD BUILDS]** At next SVD build: verify whether PR #58681 and #57512 are resolved (either explicitly merged or addressed by SM120 DeepGEMM pin bump in v0.31.0). If addressed, the SM12x regression caveat is cleared and a clean Arm C eval can proceed.
+3. **[CARRY-FORWARD — TIME SENSITIVE]** /t/383624 warranty expires **Oct 14 (9 days)**. If the hard-freeze root cause was ever clarified (kernel version), confirm it's not 6.17.0-1021 before that date.
+4. **[CARRY-FORWARD]** NVFP4 eval path: AEON vLLM 0.27.1 sm_121a still available. Once a v0.31.0-based SVD build lands, it supersedes AEON as the preferred eval image.
+5. **[CARRY-FORWARD]** Qwen3.8-35B-A3B: still unannounced. Weekly check sufficient.
+
+### Proposed SPARK_BASELINE.md diffs (applied)
+
+| Field | Current | Updated |
+|---|---|---|
+| `vllm_last_checked_version` | v0.30.0 (2026-10-04) | v0.31.0 released 2026-10-05; SM120 batch-invariant matmul + DeepGEMM SM120 pin bump; PR #58681/#57512 status in v0.31.0 uncertain |
+| `svd_last_checked_date` | 2026-10-04 (Entry 196), no new build | 2026-10-05 (Entry 197), last confirmed dev565 (Oct 2), v0.31.0-based build expected imminently |
+| `forum_last_checked_date` | 2026-10-04 (Entry 196), EGRESS_BLOCKED day 1 re-block | 2026-10-05 (Entry 197), EGRESS_BLOCKED day 2, ceiling /t/384931 unchanged, /t/383624 warranty 9 days |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

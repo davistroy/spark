@@ -16005,3 +16005,79 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | 2026-10-04 (Entry 196), EGRESS_BLOCKED day 1 re-block | 2026-10-05 (Entry 197), EGRESS_BLOCKED day 2, ceiling /t/384931 unchanged, /t/383624 warranty 9 days |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 198 - DGX Spark Recon (2026-10-06)
+
+### Arena Check: NO CHANGE (metadata batch update Oct 5)
+
+- **sub1779297106805** (Stojanovic, FP8 vLLM, 80.27 tok/s): updateTime **2026-10-02T07:37:35Z**, recipeCopyCount **233** — UNCHANGED from Entry 197
+- **sub1782803609803** (Poveda, NVFP4 vLLM, 118.91 tok/s): updateTime **2026-10-05T17:57:36Z** (bumped from 2026-10-04T20:44:20Z), recipeCopyCount **120** (+1 from 119) — metadata-only; tg128 c1 = 118.91 tok/s UNCHANGED
+- **sub1779495971526** (Rawat, Atlas overall, 218.85 tok/s): updateTime **2026-10-05T17:56:28Z** (bumped from 2026-10-01T02:30:29Z), recipyCopyCount **171** (+2 from 169) — metadata-only; tg128 c1 = 218.85 tok/s UNCHANGED
+- Poveda and Rawat both updated within ~1 min on Oct 5 17:56-17:57 UTC — batch recompute/metadata update on arena backend, NOT new submissions; scores confirmed via direct Firestore reads
+- 10% trigger (>88.30 tok/s FP8 vLLM): NOT FIRED. FP8-vLLM frontier static ~22+ weeks (last submission 2026-05-26).
+
+### vLLM Release Check: NO NEW RELEASE SINCE v0.31.0
+
+- v0.31.0 (2026-10-05) remains latest stable — already captured in Entry 197; no v0.31.1 found
+- GitHub API returned 403; WebSearch confirms no new stable release
+- v0.31.0 additional detail (Entry 198): 717 commits, 307 contributors; DeepGEMM FP8 workspace halved + DeepGEMM warmup reusing MoE workspace + FlashInfer BF16 MoE weights converted in-place — memory efficiency improvements complement SM120 batch-invariant matmul noted in Entry 197
+- PR #39138/#40099 and Issue #41063 status: no new information found
+
+### spark-vllm-docker Check: ⚠ TWO NEW BUILDS — dev655 (Oct 5) + dev631 (Oct 4) — TRIGGER FIRED
+
+- **NEW CURRENT: `0.30.1rc1.dev655+gb1401e0aa.d20261005`** + FlashInfer **`0.7.1-188bdd76-d20261005`** (Oct 5, "New stable build")
+- **INTERMEDIATE: `0.30.1rc1.dev631+g0872ddf4b.d20261004`** (Oct 4) — between Entry 197's dev565 and dev655; superseded by dev655
+- Dev655 = +90 vLLM commits over Entry 197's dev565 (Oct 2); FlashInfer commit bumped (same 0.7.1 semver: 1b578de5 → 188bdd76)
+- **Version string still `0.30.1rc1.dev655` — pre-v0.31.0 lineage.** vLLM tagged v0.31.0 on Oct 5; dev655 was same-day snapshot likely built pre-tag
+- **New Arm C eval target: dev655 (Oct 5)** (supersedes Entry 197's dev565)
+- v0.31.0-based SVD build expected Oct 6-8 — will carry SM120 batch-invariant matmul + DeepGEMM improvements from v0.31.0
+
+### Qwen Model Check: NO NEW PROD-RELEVANT MODELS
+
+- Qwen3.7: CONFIRMED never released (generation skipped; open-weight line went Qwen3.6 → Qwen3.8)
+- Qwen3.8-35B-A3B: NOT released; no official Qwen org checkpoint
+- Qwen4: NOT released; no weights on HuggingFace
+- Production model `Qwen/Qwen3.6-35B-A3B-FP8` remains correct
+
+### NVIDIA Forum Check: EGRESS_BLOCKED (day 3)
+
+- Category 719.json: EGRESS_BLOCKED. Category 721.json: EGRESS_BLOCKED
+- Day 3 of current re-block cycle (started Oct 4). Ceiling UNCHANGED at /t/384931
+- WebSearch: no new DGX Spark threads above /t/384931 found
+- **/t/383624 warranty countdown: expires 2026-10-14 (8 days)**. No confirmed NVIDIA CAS response
+- OTA hold: UNCHANGED (NV-Kernels PRs #590/#591/#623/#624 still unmerged; kernel 6.17.0-1021 production SAFE)
+
+### Cross-Correlated Findings
+
+1. **SVD dev655 same day as v0.31.0 (SVD + vLLM sources):** Both released Oct 5 but dev655 is pre-v0.31.0 (version string 0.30.1rc1). v0.31.0-based SVD build (carrying SM120/DeepGEMM improvements) still 1-3 days out. Minor incremental eval target upgrade; real target pending.
+2. **Arena Oct 5 metadata batch (Arena, internal):** Both Poveda and Rawat docs updated within ~1 min on Oct 5. Consistent with backend maintenance/recompute — NOT new benchmark submissions. FP8-vLLM frontier static 22+ weeks confirms no community activity.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED. All 3 docs scores unchanged (direct Firestore reads). |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — no new release after v0.31.0. |
+| `svd \| new prebuilt vllm version` | **FIRED** — dev655 (Oct 5, pre-v0.31.0) + dev631 (Oct 4); new Arm C eval target. |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED. |
+| `forum \| new GB10 performance/stability finding` | BLOCKED (EGRESS day 3). No new threads above /t/384931 via WebSearch. |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[WATCH — IMMINENT, ~1-2 days]** v0.31.0-based SVD build expected Oct 6-8. When it drops: becomes the definitive Arm C eval target (SM120 batch-invariant matmul + DeepGEMM workspace improvements + FI 0.7.x). Dev655 (Oct 5) is valid interim target if needed.
+2. **[CARRY-FORWARD — TIME SENSITIVE]** /t/383624 warranty expires **Oct 14 (8 days)**. Monitor for NVIDIA CAS response confirming or dismissing production-kernel risk.
+3. **[CARRY-FORWARD]** NVFP4 eval: AEON vLLM 0.27.1 sm_121a and SVD dev655 both viable now; v0.31.0-based build preferred for cleanest eval.
+4. **[CARRY-FORWARD]** Qwen3.8-35B-A3B: still unannounced.
+
+### Proposed SPARK_BASELINE.md diffs (applied)
+
+| Field | Current | Updated |
+|---|---|---|
+| `svd_last_checked_date` | 2026-10-05 (Entry 197), no new build, v0.31.0-based expected imminently | 2026-10-06 (Entry 198), ⚠ NEW BUILD dev655 (Oct 5) + dev631 (Oct 4), new Arm C eval target = dev655, v0.31.0-based still pending |
+| `forum_last_checked_date` | 2026-10-05 (Entry 197), EGRESS_BLOCKED day 2, warranty 9 days | 2026-10-06 (Entry 198), EGRESS_BLOCKED day 3, warranty 8 days |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

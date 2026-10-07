@@ -16081,3 +16081,80 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | 2026-10-05 (Entry 197), EGRESS_BLOCKED day 2, warranty 9 days | 2026-10-06 (Entry 198), EGRESS_BLOCKED day 3, warranty 8 days |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 199 - DGX Spark Recon (2026-10-07)
+
+### Arena Check: EGRESS_BLOCKED
+
+- spark-arena.com: EGRESS_BLOCKED in this environment — no direct Firestore reads possible
+- WebSearch: no new arena submissions or score changes found via web index
+- Last confirmed scores (Entry 198, Oct 6): sub1779297106805 (Stojanovic FP8 vLLM) = **80.27 tok/s** UNCHANGED; sub1782803609803 (Poveda NVFP4) = **118.91 tok/s** UNCHANGED; sub1779495971526 (Rawat Atlas) = **218.85 tok/s** UNCHANGED
+- 10% trigger (>88.30): NOT FIRED (assumed unchanged; EGRESS prevents confirmation)
+- FP8-vLLM frontier static ~22+ weeks (last submission 2026-05-26)
+
+### vLLM Release Check: v0.31.0 REMAINS LATEST — PR #58681 CONFIRMED OPEN WITH VALIDATED FIX
+
+- v0.31.0 (2026-10-05) remains latest stable — no v0.31.1 found as of 2026-10-07
+- **PR #58681 status CONFIRMED OPEN:** Title: "[Bugfix][DeepGEMM] Restore SM12x alignment behavior for grouped GEMMs" — ~15% decode throughput improvement on GB10 hardware-verified by independent contributor; RTX PRO 6000 Blackwell also validated; bit-identical correctness confirmed. Fix is ready to merge but not yet merged upstream.
+- PR #39138/#40099 (Gemma4) and Issue #41063: no new status found
+
+### spark-vllm-docker Check: ⚠ NEW BUILD dev723 (Oct 6) — TRIGGER FIRED
+
+- **NEW CURRENT: `0.30.1rc1.dev723+g6bbad6acd.d20261006`** released October 6, 2026 ("New stable build"), tag `prebuilt-vllm-current`, commit 73f01ce
+- +68 vLLM commits over Entry 198's dev655 (Oct 5)
+- Version string still `0.30.1rc1` — pre-v0.31.0 lineage on version string; built Oct 6 (one day after v0.31.0 tag), likely contains same codebase as v0.31.0
+- FlashInfer: assumed carried forward from dev655 (FI `0.7.1-188bdd76-d20261005`); not confirmed in release notes
+- **This is the v0.31.0-window build expected in Entry 198 (predicted Oct 6-8) — expected SM120 batch-invariant matmul + DeepGEMM improvements**
+- **New Arm C eval target: dev723 (Oct 6)** (supersedes dev655)
+
+### Qwen Model Check: Qwen3.8-27B RELEASED AUG 14 (DENSE, MULTIMODAL — NOT A PRODUCTION REPLACEMENT)
+
+- **Qwen3.8-27B** released 2026-08-14 (Apache 2.0): dense 27B multimodal (text + images + video), 262K native context. Available at `Qwen/Qwen3.8-27B` and `Qwen/Qwen3.8-27B-FP8` on HuggingFace. **NOT a 35B-A3B MoE equivalent** — different architecture (dense vs MoE, 27B total vs 35B/3B-active).
+- **Qwen3.8-35B-A3B-FP8:** NOT released. No MoE-architecture Qwen3.8 variant exists.
+- **Qwen4:** NOT released, no weights.
+- Production model `Qwen/Qwen3.6-35B-A3B-FP8` remains correct.
+- Note: Qwen3.8-27B was announced Aug 3 and released Aug 14; prior entries flagged this. Now confirmed released. Not tracked in SPARK_BASELINE production tracking (different architecture/size).
+
+### NVIDIA Forum Check: EGRESS_BLOCKED (day 4)
+
+- Category 719.json: EGRESS_BLOCKED. Category 721.json: EGRESS_BLOCKED (NOT 720 — permanently removed)
+- Day 4 of current re-block cycle (started Oct 4); prior ceiling UNCHANGED at /t/384931
+- WebSearch: forum thread t/383964 "Qwen4 is coming" indexed — content not accessible (EGRESS); no new DGX Spark perf/driver/firmware threads above /t/384931 found via WebSearch
+- **/t/383624 warranty countdown: expires 2026-10-14 (7 days).** No confirmed NVIDIA CAS response.
+- OTA hold: UNCHANGED (NV-Kernels PRs #590/#591/#623/#624 still unmerged per Entry 198)
+
+### Cross-Correlated Findings
+
+1. **SVD dev723 (Oct 6) is the expected v0.31.0-window build [SVD trigger]:** Built Oct 6, one day after v0.31.0 (Oct 5). The predicted v0.31.0-based build (Entry 198: expected Oct 6-8) has dropped. New Arm C eval target confirmed.
+2. **PR #58681 still open but hardware-validated [vLLM check + GitHub direct read]:** ~15% SM12x decode gain confirmed by independent GB10 tester and RTX PRO 6000. Fix ready to merge — likely included in next SVD build post-merge. SVD may already carry equivalent via `VLLM_PATCH_B12X_C128A_ALIGNMENT` (B12X builds only per Entry 192 correction).
+3. **Qwen3.8 generation gap confirmed [Qwen check]:** Open-weight Qwen3.8 is dense 27B multimodal only. No MoE 35B-A3B Qwen3.8 successor. Production model remains the right choice.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | BLOCKED (EGRESS). Prior confirmed: NOT FIRED. Assumed unchanged. |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.31.0 remains latest, no v0.31.1. PR #58681 still open (hardware-validated). |
+| `svd \| new prebuilt vllm version` | **FIRED** — dev723 (Oct 6, "New stable build"), new Arm C eval target. |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED (no 35B MoE successor; Qwen3.8-27B dense is different arch). |
+| `forum \| new GB10 performance/stability finding` | BLOCKED (EGRESS day 4). WebSearch: no new actionable findings. |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[WATCH — IMMINENT]** SVD dev723 (Oct 6) is now the Arm C eval target. Use for NVFP4 eval when scheduled.
+2. **[WATCH — IMMINENT]** PR #58681 (SM12x ~15% decode gain): hardware-validated, ready to merge. Next SVD build post-merge → candidate for ~15% free gain in production if not already in dev723.
+3. **[CARRY-FORWARD — TIME SENSITIVE]** /t/383624 warranty expires **Oct 14 (7 days)**. No NVIDIA CAS response confirmed. Escalate if unresolved by Oct 12.
+4. **[INFO]** Qwen3.8-27B-FP8 (dense 27B, multimodal, Apache 2.0) now available — possible secondary eval if multimodal path is needed. Not a production replacement.
+5. **[CARRY-FORWARD]** Qwen3.8-35B-A3B MoE: not released, no announced date.
+
+### Proposed SPARK_BASELINE.md diffs (applied)
+
+| Field | Current | Updated |
+|---|---|---|
+| `svd_last_checked_date` | 2026-10-06 (Entry 198), ⚠ NEW BUILD dev655 (Oct 5) + dev631 (Oct 4), Arm C eval target = dev655, v0.31.0-based still pending | 2026-10-07 (Entry 199), ⚠ NEW BUILD dev723 (Oct 6, "New stable build"), new Arm C eval target = dev723, v0.31.0-window build confirmed |
+| `forum_last_checked_date` | 2026-10-06 (Entry 198), EGRESS_BLOCKED day 3, warranty 8 days | 2026-10-07 (Entry 199), EGRESS_BLOCKED day 4, warranty /t/383624 expires Oct 14 (7 days) |
+| `vllm_last_checked_version` | 2026-10-05 (Entry 197): ⚠ v0.31.0 RELEASED | 2026-10-07 (Entry 199): v0.31.0 remains latest stable. PR #58681 CONFIRMED STILL OPEN with hardware-validated ~15% SM12x decode gain. |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

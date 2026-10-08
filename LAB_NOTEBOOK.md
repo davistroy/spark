@@ -16158,3 +16158,73 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `vllm_last_checked_version` | 2026-10-05 (Entry 197): ⚠ v0.31.0 RELEASED | 2026-10-07 (Entry 199): v0.31.0 remains latest stable. PR #58681 CONFIRMED STILL OPEN with hardware-validated ~15% SM12x decode gain. |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 200 - DGX Spark Recon (2026-10-08)
+
+### Arena Check: DIRECT FIRESTORE READS SUCCESSFUL (unblocked today)
+
+- sub1779297106805 (Stojanovic FP8 vLLM): updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED), tg128 c1 = **80.27 tok/s** (UNCHANGED)
+- sub1782803609803 (Poveda NVFP4): updateTime **2026-10-08T11:03:34.772607Z** (bumped TODAY — metadata-only), recipeCopyCount **120** (+3 from 117), tg128 c1 = **118.91 tok/s** (UNCHANGED)
+- sub1779495971526 (Atlas overall): updateTime **2026-10-05T17:56:28.931663Z** (bumped since Oct 2), recipeCopyCount **171** (+2 from 169), tg128 c1 = **218.85 tok/s** (UNCHANGED)
+- 10% trigger (>88.30): NOT FIRED — FP8-vLLM frontier static ~22.5 weeks (last submission 2026-05-26)
+
+### vLLM Release Check: v0.31.0 REMAINS LATEST — PR #58681 FORCE-PUSHED TODAY
+
+- v0.31.0 (2026-10-05) remains latest stable — no v0.31.1 found as of 2026-10-08
+- **PR #58681 force-pushed Oct 8 TODAY for DCO sign-off** — still OPEN, not yet merged. Title: "[Bugfix][DeepGEMM] Restore SM12x alignment behavior for grouped GEMMs." ~15% GB10 decode improvement hardware-validated. Force-push today suggests merge is imminent once DCO is resolved.
+- PR #39138/#40099 (Gemma4) and Issue #41063: no new status found
+
+### spark-vllm-docker Check: NO NEW BUILD — dev723 (Oct 6) still latest
+
+- Docker Hub confirms: latest tag = nightly-20261006, pushed 2026-10-06T13:29:06Z (UNCHANGED)
+- No nightly-20261007 or nightly-20261008 tag exists — no new build since Oct 6
+- Arm C eval target remains dev723 (Oct 6). v0.31.0-window build; PR #58681 not yet in SVD (not merged upstream)
+
+### Qwen Model Check: NO NEW MoE SUCCESSOR — status UNCHANGED
+
+- No Qwen3.7 open weights (confirmed: hosted-only Qwen3.7-Max/Plus API); no 35B-A3B MoE open-weight successor exists
+- No Qwen4 weights. No Qwen3.9. Qwen3.8-27B (dense multimodal, known) remains the only open-weight Qwen3.8 release
+- Production model `Qwen/Qwen3.6-35B-A3B-FP8` remains correct
+
+### NVIDIA Forum Check: EGRESS_BLOCKED (day 5)
+
+- Category 719.json: EGRESS_BLOCKED. Category 721.json: EGRESS_BLOCKED (NOT 720 — permanently removed)
+- Day 5 of current re-block cycle; ceiling UNCHANGED at /t/384931
+- WebSearch: forum thread /t/383964 "Qwen4 is coming" indexed (page 8 activity; content blocked) — below ceiling, already known. No new threads above /t/384931 found
+- **⚠ /t/383624 warranty countdown: expires 2026-10-14 (6 days).** No confirmed NVIDIA CAS response
+- OTA hold: UNCHANGED (NV-Kernels PRs #590/#591/#623/#624 still unmerged per Entry 198)
+
+### Cross-Correlated Findings
+
+1. **Arena Firestore unblocked + scores confirmed flat [Arena check]:** Direct reads successful today (were EGRESS_BLOCKED in Entry 199). All three key submissions UNCHANGED: Stojanovic FP8 80.27, Poveda NVFP4 118.91, Atlas 218.85. RecipyCopyCounts show minor metadata bumps (Poveda +3, Atlas +2) — organic browse activity, not new submissions. FP8-vLLM frontier static 22.5+ weeks.
+2. **PR #58681 force-pushed Oct 8 (DCO fix) — merge appears imminent [vLLM check + direct PR fetch]:** Active force-push today signals the author is actively resolving the last blocker before merge. When merged: new SVD build → ~15% free SM12x decode gain. Combined signal with no new SVD build yet = watch next nightly for inclusion.
+3. **No movement on any upgrade path [SVD + Qwen + vLLM]:** No new vLLM stable, no new SVD build, no new Qwen MoE successor. System in stable hold: current production config remains optimal.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — all scores confirmed unchanged via direct Firestore reads |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.31.0 remains latest; PR #58681 force-pushed Oct 8 (still open) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — dev723 (Oct 6) confirmed still latest via Docker Hub |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — no new 35B MoE model from Qwen or other labs |
+| `forum \| new GB10 performance/stability finding` | BLOCKED (EGRESS day 5). WebSearch: no new threads above /t/384931. |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[WATCH — IMMINENT]** PR #58681 force-pushed Oct 8 (DCO fix) — merge appears imminent. When merged → new SVD nightly build → ~15% free SM12x decode gain candidate for Arm C eval. Watch SVD Docker Hub for nightly-202610xx post-merge.
+2. **[CARRY-FORWARD — TIME SENSITIVE]** /t/383624 warranty expires **Oct 14 (6 days)**. No NVIDIA CAS response confirmed. Escalate if unresolved by Oct 12.
+3. **[CARRY-FORWARD]** NVFP4 eval Arm C target: dev723 (Oct 6). Hold until PR #58681 merges + next SVD build drops (may be as soon as Oct 9-10).
+4. **[INFO]** Arena Firestore direct reads UNBLOCKED today — recommend direct reads in future checks rather than WebSearch-only fallback.
+
+### Proposed SPARK_BASELINE.md diffs (applied)
+
+| Field | Current | Updated |
+|---|---|---|
+| `vllm_last_checked_version` | 2026-10-07 (Entry 199): v0.31.0 remains latest; PR #58681 CONFIRMED STILL OPEN | 2026-10-08 (Entry 200): v0.31.0 remains latest. PR #58681 force-pushed TODAY (Oct 8) for DCO sign-off — still open but merge appears imminent. |
+| `svd_last_checked_date` | 2026-10-07 (Entry 199): ⚠ NEW BUILD dev723 (Oct 6), Arm C eval target = dev723 | 2026-10-08 (Entry 200): NO NEW BUILD — dev723 (Oct 6) confirmed still latest via Docker Hub. PR #58681 not yet merged/in SVD. |
+| `forum_last_checked_date` | 2026-10-07 (Entry 199): EGRESS_BLOCKED day 4, warranty 7 days | 2026-10-08 (Entry 200): EGRESS_BLOCKED day 5, warranty /t/383624 expires Oct 14 (6 days) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

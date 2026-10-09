@@ -16228,3 +16228,75 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | 2026-10-07 (Entry 199): EGRESS_BLOCKED day 4, warranty 7 days | 2026-10-08 (Entry 200): EGRESS_BLOCKED day 5, warranty /t/383624 expires Oct 14 (6 days) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 201 - DGX Spark Recon (2026-10-09)
+
+### Arena Check: DIRECT FIRESTORE READS SUCCESSFUL — ALL SCORES UNCHANGED
+
+- sub1779297106805 (Stojanovic FP8 vLLM): updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED from Entry 200), recipeCopyCount **233** (UNCHANGED), tg128 c1 = **80.27 tok/s** (UNCHANGED)
+- sub1782803609803 (Poveda NVFP4): updateTime **2026-10-08T11:03:34.772607Z** (UNCHANGED from Entry 200 — Oct 8 activity), recipeCopyCount **120** (UNCHANGED), tg128 c1 = **118.91 tok/s** (UNCHANGED)
+- sub1779495971526 (Atlas overall): updateTime **2026-10-05T17:56:28.931663Z** (UNCHANGED from Entry 200), recipeCopyCount **171** (UNCHANGED), tg128 c1 = **218.85 tok/s** (UNCHANGED)
+- 10% trigger (>88.30): NOT FIRED — FP8-vLLM frontier static ~22.7 weeks (last submission 2026-05-26)
+
+### vLLM Release Check: v0.31.0 REMAINS LATEST — PR #58681 STILL OPEN (day 2 post force-push)
+
+- v0.31.0 (2026-10-05) confirmed latest stable — no v0.31.1 found
+- **PR #58681 STILL OPEN** — force-pushed Oct 8 for DCO sign-off (Entry 200); no confirmed merge as of Oct 9. DeepGEMM companion PR #18 still awaiting maintainer review (author request Oct 7). ~15% GB10 decode improvement not yet in upstream.
+- **NEW: Issue #60261** "[Bug]: Block-FP8 models crash on SM120 without a CUDA toolkit: DeepGEMM is selected although its JIT cannot run (no fallback to CUTLASS block FP8)" — affects SM120/SM121 without CUDA toolkit installed. INFO only: our production setup has CUDA toolkit present; no production impact.
+- PR #39138/#40099 (Gemma4) and Issue #41063 (DeepGEMM SM12x tracking): no new status found in searches
+
+### spark-vllm-docker Check: NO NEW BUILD — nightly-20261006 still latest (day 3)
+
+- Docker Hub direct fetch confirmed: latest tag = nightly-20261006, pushed 2026-10-06T13:29:06Z (UNCHANGED from Entry 200)
+- No nightly-20261007, nightly-20261008, or nightly-20261009 tags exist — day 3 of no new build since Oct 6
+- Arm C eval target remains dev723 (Oct 6); PR #58681 not yet merged upstream → not yet in SVD
+
+### Qwen Model Check: NO NEW MoE SUCCESSOR — status UNCHANGED
+
+- No Qwen3.7 open weights (confirmed closed per Entry 185 — API-only)
+- No Qwen3.8-35B-A3B open weights; no Qwen4-35B-A3B open weights
+- Qwen4: 27B dense open-weights tier confirmed architecture (dense GDN, NOT A3B MoE drop-in per Watch Items); no weights on HF as of today
+- Production model `Qwen/Qwen3.6-35B-A3B-FP8` remains correct
+
+### NVIDIA Forum Check: EGRESS_BLOCKED (day 6)
+
+- Category 719.json: EGRESS_BLOCKED. Category 721.json: EGRESS_BLOCKED (NOT 720 — permanently removed)
+- Day 6 of current re-block cycle; ceiling UNCHANGED at /t/384931
+- WebSearch: no new threads above /t/384931 found
+- **⚠ /t/383624 warranty countdown: expires 2026-10-14 (5 days).** No confirmed NVIDIA CAS response
+- OTA hold: UNCHANGED (NV-Kernels PRs #590/#591/#623/#624 still unmerged per Entry 198)
+
+### Cross-Correlated Findings
+
+1. **All three Arena docs UNCHANGED [Arena check]:** Stojanovic FP8 80.27, Poveda NVFP4 118.91, Atlas 218.85 — zero score movement. FP8-vLLM frontier static 22.7+ weeks. Direct reads successful (second consecutive unblocked day).
+2. **PR #58681 still open — merge now overdue by force-push signal [vLLM + SVD checks]:** Yesterday's force-push for DCO suggested imminent merge; today no merge confirmed. This is day 2 post force-push. Combined with no new SVD build: ~15% free decode gain still pending. Watch SVD Docker Hub for nightly-2026100x post-merge.
+3. **No movement on any upgrade path [SVD + Qwen + vLLM]:** No new vLLM stable, no new SVD build, no new Qwen MoE successor. System in stable hold; current production config remains optimal.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — all scores confirmed unchanged via direct Firestore reads |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.31.0 remains latest; PR #58681 still open (day 2 post DCO force-push) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261006 (Oct 6) confirmed still latest via Docker Hub |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — no new 35B MoE model from Qwen or other labs |
+| `forum \| new GB10 performance/stability finding` | BLOCKED (EGRESS day 6). WebSearch: no new threads above /t/384931. |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[WATCH — STILL IMMINENT]** PR #58681 still open day 2 post DCO force-push. Merge expected any day — when it lands, new SVD nightly drops → ~15% free SM12x decode gain candidate for Arm C eval. Watch SVD Docker Hub daily for nightly-202610xx.
+2. **[CARRY-FORWARD — TIME SENSITIVE]** /t/383624 warranty expires **Oct 14 (5 days)**. No NVIDIA CAS response confirmed. Escalate if unresolved by Oct 12.
+3. **[CARRY-FORWARD]** NVFP4 eval Arm C target: dev723 (Oct 6). Hold until PR #58681 merges + next SVD build drops.
+4. **[INFO]** New vLLM Issue #60261 (Block-FP8 + no CUDA toolkit → DeepGEMM fallback failure on SM120) — no production impact (our setup has CUDA toolkit); noted for completeness.
+
+### Proposed SPARK_BASELINE.md diffs (applied)
+
+| Field | Current | Updated |
+|---|---|---|
+| `vllm_last_checked_version` | 2026-10-08 (Entry 200): v0.31.0 remains latest; PR #58681 force-pushed TODAY for DCO | 2026-10-09 (Entry 201): v0.31.0 remains latest stable — no v0.31.1. PR #58681 STILL OPEN (day 2 post force-push; no merge confirmed Oct 9). New Issue #60261 SM120 no-CUDA-toolkit fallback — INFO only. |
+| `svd_last_checked_date` | 2026-10-08 (Entry 200): NO NEW BUILD — dev723 (Oct 6) still latest | 2026-10-09 (Entry 201): NO NEW BUILD — nightly-20261006 (Oct 6) still latest via Docker Hub. Day 3 of no new build. |
+| `forum_last_checked_date` | 2026-10-08 (Entry 200): EGRESS_BLOCKED day 5, warranty /t/383624 expires Oct 14 (6 days) | 2026-10-09 (Entry 201): EGRESS_BLOCKED day 6, warranty /t/383624 expires Oct 14 (5 days). No new threads above /t/384931. |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

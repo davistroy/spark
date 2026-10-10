@@ -16300,3 +16300,77 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | 2026-10-08 (Entry 200): EGRESS_BLOCKED day 5, warranty /t/383624 expires Oct 14 (6 days) | 2026-10-09 (Entry 201): EGRESS_BLOCKED day 6, warranty /t/383624 expires Oct 14 (5 days). No new threads above /t/384931. |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 202 - DGX Spark Recon (2026-10-10)
+
+### Arena Check: DIRECT FIRESTORE READS SUCCESSFUL — ALL SCORES UNCHANGED; METADATA ACTIVITY ON 2 OF 3 DOCS
+
+- sub1779297106805 (Stojanovic FP8 vLLM): updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED from Entry 201), recipeCopyCount **233** (UNCHANGED), tg128 c1 = **80.27 tok/s** (UNCHANGED)
+- sub1782803609803 (Poveda NVFP4): updateTime **2026-10-10T04:42:19.463007Z** (NEW — bumped TODAY from Entry 201's Oct 8 11:03:34), recipeCopyCount **121** (+1 from 120), tg128 c1 = **118.91 tok/s** (UNCHANGED)
+- sub1779495971526 (Atlas overall): updateTime **2026-10-09T12:31:24.647071Z** (NEW — bumped Oct 9 from Entry 201's Oct 5 17:56:28), recipeCopyCount **171** (UNCHANGED), tg128 c1 = **218.85 tok/s** (UNCHANGED)
+- 10% trigger (>88.30): NOT FIRED — FP8-vLLM frontier static ~22.9 weeks (last submission 2026-05-26)
+- Metadata-only activity on Poveda (+1 copy) and Atlas (bump Oct 9) — zero score movement
+
+### vLLM Release Check: v0.31.0 REMAINS LATEST — PR #58681 STATUS UNCONFIRMED (GITHUB API 403, DAY 5 POST FORCE-PUSH)
+
+- GitHub API returned 403 Forbidden — direct PR fetch unavailable
+- WebSearch confirms v0.31.0 (2026-10-05) is still latest stable; no v0.31.1 or v0.32.0 found
+- PR #58681 (SM12x ~15% decode alignment fix): status unknown — WebSearch found no merge announcement; last confirmed state was OPEN day 2 post-DCO force-push (Entry 201). Assumed still OPEN (day 5 post force-push).
+- Issue #60261 (Block-FP8 no CUDA toolkit DeepGEMM fallback, SM120): INFO only, no production impact
+- PR #39138/#40099 (Gemma4) and Issue #41063 (DeepGEMM SM12x): no new status found
+
+### spark-vllm-docker Check: NO NEW BUILD — nightly-20261006 STILL LATEST (DAY 4)
+
+- Docker Hub direct fetch confirmed: latest tag = nightly-20261006, pushed 2026-10-06T13:29:06Z (UNCHANGED from Entry 201)
+- No nightly-20261007, -20261008, -20261009, or -20261010 tags exist — day 4 of no new build since Oct 6
+- Arm C eval target remains dev723 (Oct 6); PR #58681 not confirmed merged → not yet in SVD
+
+### Qwen Model Check: NO NEW MoE SUCCESSOR — STATUS UNCHANGED
+
+- No Qwen3.8-35B-A3B or Qwen4-35B-A3B open weights found (WebSearch + HF inference)
+- Qwen4: confirmed 27B dense open-weights only architecture (dense GDN, NOT A3B MoE drop-in); no HF repo confirmed as of Sep 29; still "in training"
+- Production model `Qwen/Qwen3.6-35B-A3B-FP8` remains correct
+
+### NVIDIA Forum Check: EGRESS_BLOCKED (DAY 7)
+
+- Category 719.json: EGRESS_BLOCKED (DNS resolution failure — getaddrinfo ENOTFOUND). Category 721.json: implied EGRESS_BLOCKED
+- Day 7 of current re-block cycle; ceiling UNCHANGED at /t/384931
+- WebSearch: no new threads above /t/384931 found
+- **⚠ /t/383624 warranty countdown: expires 2026-10-14 (4 days).** No confirmed NVIDIA CAS response
+- OTA hold: UNCHANGED (NV-Kernels PRs #590/#591/#623/#624 still unmerged per Entry 201)
+
+### Cross-Correlated Findings
+
+1. **All three Arena doc scores UNCHANGED [Arena check]:** Stojanovic FP8 80.27, Poveda NVFP4 118.91, Atlas 218.85 — zero score movement. Metadata-only activity (Poveda recipeCopyCount 120→121, Atlas updateTime bumped Oct 9). FP8-vLLM frontier static ~22.9 weeks. Direct reads fully operational (third consecutive unblocked day).
+2. **PR #58681 merge and SVD build both stalled [vLLM + SVD checks]:** GitHub API 403 blocks direct PR check; WebSearch finds no merge announcement for PR #58681 on day 5 post DCO force-push. Simultaneously no new SVD build day 4 since Oct 6. ~15% free SM12x decode gain still pending; both signals needed to watch for simultaneously.
+3. **All upgrade paths static [SVD + Qwen + vLLM]:** No new vLLM stable past v0.31.0, no new SVD build, no new Qwen MoE successor, forum fully egress-blocked. System in stable hold; current production config remains optimal.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — all scores confirmed UNCHANGED via direct Firestore reads |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.31.0 remains latest; no v0.31.1; GitHub API 403 (PR #58681 status unconfirmed) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261006 (Oct 6) confirmed still latest via Docker Hub. Day 4 of no new build. |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — no new 35B MoE model from Qwen or other labs |
+| `forum \| new GB10 performance/stability finding` | BLOCKED (EGRESS day 7 — DNS failure). WebSearch: no new threads above /t/384931. |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[CARRY-FORWARD — CRITICAL TIME SENSITIVE]** /t/383624 warranty expires **Oct 14 (4 days)**. No NVIDIA CAS response confirmed. Escalate NOW if unresolved — last opportunity before warranty window closes.
+2. **[WATCH — STILL IMMINENT]** PR #58681 status unconfirmed (GitHub API 403 on day 5 post DCO force-push). When it merges + SVD nightly drops → ~15% free SM12x decode gain candidate for Arm C eval. Watch SVD Docker Hub daily for nightly-202610xx.
+3. **[CARRY-FORWARD]** NVFP4 eval Arm C target: dev723 (Oct 6). Hold until PR #58681 merges + next SVD build drops.
+4. **[INFO]** GitHub API returning 403 for vllm-project/vllm — direct PR status checks blocked. Using WebSearch fallback only; some uncertainty about PR #58681 exact state.
+
+### Proposed SPARK_BASELINE.md diffs (applied)
+
+| Field | Current | Updated |
+|---|---|---|
+| `Last recon` | 2026-10-09 (Entry 201) | 2026-10-10 (Entry 202) |
+| `vllm_last_checked_version` | 2026-10-09 (Entry 201): v0.31.0 remains latest stable — no v0.31.1. PR #58681 STILL OPEN (day 2 post force-push) | 2026-10-10 (Entry 202): v0.31.0 remains latest stable — no v0.31.1. GitHub API 403. PR #58681 status unconfirmed day 5 post DCO force-push; assumed STILL OPEN (no merge announcement found via WebSearch). |
+| `svd_last_checked_date` | 2026-10-09 (Entry 201): NO NEW BUILD — nightly-20261006 (Oct 6) still latest. Day 3 of no new build. | 2026-10-10 (Entry 202): NO NEW BUILD — nightly-20261006 (Oct 6) confirmed still latest via Docker Hub. Day 4 of no new build since Oct 6. |
+| `forum_last_checked_date` | 2026-10-09 (Entry 201): EGRESS_BLOCKED day 6, warranty /t/383624 expires Oct 14 (5 days) | 2026-10-10 (Entry 202): EGRESS_BLOCKED day 7 (DNS failure). Ceiling UNCHANGED at /t/384931. /t/383624 warranty expires Oct 14 (4 days). OTA hold UNCHANGED. |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

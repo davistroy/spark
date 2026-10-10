@@ -16374,3 +16374,97 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | 2026-10-09 (Entry 201): EGRESS_BLOCKED day 6, warranty /t/383624 expires Oct 14 (5 days) | 2026-10-10 (Entry 202): EGRESS_BLOCKED day 7 (DNS failure). Ceiling UNCHANGED at /t/384931. /t/383624 warranty expires Oct 14 (4 days). OTA hold UNCHANGED. |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 203 - DGX Spark Recon (2026-10-10, weekly)
+
+**Date:** 2026-10-10 UTC
+**Operator:** Claude Code (spark-recon skill) — headless weekly run, no user present
+**Status:** RECON — report + recommend only. No changes to the running Spark system. SPARK_BASELINE.md NOT updated (headless; proposed diffs below).
+
+### Arena Check: NO CHANGE — FULL LIST READ OK (353 docs)
+
+- Access: Firestore REST `benchmarks` (direct doc reads + paginated LIST, 3 pages) — no fallback needed.
+- sub1779297106805 (Stojanovic FP8 vLLM DFlash): tg128 c1 **80.27** (UNCHANGED), copyCount 233, updateTime 2026-10-02T07:37:35Z (UNCHANGED).
+- sub1782803609803 (Poveda NVFP4 vLLM): **118.91** (UNCHANGED), copyCount 121, updateTime 2026-10-10T04:42:19Z.
+- sub1779495971526 (Rawat Atlas NVFP4, top overall): **218.85** (UNCHANGED), copyCount 171, updateTime 2026-10-09T12:31:24Z.
+- LIST: 353 docs total, 180 single-node with a tg128 c1 result. Top FP8 Qwen3.6-35B-A3B on vLLM: Stojanovic 80.27 > Walczak DFlash 77.88 > Hobson MTP 60.70. Top non-vLLM: Atlas (218.85 / 217.37 / 211.31). Top 5 single-node excluding LFM2.5 tiny models: Rawat Atlas 218.85, Amorim Atlas 217.37, Walczak Atlas NVFP4 211.31, Ryan Yang maple-preview-GGUF llama.cpp 177.99, Walczak Atlas FP8 172.03.
+- 7 new docs since 2026-10-03, none relevant: `myllmbox/Qwen3.8-Flash-Next-hibrid48` vLLM MTP 53.32 (×3 dup), `nvidia/Qwen3.8-Flash-Next-NVFP4` vLLM 32.22, Mistral-Small-4-119B FP8 16.34, DeepSeek-V4.1-Flash FP8 SGLang 43.73 (4-node), Aleph-Alpha Kolibri-1 FP8 (no tg128 c1).
+- New runtime seen: **tensorfold** (sub1790738008192, 2026-09-30, turboderp EXL3, no tg128 c1 result) — informational.
+- 10% trigger (>88.30): **NOT FIRED.** FP8-vLLM frontier static ~23 weeks (last submission 2026-05-26).
+
+### vLLM Release Check: v0.31.0 STILL LATEST — MEDIUM; ⚠ PR #58681 NOW 404
+
+- Latest stable **v0.31.0** (GitHub 2026-10-05T06:44Z; PyPI 07:41Z). No v0.31.1. GitHub API reachable today (no 403).
+- v0.31.0 HIGH-keyword scan: no SM121/GB10 items. SM120 items: NoPE sparse MLA on FlashInfer SM120 backend (#55277, GLM-5.3-Flash), DeepGEMM pin bump with SM120 fixes (#57218), FlashInfer 0.7.0.post1 (#58069, #59323).
+- MEDIUM items: DFlash async scheduling (#58065) + DFlash draft K/V in CUDA graph (#57632); MTP-acceptance collapse fix under FULL CUDA graphs in HiSparse path (#59309); mamba prefix-cache flag rename (breaking) + `--enable-mamba-shared-prefix-checkpoint` (#57382); `vllm preload` keeps weights resident across restarts incl. MTP drafts (#56680, #57312); per-token NVFP4 MoE backends (#57176); **JIT warmup disabled under `--enforce-eager` (#58197)** — relevant because qwen35 currently runs an undocumented `--enforce-eager` (Entry 119 drift).
+- **CORRECTION / NEW: PR #58681 (SM12x ~15% decode alignment fix) returns 404** on API pulls, API issues, and HTML. Prior entries (≤202) assumed it was OPEN. A 404 means deleted PR, suspended author account, or wrong number — cannot distinguish. No replacement PR found. Treat "wait for #58681 merge" as an unreliable gate; SVD's local `VLLM_PATCH_B12X_C128A_ALIGNMENT` (Entry 190; B12X-only per Entry 193) stays the only known mitigation path.
+- Related SM121 PRs: merged #59632 (SM121 TP=2 skinny-GEMM plans, 10-05), #59753 (SM121 TP=1 skinny-GEMM plans, 10-02, Qwen4Exp); opened 10-10 #60843 `--kv-cache-host-pinned` for GB10; still open #31740 SM121/GB10 support.
+
+### spark-vllm-docker Check: NO NEW MAIN BUILD — b12x LANE ACTIVE
+
+- GitHub releases: nothing new. `prebuilt-vllm-current` (2026-10-06) = vLLM 0.30.1rc1.dev723+g6bbad6acd.
+- Commits since 10-06 (all 10-07): a05111a5 "Switch to flashinfer for b12x" — `--exp-b12x` now builds FlashInfer from `local-inference-lab/flashinfer@main` (no cubin wheel) and vLLM from `local-inference-lab/vllm@dev/karmic-kraken`; 6c074b54 InstantTensor patch for 0.2.1; a4c17297 temp patch for FlashInfer B12X loader include-order regression (upstream 601cb127). Regular builds: FlashInfer main, torch 2.13.0, CUTLASS DSL 4.7.0, arch 12.1a.
+- Docker Hub `eugr/spark-vllm`: latest still **nightly-20261006** (day 4, no new main nightly).
+- Docker Hub `eugr/spark-vllm-b12x`: **new nightlies 20261007–20261010** (latest pushed 10-10 12:39Z), 9.7 GB (was 11.2 GB, cubin wheel dropped). vLLM base version not published in tags.
+- No reference to PR #58681 anywhere in the SVD repo.
+
+### Qwen Model Check: NO NEW MODELS BEYOND QWEN3.6
+
+- Qwen HF org (newest 40): only new item since 10-03 is `Qwen/Qwen-Image-2.1-Turbo` (10-09, image model, n/a). No Qwen3.7/3.9/Qwen4 open weights.
+- Qwen4: unchanged — 27B open-weights tier (dense, not an A3B drop-in) named at Apsara 09-22, in training, no specs/date. Manifold prices release before 11-01 at ~74%.
+- Other labs (~25 orgs scanned): no new A3B-class model. XiaomiMiMo MiMo-V2.6-Flash/Pro-MOPD (09-27) is ~300B class (inferred), does not fit one Spark. Nemotron-3.5-Lightning-30B-A3B remains strongest other-lab same-class model (not new; NVFP4 only → coupled to Arm C build).
+
+### NVIDIA Forum Check: ⚠ EGRESS RESTORED — 22 NEW TOPICS, 1 ACTION
+
+- Direct `curl` to 719.json works (HTTP 200); 721.json works with `-L` (301 redirect). Discourse rate-limits after ~15 rapid requests. **Ends the 7-day EGRESS_BLOCKED cycle.**
+- 22 new topics since 10-03. New ceiling **/t/385496** (was /t/384931). No new topics from tracked community builders (eugr only as a replier in /t/359842).
+- **ACTION — /t/385388 "Hard thermal shutdown during prefill on long context using latest spark-vllm-docker"** (Phaserblast, 10-08): after moving to the latest **b12x** vLLM image, long-context prefill causes a 100%-repeatable hard shutdown, even on latest EC firmware; fans never reach 100%; `partnerdiag` also dies mid-run. Same failure class as our 2026-08-03 EC/PD power-protection cut (Entry 157). **Treat b12x images as a shutdown risk for Arm C eval.**
+- INFO — /t/384720 "GB10 endboss to insta-poweroff" (rene47, follow-up 10-09): burn-in script (djmad/Spark_Energy_Management) triggers instant poweroff at 90W+; Lenovo replaced the motherboard.
+- INFO — /t/385314 (christopher_owen, 10-07): EC firmware 3.5.8 rebuilt from source byte-exact; describes EC bug where power limits read 0W → SoC falls back to 20W, cleared only by AC removal.
+- INFO — /t/385463 "Six weeks optimizing Qwen3.8-Flash-Next" (jeremy.newhouse1, 10-09): NVFP4 single-Spark 67.5 tok/s median c1, public recipe `salient-data/qwen38-next-dgx-recipe` on pinned nightly. Big improvement on the 19.82 tok/s that closed it in Entry 173, but still ≈ our 66.9 prod c1 with a much larger (125B/6B-active) model — informational, not a throughput win.
+- INFO — /t/379105 "Token Generation dropping to 0.1 for Qwen3.6-35b-a3b" (replies 10-08/10-10): 0.1 tok/s drops attributed to memory exhaustion; references Arena NVFP4 recipe at 54.8 tok/s c1 (below our 66.9).
+- INFO — /t/385447 GLM5.3 on 8× Spark via SVD `vllm-node-b12x` image; /t/385135 Qwen3-Next-80B 77 tok/s (griffith.mark, 10-05); /t/385256 reboot does not auto-install firmware.
+- **CORRECTION — /t/383624 is a third-party thread, not our unit.** Owner runs llama.cpp on kernel 7.0.0-1019 / driver 580.173.02 / BIOS 5.36_0ACUM018 / EC 0x03000508 (our box: 6.17.0-1021 / 580.159.03, vLLM). NVIDIA case 260918-000060 belongs to that owner. Last post 2026-09-24 (16 days silent), no NVIDIA staff reply; owner's `partnerdiag --field` PowerStress failed MODS-020000600139 (thermal limit / sensor). Prior "escalate NOW" recommendations (Entries ~180–202) cannot be acted on by us. Keep only as a failure-mode reference; drop the warranty countdown.
+
+### Cross-Correlated Findings
+
+1. **b12x lane = new shutdown risk [SVD + Forum]:** SVD switched `--exp-b12x` to a FlashInfer-from-source build (10-07) and is shipping daily b12x nightlies, while /t/385388 reports 100%-repeatable hard shutdowns on long-context prefill with the latest b12x image, and /t/385447 shows b12x is now the SVD default for multi-node users. Combined with our own EC/PD power-protection history (Entries 129/157), any Arm C eval on a b12x image needs a power-draw guard and a recovery plan (BIOS auto-on still not set — needs physical access).
+2. **SM12x decode-fix gate is broken [vLLM + SVD]:** PR #58681 is 404 and absent from SVD; no main SVD nightly for 4 days. The "~15% free decode gain when #58681 merges" plan has no live tracking target.
+3. **Frontiers static [Arena + Qwen]:** FP8-vLLM Arena frontier unchanged ~23 weeks; no new Qwen MoE successor. Production config remains the best known FP8 path for our stack.
+4. **`--enforce-eager` drift touched by upstream [vLLM + Entry 119]:** v0.31.0 #58197 disables JIT warmup under `--enforce-eager` — not applicable to the v0.19.1rc1 production image, but relevant to any Arm C eval that carries the flag forward.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — 80.27 (threshold 88.30) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — no new release; v0.31.0 SM120 items already known |
+| `vllm_release \| DeepGEMM AND SM12` | NOT FIRED (no new release); note #57218 DeepGEMM SM120 pin bump in v0.31.0 |
+| `vllm_release \| speculative AND (Qwen OR MoE)` | INFO — v0.31.0 DFlash async scheduling + MTP full-CUDA-graph acceptance fix (HiSparse path only) |
+| `vllm_release \| #37754 OR (FlashInfer AND MTP AND crash)` | NOT FIRED |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED |
+| `forum \| gemma4 structured-output fix` | NOT FIRED |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[NEW — ACTION before any Arm C eval]** Do not evaluate on an SVD **b12x** image without a power guard. Read /t/385388 first. Prefer the main `eugr/spark-vllm` line (nightly-20261006, dev723) for Arm C. Set BIOS `Power On Behavior` = auto-on at the next physical-access window (Entry 157) so a protection cut self-recovers.
+2. **[CORRECTION]** Drop the /t/383624 "escalate before Oct 14" item. It is another owner's warranty case. Keep the thread as a failure-mode reference only.
+3. **[CORRECTION]** Stop gating Arm C on "PR #58681 merge" — the PR is 404. Re-locate the SM12x decode-alignment fix (search vLLM for a successor PR referencing issue #58624) on the next run.
+4. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) still awaits a decision. Unaffected by this recon.
+5. **[INFO]** Forum egress restored — daily recon can return to direct Discourse JSON. Use `curl -L` for 721.json; pace requests (<15 burst).
+
+### Proposed SPARK_BASELINE.md diffs (NOT applied — headless run, awaiting user confirmation)
+
+| Field | Current | Proposed |
+|---|---|---|
+| `Last recon` | 2026-10-10 (Entry 202) | 2026-10-10 (Entry 203, weekly) |
+| `arena_top_fp8_qwen35_tok_s` | 80.27 (sub1779297106805) | unchanged — 80.27; LIST 353 docs; 7 new since 10-03, none relevant |
+| `arena_top_overall_tok_s` | 218.85 (Atlas, sub1779495971526) | unchanged — 218.85 |
+| `vllm_last_checked_version` | v0.31.0; PR #58681 assumed OPEN | v0.31.0; **PR #58681 returns 404 (deleted/hidden)** — no successor found |
+| `svd_last_checked_date` | 2026-10-10 (Entry 202): nightly-20261006 latest | 2026-10-10 (Entry 203): main nightly-20261006 (day 4); **b12x nightlies 20261007–20261010**; b12x switched to FlashInfer-from-source (a05111a5) |
+| `forum_last_checked_date` | 2026-10-10 (Entry 202): EGRESS_BLOCKED day 7, ceiling /t/384931 | 2026-10-10 (Entry 203): **egress restored**, ceiling /t/385496, 22 new topics; /t/385388 b12x thermal-shutdown ACTION; /t/383624 reclassified third-party |
+| Watch Items | /t/383624 "⚠ HIGH — INVESTIGATE", PR #58681 gate | Downgrade /t/383624 to INFO (third-party); mark #58681 404; add /t/385388 b12x shutdown risk |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -16468,3 +16468,83 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | Watch Items | /t/383624 "⚠ HIGH — INVESTIGATE", PR #58681 gate | Downgrade /t/383624 to INFO (third-party); mark #58681 404; add /t/385388 b12x shutdown risk |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 204 - DGX Spark Recon (2026-10-11)
+**Date:** 2026-10-11 11:14 UTC
+**Operator:** Claude Code (spark-recon skill) — scheduled daily run, no user present
+**Status:** RECON — report + recommend only. No changes to the running Spark system.
+
+### Arena Check: NO CHANGE — 10% TRIGGER NOT FIRED
+
+- sub1779297106805 (Stojanovic FP8 vLLM DFlash): tg128 c1 **80.27 tok/s** (UNCHANGED), copyCount 233, updateTime 2026-10-02.
+- sub1782803609803 (Poveda NVFP4 vLLM): **118.91 tok/s** (UNCHANGED), copyCount 121, updateTime 2026-10-10.
+- sub1779495971526 (Rawat Atlas NVFP4, top overall): **218.85 tok/s** (UNCHANGED), copyCount 171, updateTime 2026-10-09.
+- 10% trigger (>88.30): **NOT FIRED.** FP8-vLLM frontier static ~23 weeks (last submission 2026-05-26).
+- **Notable new doc — sub1779640157109** (Walczak, **Atlas** runtime, Qwen3.6-35B-A3B-**FP8**, updated 2026-10-09): tg128 c1 **172.03 tok/s**. Atlas-only, not vLLM — informational, not an actionable vLLM trigger. Confirms Atlas achieves 2.1× over vLLM's best FP8 result.
+- **Notable new doc — sub1782724431960** (Poveda, NVFP4 vLLM, updated 2026-10-11 09:05Z): tg128 c1 **109.3 tok/s**, copyCount **994** (highest in DB by a wide margin; prior leader was ~265). Different from tracked Poveda doc (sub1782803609803, 118.91 tok/s). Community adoption signal: NVFP4 vLLM path is going viral. Production-blocking constraint (NVFP4 schema gap, Entry 094) unchanged.
+
+### vLLM Release Check: NO NEW RELEASE — LOW
+
+- Latest stable: **v0.31.0** (2026-10-05) — no v0.31.1. Classification: **LOW**.
+- v0.31.0 HIGH-keyword scan: none (no SM121/GB10/SM12 items in release body).
+- Noteworthy: v0.31.0 release notes mention "DGX Spark weight-loading speedup" — nice-to-have; not applicable to production until a build upgrade.
+- PR #31740 (SM121/GB10 native support): still **OPEN**, no movement.
+- PR #58681 (SM12x alignment fix): still **404** (deleted/suspended). No replacement PR found. SVD's local `VLLM_PATCH_B12X_C128A_ALIGNMENT` (nightly-20261006) remains the only known mitigation.
+
+### spark-vllm-docker Check: NO NEW MAIN BUILD — DAY 5
+
+- Main nightly (spark-vllm): **nightly-20261006** still latest — day 5 with no new main build.
+- b12x nightly (spark-vllm-b12x): **nightly-20261010** (Oct 10) latest, daily cadence continues. Thermal shutdown risk on long-context prefill per /t/385388 remains in effect.
+- No new GitHub commits since 2026-10-07 (the three Oct 7 b12x commits remain the last changes).
+- Arm C eval target: nightly-20261006 (dev723) — unchanged.
+
+### Qwen Model Check: NO NEW MODELS — EGRESS PARTIAL
+
+- HF DNS resolution failed (egress block); WebSearch fallback used.
+- No new open-weight Qwen models since last check. Qwen3.7-Plus/Max: API-only (no weights). Qwen4: still in training, no release date, no weights.
+- No new 25–40B MoE models from other labs found. Production `Qwen/Qwen3.6-35B-A3B-FP8` remains the correct choice.
+
+### NVIDIA Forum Check: EGRESS BLOCKED — DAY 1 (new cycle)
+
+- forums.developer.nvidia.com: `connect_rejected` (proxy 403 on CONNECT) — same block pattern as Oct 3-9 (Entry 195-202). Forum access via WebSearch fallback shows no obvious announcements.
+- Prior ceiling **/t/385496** stands. New topics unknown.
+- No new data on /t/385388 (b12x thermal shutdown) or other tracked threads.
+
+### Cross-Correlated Findings
+
+1. **NVFP4 vLLM going viral [Arena + community]:** sub1782724431960 (Poveda, 109.3 tok/s) has 994 copies — 4× the prior record holder. Combined with the AEON NVFP4 path (Entry 195 Watch Item, 103–119 tok/s target), community momentum toward NVFP4 vLLM is unmistakable. The production NVFP4 gate remains the schema gap (Entry 094) + Arm C build; this doesn't move the gate but raises its urgency.
+2. **Atlas FP8 = 172 tok/s [Arena]:** Atlas now claims FP8 top (Walczak, 172 vs vLLM's 80.27). Combined with Atlas NVFP4 top (218.85), Atlas consistently runs 2–2.7× faster than vLLM on the same hardware. Informational for the Atlas evaluation track.
+3. **SVD main build dry spell [SVD + vLLM]:** No new main SVD nightly for 5 days (was daily for weeks). No new vLLM release either. Possible: waiting on a larger upstream change. b12x continues daily — may be where active development is.
+4. **Forum + HF both egress-blocked [Forum + Qwen]:** Two separate cloud session egress blocks confirm this run's external reach is limited. Data gaps noted; trends unchanged.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — 80.27 tok/s (threshold 88.30) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — no new release |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261006 still latest (day 5) |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — no new weights (HF DNS blocked; WebSearch fallback confirms no release) |
+| `forum \| new GB10 performance/stability finding` | BLOCKED — proxy 403, no data |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[INFO — NVFP4 COMMUNITY SIGNAL]** sub1782724431960 (Poveda NVFP4 vLLM, 109.3 tok/s) has accumulated 994 copies — the most-copied recipe in the entire DB. This is the strongest community-adoption signal yet for the NVFP4 vLLM path. Gate remains Arm C build upgrade; proceed with nightly-20261006 (dev723) when ready.
+2. **[INFO — SVD MAIN BUILD GAP]** Day 5 with no new SVD main nightly. If this extends past Oct 13–14, consider checking for a planned break or a pending larger update (e.g., base vLLM version bump). b12x thermal risk (/t/385388) still blocks b12x for eval.
+3. **[CARRY-FORWARD]** SM12x decode-fix gate: no replacement for PR #58681 found. SVD nightly-20261006 (VLLM_PATCH_B12X_C128A_ALIGNMENT) remains the only tested mitigation for Arm C. Do not wait for an upstream PR.
+4. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) still awaits decision.
+5. **[CARRY-FORWARD]** NVFP4 AEON eval path (ghcr.io/aeon-7/aeon-vllm-ultimate:latest, vLLM 0.27.1 sm_121a): still the fastest available NVFP4 path outside Atlas. bjk110 patches still required. Expected ceiling: 103–119 tok/s.
+
+### Proposed SPARK_BASELINE.md diffs (NOT applied — headless run, awaiting user confirmation)
+
+| Field | Current | Proposed |
+|---|---|---|
+| `Last recon` | 2026-10-10 (Entry 202/203) | 2026-10-11 (Entry 204) |
+| `arena_top_fp8_qwen35_tok_s` | 80.27 UNCHANGED | unchanged — 80.27; new Atlas FP8 result 172.03 (Walczak, Atlas runtime) noted; viral Poveda NVFP4 recipe sub1782724431960 (994 copies, 109.3 tok/s) noted |
+| `vllm_last_checked_version` | v0.31.0; PR #58681 404 | unchanged — v0.31.0 still latest; no v0.31.1; PR #31740 still open |
+| `svd_last_checked_date` | nightly-20261006 day 4 | nightly-20261006 day 5 (no new main build); b12x nightly-20261010 latest |
+| `forum_last_checked_date` | 2026-10-10 (Entry 203): egress restored, ceiling /t/385496 | 2026-10-11: EGRESS_BLOCKED again (new cycle day 1), ceiling /t/385496 unchanged |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

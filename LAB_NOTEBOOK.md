@@ -16548,3 +16548,90 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | 2026-10-10 (Entry 203): egress restored, ceiling /t/385496 | 2026-10-11: EGRESS_BLOCKED again (new cycle day 1), ceiling /t/385496 unchanged |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 205 - DGX Spark Recon (2026-10-12)
+**Date:** 2026-10-12 11:24 UTC
+**Operator:** Claude Code (spark-recon skill) — scheduled daily run, no user present
+**Status:** RECON — report + recommend only. No changes to the running Spark system.
+
+### Arena Check: NO CHANGE — 10% TRIGGER NOT FIRED
+
+- sub1779297106805 (Stojanovic FP8 vLLM DFlash): tg128 c1 **80.27 tok/s** (UNCHANGED), recipeCopyCount **233** (UNCHANGED), updateTime 2026-10-02 (UNCHANGED).
+- sub1782803609803 (Poveda NVFP4 vLLM): **118.91 tok/s** (UNCHANGED), recipeCopyCount **124** (+3 from Entry 204's 121), updateTime 2026-10-11T16:09:35Z (bumped from 2026-10-10).
+- sub1779495971526 (Rawat Atlas NVFP4, top overall): **218.85 tok/s** (UNCHANGED), recipeCopyCount **172** (+1 from Entry 204's 171), updateTime **2026-10-12T09:21:30Z** (bumped TODAY — metadata-only).
+- 10% trigger (>88.30): **NOT FIRED.** FP8-vLLM frontier static ~24 weeks (last submission 2026-05-26). No new leaderboard submissions found.
+
+### vLLM Release Check: NO NEW RELEASE — LOW
+
+- Latest stable: **v0.31.0** (2026-10-05) — no v0.31.1 or v0.32 found. Classification: **LOW**.
+- v0.31.0 HIGH-keyword scan: none (no SM121/GB10/SM12 items). v0.31.0 features: DeepSeek-V4.1-Flash kernels, hot-restart weight caching, Model Runner V2 spec decode, large-scale MoE serving upgrades.
+- Gemma4 PRs #39138/#40099 status: **unable to check** (GitHub API 403; vllm-project/vllm outside MCP scope). PR #41745 (Gemma4 MTP spec decode) reportedly nearing approval — status unconfirmed.
+- DeepGEMM issue #41063: SVD landed a "DeepGEMM fix" and "Fixed DeepGEMM dependency" on 2026-10-09 — likely resolving this. Upstream closure unconfirmed.
+- PR #58681 (SM12x alignment): still **404**. SVD's local `VLLM_PATCH_B12X_C128A_ALIGNMENT` is the only known mitigation.
+
+### spark-vllm-docker Check: NEW MAIN BUILD — WORTH WATCHING
+
+- Main nightly (spark-vllm): **nightly-20261011** is the new latest (Docker Hub updated 2026-10-12 00:15:10 UTC; `latest` tag points to it). **5-day main build drought (nightly-20261006) is over.**
+- Key commits in nightly-20261011 (Oct 8–11, newest first):
+  - `ef086ae` (Oct 11): "Do not force expandable segments as it leads to OOM with new autotuner" — **new autotuner caused OOM with forced expandable segments; disabled.**
+  - `63ba399`/`dafc3eb` (Oct 11): "sync patchset with upstream" — upstream vLLM absorbed.
+  - `09810b5` (Oct 11): "update num batched tokens" — default `--max-num-batched-tokens` may have changed.
+  - `fec4594` (Oct 10): "Updated PR 50897 to fix regression" — upstream vLLM regression fix.
+  - `0dd7c01`/`e5aafe6` (Oct 9): "DeepGEMM fix" + "Fixed DeepGEMM dependency" — **DeepGEMM dependency resolved.**
+  - `fedb7a1`/`40b4cd5` (Oct 9): "Updated recipes for reliability" + "bugfixes."
+  - `8c0dd54` (Oct 8): "Updated Qwen3.8-27B recipe" — **new model recipe added.**
+- b12x nightly: nightly-20261010 was latest per Entry 204; not re-checked today. Thermal risk (/t/385388) still in effect.
+- Arm C eval target: upgraded from nightly-20261006 (dev723) to **nightly-20261011**.
+
+### Qwen Model Check: NO NEW DROP-IN MODEL — HF PARTIAL
+
+- HF DNS resolution failed (egress block); WebSearch fallback used.
+- **No Qwen3.7-35B open weights** — 3.7 was API-only; open-weight track skipped to 3.8.
+- **No official Qwen3.8-35B-A3B** — community confirms Qwen team has not released one. Third-party only: `empero-ai/Qwen3.8-35B-A3B-Distill` (Apache-2.0, distilled into Qwen3.6 35B-A3B MoE architecture — not official, not an eval target).
+- Confirmed official Qwen3.8 open weights (already tracked): Qwen3.8-27B (Aug 14) and Qwen3.8-2.4T-A95B (Aug 12). No 35B-A3B equivalent.
+- **Qwen4**: still in training, no weights, no release date.
+- No new 25–40B MoE models from other labs found.
+
+### NVIDIA Forum Check: EGRESS BLOCKED — DAY 2
+
+- forums.developer.nvidia.com: `ENOTFOUND` (DNS failure) — egress block continues (day 2, new cycle started Oct 11).
+- WebSearch fallback (limited): Petronellatech September 2026 field report: 8 GB10 units, firmware fragmentation, DGX OS 7.6.0 update caused ~11% synthetic benchmark slowdown, 4–8% faster real LLM after applying a hotfix referenced in NVIDIA forum. Pre-existing finding; no new Oct 2026 posts found.
+- "Spark abruptly shuts down" /t/377478 last active Sep 28 — no update. Qwen4 thread /t/383964 still exists. Prior ceiling /t/385496 unchanged.
+
+### Cross-Correlated Findings
+
+1. **SVD new build + DeepGEMM fix [SVD + vLLM]:** nightly-20261011 includes DeepGEMM dependency fix (Oct 9), likely resolving vLLM issue #41063 at the SVD layer. Arm C eval target upgrades from dev723.
+2. **New autotuner OOM signal [SVD]:** "Do not force expandable segments" (Oct 11) implies a new upstream autotuner feature that can OOM with forced expandable segments. Not relevant to current prod (older build) but a flag for Arm C upgrade path.
+3. **Arena metadata-only activity [Arena]:** Atlas updated today, Poveda +3 copies. No new performance submissions in ~24 weeks of FP8-vLLM frontier stasis.
+4. **No drop-in Qwen successor [Qwen + Arena]:** Official Qwen3.8-35B-A3B does not exist. The production NVFP4 forward path (Poveda recipe, 994+ copies) remains gated on NVFP4 schema gap (Entry 094) + Arm C build.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — 80.27 tok/s (threshold 88.30) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — no new release |
+| `svd \| new prebuilt vllm version` | PARTIAL — nightly-20261011 new; base vLLM version increment unconfirmed (GitHub API 403); notable: DeepGEMM fix + OOM/autotuner fix |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — no official weights; no Qwen3.8-35B-A3B exists |
+| `forum \| new GB10 performance/stability finding` | BLOCKED — ENOTFOUND day 2; pre-existing DGX OS 7.6.0 hotfix noted via WebSearch |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[ACTION — SVD EVAL TARGET UPGRADE]** nightly-20261011 is the new Arm C eval build; replaces nightly-20261006. Includes DeepGEMM fix, OOM/autotuner fix, Qwen3.8-27B recipe. Use for pending NVFP4 eval.
+2. **[WATCH — NEW AUTOTUNER OOM]** Expandable-segments OOM fix in Oct 11 commit. Monitor when upgrading to any newer vLLM build. No production impact on current vllm-cu132-test:latest.
+3. **[WATCH — DGX OS 7.6.0 HOTFIX]** WebSearch found September field report: DGX OS 7.6.0 update caused synthetic benchmark regression on 8 GB10 units; NVIDIA forum hotfix available. If firmware was recently updated, verify the hotfix was applied.
+4. **[CARRY-FORWARD]** NVFP4 AEON eval path gated on Arm C build upgrade; nightly-20261011 is the target.
+5. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) awaits decision.
+6. **[CARRY-FORWARD]** PR #58681 still 404; SVD VLLM_PATCH_B12X_C128A_ALIGNMENT is the only SM12x alignment mitigation.
+
+### SPARK_BASELINE.md diffs (applied in this commit)
+
+| Field | Old | New |
+|---|---|---|
+| `Last recon` | 2026-10-10 (Entry 202) | 2026-10-12 (Entry 205) |
+| `svd_last_checked_date` | nightly-20261006 day 5 | nightly-20261011 (new main build Oct 11; DeepGEMM fix + OOM/autotuner fix + Qwen3.8-27B recipe) |
+| `forum_last_checked_date` | EGRESS_BLOCKED day 1 | EGRESS_BLOCKED day 2; DGX OS 7.6.0 hotfix noted via WebSearch |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

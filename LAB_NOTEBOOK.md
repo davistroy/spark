@@ -16635,3 +16635,86 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | EGRESS_BLOCKED day 1 | EGRESS_BLOCKED day 2; DGX OS 7.6.0 hotfix noted via WebSearch |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 206 - DGX Spark Recon (2026-10-13)
+**Date:** 2026-10-13 11:20 UTC
+**Operator:** Claude Code (spark-recon skill) — scheduled daily run, no user present
+**Status:** RECON — report + recommend only. No changes to the running Spark system.
+
+### ⚠ TIME-SENSITIVE: WARRANTY t/383624 EXPIRES TOMORROW (Oct 14)
+DGX Spark hard-freeze unit warranty ends Oct 14 — NO NV CAS response visible in public search. Thread originated Sep 22; unit hard-freezes 3+ times under sustained inference (no Xid/OOM/panic, GPU 74–85°C during events). **If this is your unit, check and act before EOD Oct 14.**
+
+### Arena Check: NO CHANGE — 10% TRIGGER NOT FIRED
+
+- sub1779297106805 (Stojanovic FP8 vLLM DFlash): **80.27 tok/s** (UNCHANGED), recipeCopyCount 233 (UNCHANGED), updateTime 2026-10-02 (UNCHANGED).
+- sub1782803609803 (Poveda NVFP4 vLLM): **118.91 tok/s** (UNCHANGED), recipeCopyCount 124 (UNCHANGED), updateTime 2026-10-12.
+- sub1779495971526 (Rawat Atlas NVFP4, top overall): **218.85 tok/s** (UNCHANGED), recipeCopyCount 172 (UNCHANGED).
+- 10% trigger (>88.30): **NOT FIRED.** FP8-vLLM frontier static ~24 weeks (last submission 2026-05-26).
+- New notable: sub1790738008192 (Aita, tensorfold v0.5.0 runtime, turboderp/Qwen3.8-Flash-Next-exl3, tg400 c1 58.36 tok/s, Sep 30) — new runtime + successor model; uses tg400 not tg128, NOT directly comparable to our baseline metric.
+
+### vLLM Release Check: NO NEW RELEASE — LOW
+
+- Latest stable: **v0.31.0** (2026-10-05) — no v0.31.1 or v0.32 found. 8 days since last release. Classification: **LOW**.
+- No SM121/GB10/Blackwell HIGH-keyword matches. SM120 hits are GB200 Ultra (unrelated to GB10/SM121).
+- v0.31.0 DGX Spark mention: Qwen3.8-Flash-Next model-load time −25s on DGX Spark (#58720) — not our production model.
+- Qwen3.5 GDN BF16 prefill fix (#53864) in v0.31.0 — same GDN attention path as production Qwen3.6; correctness vs. performance scope unclear; flag for Arm C upgrade assessment.
+
+### spark-vllm-docker Check: NEW REBUILD — NO NEW CODE
+
+- **nightly-20261012** exists (pushed 2026-10-13T02:44 UTC, 11.25 GB, arm64), but built from same HEAD commit `ef086aea` as nightly-20261011. Zero new commits since Oct 11.
+- Arm C eval target: **unchanged = nightly-20261011**. nightly-20261012 is equivalent.
+- SVD Dockerfile still builds from `VLLM_REF=main` (vLLM main at build time) + CUDA 13.0.2 base.
+
+### Qwen Model Check: NO DROP-IN — QWEN4 IN TRAINING
+
+- **No Qwen4 weights.** "In training" per Sep 22 Apsara; community prediction market ~75% release before Nov 1. Watch item active.
+- **No Qwen3.8-35B-A3B exists** — community demand only. Official Qwen3.8 MoE = Flash-Next (125B/6B active).
+- **Qwen3.8-Flash-Next-FP8** (released Aug 26, 172.78 GiB): requires vLLM v0.28.0+; ~40-55% slower than prod on single Spark at c=1 (community 43.9 tok/s vs prod 66.9). Not a production candidate.
+- No other new 25-40B MoE models from major labs found.
+
+### NVIDIA Forum Check: EGRESS BLOCKED — DAY 3
+
+- forums.developer.nvidia.com: ENOTFOUND (DNS failure) — day 3 of new egress-block cycle (started Oct 11).
+- WebSearch fallback findings:
+  - **⚠ t/385262** (Oct 7) "log-less hard power-off under sustained load, thermal sensor fault" — fault code MODS-020000600139, EC 3.5.8/2.155.11, 4th+ unit in cluster. No firmware fix found.
+  - **t/384721** (Sep 29–Oct 9) "DGX Spark firmware stack" — community teardown of 5 firmware components; EC locked/fused on production units. Active through Oct 9.
+  - **t/384861** "New DGX Spark Production?" — NVIDIA staff confirmed platform committed. (Already tracked.)
+  - No new performance/optimization threads found for Oct 12-13.
+  - Ceiling: /t/385496 (per Entry 204/205; not confirmed updated today).
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-Flash-Next slower on single Spark [Qwen + Arena + Forum]:** Community results converge — Arena sub1790738008192 (tensorfold Sep 30), forum 43.9 tok/s (Sep), Qwen check (40-55% slower than prod at c=1). 125B/6B is not a viable single-Spark upgrade.
+2. **Landscape fully static for 3rd day [Arena + vLLM + SVD]:** No new Arena submissions, no vLLM release, no SVD code since Oct 11. Third consecutive no-action day on performance frontier.
+3. **Thermal fault cluster at 4+ units [Forum]:** t/385262 extends EC MODS-020000600139 cluster. No firmware fix across 3+ weeks of tracking.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — 80.27 tok/s (threshold 88.30) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — no new release |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261012 is code-identical rebuild |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — Qwen4 in training; no new weights |
+| `forum \| new GB10 performance/stability finding` | BLOCKED — ENOTFOUND day 3; t/385262 thermal cluster noted via WebSearch |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[⚠ TIME-SENSITIVE — WARRANTY t/383624 EXPIRES OCT 14]** Hard-freeze unit warranty ends tomorrow. No NV CAS response visible in search. If this is your unit: check the thread and contact NVIDIA support before EOD Oct 14. Post-expiry options are very limited. https://forums.developer.nvidia.com/t/dgx-spark-silent-hard-freeze-under-sustained-llama-cpp-inference-no-xid-oom-panic-10-second-telemetry-captured-warranty-ends-oct-14-requesting-cas/383624
+2. **[WATCH — THERMAL FAULT CLUSTER]** t/385262 is 4th+ unit with MODS-020000600139. If your unit exhibits unexplained hard power-offs under sustained inference, file a support case before relying on forum posts — this is a potential hardware defect, not a software issue.
+3. **[CARRY-FORWARD — QWEN4 WATCH]** ~75% prediction market for Qwen4 open weights by Nov 1. Check HF Qwen org daily as that date approaches.
+4. **[CARRY-FORWARD — NVFP4 EVAL]** Arm C eval target: nightly-20261011 (unchanged). Prioritize Qwen3.6-35B-A3B-NVFP4 (Poveda recipe, 118.91 tok/s, +78% vs prod) over Flash-Next.
+5. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) awaits decision.
+6. **[CARRY-FORWARD]** PR #58681 still 404; SVD VLLM_PATCH_B12X_C128A_ALIGNMENT remains only SM12x alignment mitigation.
+
+### SPARK_BASELINE.md diffs (applied in this commit)
+
+| Field | Old | New |
+|---|---|---|
+| `Last recon` | 2026-10-12 (Entry 205) | 2026-10-13 (Entry 206) |
+| `svd_last_checked_date` | nightly-20261011 new build | nightly-20261012 exists, code-identical to nightly-20261011; Arm C eval target unchanged |
+| `forum_last_checked_date` | EGRESS_BLOCKED day 2 | EGRESS_BLOCKED day 3; ⚠ WARRANTY t/383624 EXPIRES OCT 14; new thermal thread t/385262 |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

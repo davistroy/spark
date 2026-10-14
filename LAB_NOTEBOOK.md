@@ -16718,3 +16718,91 @@ DGX Spark hard-freeze unit warranty ends Oct 14 — NO NV CAS response visible i
 | `forum_last_checked_date` | EGRESS_BLOCKED day 2 | EGRESS_BLOCKED day 3; ⚠ WARRANTY t/383624 EXPIRES OCT 14; new thermal thread t/385262 |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 207 — DGX Spark Recon (2026-10-14)
+**Date:** 2026-10-14 11:19 UTC
+**Operator:** Claude Code (spark-recon skill) — scheduled daily run, no user present
+**Status:** RECON — report + recommend only. No changes to the running Spark system.
+
+### ⚠ WARRANTY EXPIRED: t/383624 — NO NVIDIA RESPONSE VISIBLE
+DGX Spark hard-freeze unit (purchased Oct 14, 2025) — warranty expired TODAY. **No NV CAS response has been visible in any public search across 3+ weeks of monitoring.** Forum DNS-blocked (day 4). If this is your unit, **direct CAS contact (phone/email) is required immediately** — forum escalation is no longer relevant post-expiry.
+
+### Arena Check: NO CHANGE — 10% TRIGGER NOT FIRED
+
+- **sub1779297106805** (Stojanovic FP8 DFlash vllm-node-tf5): **80.27 tok/s** (UNCHANGED), recipeCopyCount 233 (UNCHANGED), updateTime 2026-10-02 (UNCHANGED).
+- **sub1782803609803** (Poveda NVFP4): **118.91 tok/s** (UNCHANGED), recipeCopyCount 124 (UNCHANGED), updateTime **2026-10-13T23:25:29Z** (bumped from Oct 12 — metadata-only edit, no copy increase, no recipe change).
+- **sub1779495971526** (Rawat Atlas NVFP4, top overall): **218.85 tok/s** (UNCHANGED), recipeCopyCount 172 (UNCHANGED).
+- 10% trigger (>88.30 tok/s): **NOT FIRED.** FP8-vLLM frontier static ~25 weeks (last submission 2026-05-26).
+- Sorted collection query (`orderBy=score desc`) returned empty `{}` — composite index likely requires auth; partial unsorted scan showed no new FP8 entries above threshold.
+
+### vLLM Release Check: NO NEW RELEASE — LOW
+
+- Latest stable: **v0.31.0** (2026-10-05) — unchanged from Entry 202. No v0.31.1 or v0.32.0 found. Classification: **LOW**.
+- **PR #58681** (SM12x DeepGEMM ~15% alignment fix): **STILL OPEN** upstream (merged_at: null). DCO force-push Oct 8 did not result in merge.
+- **PR #57512** (float32-scale guard SM12x): STILL OPEN, last active Sep 23.
+- **DeepGEMM companion PR #18**: STILL OPEN, awaiting maintainer review.
+- No SM121/GB10/arch-guard HIGH keywords in any release since v0.31.0.
+
+### spark-vllm-docker Check: NEW COMMITS (B12X LANE ONLY) — NO NEW BUILD
+
+- 4 new commits since ef086aea (Oct 11): `69fcf1e9`, `eadf57da`, `edf20694`, `0b8c440a` (Oct 12–13). **All exclusively in `docker/patches/qwen3.8/` (B12X/Flash-Next lane)** — zero production-lane changes.
+- Oct 12 commit `69fcf1e9` adds `16-flash-next-fp4.patch` (1515 lines) + `17-flash-next-b12x-loader.patch` (1320 lines) for Qwen3.8 Flash-Next NVFP4 support on GB20x/B12X hardware. Not relevant to production Qwen3.6-35B-A3B-FP8.
+- **Arm C eval target: UNCHANGED** — `prebuilt-vllm-current` and `prebuilt-flashinfer-current` both still point to ef086aea (Oct 11).
+- **NEW CLARIFICATION (corrects Entry 206 Rec #6):** The DeepGEMM SM12x alignment fix (upstream PR #58681) was **ALREADY INCORPORATED into SVD as of Oct 9 commit `0dd7c01f` ("DeepGEMM fix")**. The Arm C eval target (nightly-20261011, built from ef086aea which is post-`0dd7c01f`) **already includes the ~15% alignment improvement.** Prior entries noting "PR #58681 still the only mitigation via VLLM_PATCH_B12X_C128A_ALIGNMENT" were incorrect for SVD builds after Oct 9.
+- NVFP4/AEON path (Dockerfile.mxfp4): last touched Sep 22 (`ce175a5`), unchanged — still on christopherowen/vllm `045293d` + pytorch:26.01-py3 base.
+
+### Qwen Model Check: NO DROP-IN — QWEN4 IN TRAINING
+
+- **No Qwen4 weights.** "In training" since Sep 22 Apsara; community prediction market ~75% release by Nov 1 (17 days remain). Watch item active.
+- Qwen3.8-27B dense (released Aug 14, Apache 2.0) — dense architecture, wrong class, not a production candidate.
+- **Qwen3.6-35B-A3B-NVFP4** (nvidia/ canonical): confirmed still available. **New flag:** unsloth mirror potentially silently replaced July 10 with different quantization (degenerate output per community report). Use only `nvidia/Qwen3.6-35B-A3B-NVFP4` when NVFP4 eval resumes.
+- No new competing 25-40B sparse MoE models from Mistral, Meta, or other major labs in October.
+
+### NVIDIA Forum Check: EGRESS BLOCKED — DAY 4
+
+- forums.developer.nvidia.com: ENOTFOUND (DNS failure) — day 4 of block (started Oct 11). Both endpoints (719.json, 721.json) unreachable. All data via WebSearch fallback.
+- **⚠ t/383624 WARRANTY EXPIRED TODAY:** Warranty on hard-freeze unit expired Oct 14 with no NV CAS response visible in any search result. WebSearch confirmed thread exists (full title: "DGX Spark silent hard-freeze under sustained llama.cpp inference…warranty ends Oct 14, requesting cas") but zero NVIDIA staff replies found. Unit purchased Oct 14 2025; freezes 3+ times under sustained inference (GPU 74–85°C/55–85W). RMA path requires direct NVIDIA CAS contact (phone/email).
+- **t/385262** (MODS-020000600139 thermal cluster): No new updates visible since block. New detail via search: firmware downgrade + 2000 MHz clock cap reported as a freeze-prevention stopgap by one user (not a fix). RMA approvals confirmed via CAS in multiple related threads.
+- **NEW: 64GB DGX Spark launched Oct 2, ships Oct 23** — $4,999 from Acer, ASUS, Dell, GIGABYTE, HP, MSI. NVIDIA Sync Cluster Assistant links two units over QSFP (ConnectX-7) for 128GB / 546 GB/s pooled. DGX OS software update planned later October. Informational — no production config impact.
+- **t/379766** (vLLM vs Ollama vs llama.cpp single-Spark benchmark) — vLLM ahead on GPT-OSS-120B (60.7 vs 42.1 tok/s vs Ollama Q4); ±30% run-to-run variance noted. INFO.
+- t/385496 ceiling thread, t/384721 firmware teardown: not found in WebSearch results.
+
+### Cross-Correlated Findings
+
+1. **DeepGEMM SM12x fix already in Arm C eval target [vLLM + SVD]:** PR #58681 STILL OPEN upstream (Check 2), but SVD commit `0dd7c01f` (Oct 9) already incorporated the fix (Check 3). The Arm C eval nightly-20261011 already has the ~15% alignment improvement baked in. High confidence — from SVD commit history directly.
+2. **Performance frontier static for 4th consecutive day [Arena + vLLM + SVD]:** No new Arena submissions, no new vLLM release, no new SVD nightly build. Consistent pattern since Oct 11.
+3. **NVFP4 upgrade path dual-gated [SVD + Qwen]:** AEON path unchanged (Sep 22); canonical model confirmed available. Both checks confirm gating is solely on vLLM build upgrade (v0.23.x+). Unsloth mirror flag adds new sourcing caution.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — 80.27 tok/s (threshold 88.30) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — no new release |
+| `svd \| new prebuilt vllm version` | NOT FIRED — 4 new commits B12X lane only, no new nightly tagged |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — Qwen4 in training; no new weights |
+| `forum \| new GB10 performance/stability finding` | BLOCKED — ENOTFOUND day 4; warranty t/383624 EXPIRED today; 64GB Spark via WebSearch |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[⚠ POST-WARRANTY — t/383624]** Warranty expired TODAY. No NVIDIA CAS response visible after 3+ weeks of public tracking. If this is your unit: skip the forum entirely. Contact NVIDIA CAS directly by phone or email — post-expiry options narrow rapidly. Reference the original freeze telemetry in your case.
+2. **[CLARIFICATION — DeepGEMM fix already in Arm C eval]** Prior entries (Entry 206 Rec #6) stated "PR #58681 still the only SM12x mitigation." This is incorrect for SVD post-Oct-9. The Arm C eval target (nightly-20261011) **already includes the DeepGEMM ~15% alignment improvement** via commit `0dd7c01f`. The Arm C upgrade delivers both NVFP4 schema support AND the ~15% decode improvement — they are now bundled.
+3. **[CARRY-FORWARD — QWEN4 WATCH]** ~75% prediction market for Qwen4 open weights by Nov 1 (17 days). Watch `Qwen/` HF org only. Qwen4-MoE specifics (active parameter count) unconfirmed.
+4. **[CARRY-FORWARD — NVFP4 EVAL]** Arm C eval target: nightly-20261011. Use **`nvidia/Qwen3.6-35B-A3B-NVFP4` only** — not unsloth mirror (potentially corrupted July 10). Target: +78% vs prod at c=1.
+5. **[INFO — 64GB Spark + Sync Clustering]** 64GB variant ships Oct 23 at $4,999; Sync Cluster Assistant pools two units over QSFP to 128GB/546 GB/s. No production impact today; context for hardware expansion decisions.
+6. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) awaits decision.
+
+### SPARK_BASELINE.md diffs (applied in this commit)
+
+| Field | Old | New |
+|---|---|---|
+| `Last recon` | 2026-10-13 (Entry 206) | 2026-10-14 (Entry 207) |
+| `vllm_last_checked_version` | v0.31.0, PR #58681 STILL OPEN | v0.31.0 still latest; PR #58681 STILL OPEN upstream — **already incorporated in SVD Oct 9 `0dd7c01f`** |
+| `svd_last_checked_date` | nightly-20261012 code-identical to nightly-20261011; Arm C eval target unchanged | 4 new commits Oct 12–13 (B12X lane only); Arm C eval target unchanged ef086aea; **DeepGEMM SM12x fix confirmed in SVD since Oct 9 — Arm C eval already includes ~15% improvement** |
+| `forum_last_checked_date` | EGRESS_BLOCKED day 3; ⚠ WARRANTY t/383624 EXPIRES OCT 14 | EGRESS_BLOCKED day 4; **WARRANTY t/383624 EXPIRED** no NV response visible; 64GB Spark launched Oct 2 ships Oct 23; firmware downgrade + 2000 MHz clock cap as freeze stopgap (community) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

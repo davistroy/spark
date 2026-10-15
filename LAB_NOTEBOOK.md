@@ -16806,3 +16806,83 @@ DGX Spark hard-freeze unit (purchased Oct 14, 2025) — warranty expired TODAY. 
 | `forum_last_checked_date` | EGRESS_BLOCKED day 3; ⚠ WARRANTY t/383624 EXPIRES OCT 14 | EGRESS_BLOCKED day 4; **WARRANTY t/383624 EXPIRED** no NV response visible; 64GB Spark launched Oct 2 ships Oct 23; firmware downgrade + 2000 MHz clock cap as freeze stopgap (community) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 208 — DGX Spark Recon (2026-10-15)
+
+### Check 1 — Arena Firestore
+
+- **sub1779297106805** (Stojanovic, FP8 vLLM): tg128 c1 = **80.27 tok/s** (UNCHANGED). recipeCopyCount **233** (UNCHANGED).
+- **updateTime bumped: 2026-10-02T07:37:35.719327Z** (was 2026-09-30T14:57:39.653871Z per Entry 207/SPARK_BASELINE). Metadata-only activity — no score change.
+- 10% trigger (>88.30 tok/s): **NOT FIRED** (+20.0% vs prod 66.9).
+- FP8 vLLM frontier static: ~23 weeks (last new submission 2026-05-26).
+- Top overall (Atlas NVFP4, sub1779495971526): not re-queried; prior value 218.85 tok/s assumed static.
+
+### Check 2 — vLLM Releases
+
+- **GitHub API blocked** (403 from WebFetch; mcp__github__ restricted to davistroy/spark). Fallback: WebSearch.
+- **WebSearch result:** Wikipedia cites v0.30.0 / September 22, 2026 as latest stable. Entry 207 tracked v0.31.0 — may be RC/pre-release not yet reflected in secondary sources. No v0.32 found.
+- **PR #58681** (DeepGEMM SM12x alignment ~15% fix): STILL OPEN upstream per Entry 207; already incorporated in SVD since Oct 9 `0dd7c01f`.
+- **PR #52708** ("Add SM121 (DGX Spark / GB10) to published build targets"): discovered via WebSearch today. Merge status UNKNOWN — search returned no merge confirmation. If merged, would add native SM121 wheels to upstream vLLM published releases. Mark as watch item.
+- HIGH trigger (SM121/GB10/arch-guard language in release): **NOT FIRED** — no new release confirmed.
+
+### Check 3 — eugr/spark-vllm-docker
+
+- **GitHub API blocked** (403). Fallback: WebSearch.
+- **NEW Oct 7 changelog entry:** "B12X is now part of Flashinfer! --exp-b12x builds now build Flashinfer from `local-inference-lab/flashinfer@main`, with separate wheel caches and no flashinfer-cubin wheel. Regular builds continue to use upstream FlashInfer."
+  - This is significant: B12X FlashInfer support has been integrated into the upstream FlashInfer main branch, removing the need for a separate cubin wheel. The Arm C eval path benefits directly.
+- Entry 207 had Oct 12–13 B12X lane commits; no new nightly tag confirmed beyond nightly-20261011 (Arm C eval target ef086aea).
+- `svd_last_checked_date`: Oct 7 changelog entry confirmed; Oct 12–13 commits unchanged from Entry 207.
+
+### Check 4 — Qwen Models
+
+- **No new Qwen3.7, Qwen3.9, or Qwen4 35B MoE open weights.** Qwen4 still in training (Apsara Sep 22 announcement).
+- **Prediction market ~74–75%** for Qwen4 open weights before Nov 1 (T−17 days from Entry 207, T−16 days today).
+- Latest Qwen release: **Qwen-Image-2.1-Turbo** (Oct 9, 7B image model, research license) — not a production candidate.
+- Qwen3.8-27B trending on HuggingFace (~17K likes, 6.8M downloads). No 35B MoE variant.
+- Qwen4 architecture preview: Qwen3.8-Flash-Next (125B total / ~6B active, sparse MoE) — NOT a Qwen3.6-35B-A3B successor.
+- Watch item for Qwen4-35B-A3B-FP8 drop-in successor: **still open**.
+
+### Check 5 — NVIDIA Forum
+
+- **forums.developer.nvidia.com: ENOTFOUND — EGRESS BLOCKED DAY 5** (started Oct 11; both 719.json and 721.json unreachable).
+- Via WebSearch: No new Oct 2026 DGX Spark threads found. Forum content dated ~April 2026 or earlier in search index.
+- **t/383624 WARRANTY EXPIRED OCT 14 (yesterday):** No NVIDIA CAS response visible in any search result post-expiry. If this is your unit: direct CAS contact (phone/email) is the only path.
+- Community context: BIOS-dated hang fix (newer BIOS resolves long-context prefill freezes on Dell units); multi-node freeze reports (TP=2 prefill, zero forensic trace); freeze mitigation via 2000 MHz clock cap (not a fix).
+
+### Cross-Correlated Findings
+
+1. **B12X FlashInfer mainlined [SVD Oct 7]:** The separation between B12X experimental and regular builds is narrowing — `local-inference-lab/flashinfer@main` is now the B12X target. Entry 207 confirmed DeepGEMM SM12x fix in SVD since Oct 9. Both point toward the Arm C eval target (nightly-20261011) being highly feature-complete. Medium confidence (single-source for SVD, no direct GitHub verify).
+2. **Arena frontier static for 5th consecutive week [Arena + WebSearch]:** No new submissions, no new runtime, no new scores. FP8 vLLM ceiling at 80.27 tok/s has held since May 26. Both checks agree.
+3. **Qwen4 countdown unchanged [Qwen check + prior entries]:** T−16 days to Nov 1 prediction market threshold. No architecture change, no open-weight announcement. Watch window narrows daily.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — 80.27 tok/s (threshold 88.30) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — GitHub API blocked; no new release confirmed via WebSearch |
+| `svd \| new prebuilt vllm version` | NOT FIRED — Oct 7 B12X/FlashInfer integration is notable but no new nightly tag confirmed |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — Qwen4 still in training; no new weights |
+| `forum \| new GB10 performance/stability finding` | BLOCKED — ENOTFOUND day 5; t/383624 warranty expired Oct 14 |
+
+### Overall: WORTH WATCHING
+
+### Recommendations
+
+1. **[NEW — PR #52708 WATCH]** vLLM PR #52708 "Add SM121 (DGX Spark / GB10) to published build targets" discovered today via WebSearch. If merged, this adds native SM121 wheels to upstream published vLLM releases — potentially simplifying the upgrade path beyond SVD. Merge status unknown; monitor at `vllm-project/vllm/pull/52708`.
+2. **[NEW — B12X FlashInfer mainlined in SVD]** Oct 7 SVD changelog: B12X FlashInfer now builds from `local-inference-lab/flashinfer@main`. This removes the separate cubin wheel dependency for B12X builds. The Arm C eval target (nightly-20261011) already incorporates DeepGEMM SM12x fix + this FlashInfer integration. The upgrade package is increasingly well-tested.
+3. **[POST-WARRANTY — t/383624]** Warranty expired yesterday (Oct 14). No NVIDIA CAS response. Direct CAS contact by phone or email is the only remaining option — forum-only approaches are exhausted.
+4. **[CARRY-FORWARD — QWEN4 WATCH]** T−16 days to Nov 1 (~74% prediction market). Watch `Qwen/` HF org only. Architecture preview is 125B total / 6B active (NOT 35B MoE).
+5. **[CARRY-FORWARD — NVFP4 EVAL]** Arm C eval target: nightly-20261011 (DeepGEMM SM12x fix + B12X FlashInfer integration). Use `nvidia/Qwen3.6-35B-A3B-NVFP4` only (not unsloth mirror). Target: +78% vs prod at c=1.
+6. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) awaits decision.
+
+### SPARK_BASELINE.md diffs (applied in this commit)
+
+| Field | Old | New |
+|---|---|---|
+| `Last recon` | 2026-10-14 (Entry 207) | 2026-10-15 (Entry 208) |
+| `arena_top_fp8_qwen35_tok_s` | updateTime 2026-09-30T14:57:39.653871Z | updateTime **2026-10-02T07:37:35.719327Z** (metadata-only bump detected Oct 15; score 80.27 tok/s UNCHANGED) |
+| `svd_last_checked_date` | 4 new commits Oct 12–13 B12X lane; DeepGEMM SM12x fix in SVD Oct 9 | **Oct 7 changelog: B12X FlashInfer mainlined** (`local-inference-lab/flashinfer@main`, no cubin wheel); Oct 12–13 commits unchanged; Arm C eval target nightly-20261011 unchanged |
+| `forum_last_checked_date` | EGRESS_BLOCKED day 4; WARRANTY EXPIRED Oct 14 | EGRESS_BLOCKED **day 5**; warranty expired; no CAS response; PR #52708 (SM121 build targets) new watch item |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

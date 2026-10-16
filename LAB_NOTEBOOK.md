@@ -16886,3 +16886,91 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | EGRESS_BLOCKED day 4; WARRANTY EXPIRED Oct 14 | EGRESS_BLOCKED **day 5**; warranty expired; no CAS response; PR #52708 (SM121 build targets) new watch item |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 209 — DGX Spark Recon (2026-10-16)
+
+### Check 1 — Arena Firestore
+
+- **sub1779297106805** (Stojanovic, FP8 vLLM): tg128 c1 = **80.27 tok/s** (UNCHANGED). recipeCopyCount **233** (UNCHANGED). updateTime 2026-10-02T07:37:35.719327Z (UNCHANGED).
+- 10% trigger (>88.30 tok/s): **NOT FIRED** (+20.0% vs prod 66.9). FP8 vLLM frontier static: ~24 weeks (last submission 2026-05-26).
+- **sub1782803609803** (Poveda NVFP4): 118.91 tok/s UNCHANGED. recipeCopyCount **125** (was 117 — +8 copies). updateTime **2026-10-16T00:44:05.899039Z** (bumped TODAY).
+- **sub1779495971526** (Atlas overall): 218.85 tok/s UNCHANGED. recipeCopyCount **173** (was 169 — +4 copies). updateTime **2026-10-16T00:19:47.888223Z** (bumped TODAY).
+- Both NVFP4 entries received recipe copies today — probable community activity around SVD nightly-20261015 that unblocks NVFP4 (cross-correlated Check 3).
+
+### Check 2 — vLLM Releases
+
+- **GitHub API blocked (403). Fallback: WebSearch + PyPI.**
+- Latest stable: **v0.31.0** (Oct 5, 2026 — UNCHANGED from Entry 208). No v0.31.x patch release found.
+- **v0.32.0rc1** in active RC cycle (version string confirmed via SVD build `0.32.0rc1.dev227`). No SM121/GB10-specific items confirmed in either release.
+- v0.31.0 highlights: DeepSeek-V4.1-Flash kernels, FlashMLA (SM100 default, NOT SM121), Mega-Gate fused MoE, hot-restart weight caching, HiSparse KV paging, Model Runner V2 spec-decode improvements.
+- PR #52708 (SM121 build targets), PR #58681 (DeepGEMM SM12x alignment): status unconfirmed (GitHub API blocked).
+- Classification: **LOW** (production) / **MEDIUM** (watch v0.32.0 stable for SM121 items).
+
+### Check 3 — eugr/spark-vllm-docker
+
+- **TRIGGER FIRED — NEW BUILD nightly-20261015** (pushed 2026-10-15 13:13 UTC, labeled "New stable build" by eugr). Previous: nightly-20261011.
+- vLLM: **0.32.0rc1.dev227+g1336955f3.d20261015** (was 0.30.1rc1.dev723 — SKIPPED v0.31.0 stable label, major jump).
+- FlashInfer: **0.7.2-367cfded-d20261015** (was 0.7.1).
+- b12x image: also nightly-20261015 (pushed 2026-10-15 17:39 UTC).
+- Key commits Oct 12–16: B12X loader added to regular lane (Qwen3.8 Flash Next only); upstream patchset resync; new Nemotron 3.5 Bolt-74B-A9B-24GB + Super-VL-120B-A12B-NVFP4 recipes; Qwen3.8 switched to `nvidia/Qwen3.8-Flash-Next-FP4-Local`; recipe validator added (`--setup` required if model not cached).
+- **NVFP4 eval gate CLEARED: v0.32.0rc1 >> v0.23.x threshold (Entry 094).** `nvidia/Qwen3.6-35B-A3B-NVFP4` (22 GB, already cached) can now be evaluated. New Arm C eval target: **nightly-20261015**.
+
+### Check 4 — Qwen Models
+
+- **No Qwen4 open weights.** UNCHANGED from Entry 208. T-15 days to Nov 1 prediction market threshold (~74%).
+- Qwen4 architecture confirmed: 27B dense only (NOT 35B-A3B MoE) — no production upgrade path regardless of release.
+- No new A3B-class MoE models: Edge0-35B-A3B-preview (MLX/Apple Silicon only, no CUDA); Nemotron 3.5 Lightning 30B-A3B (30B class, different architecture, tracked since Entry 140).
+- Watch item Qwen4-35B-A3B-FP8: no such variant planned/announced.
+
+### Check 5 — NVIDIA Forum
+
+- **EGRESS_BLOCKED Day 6** (ENOTFOUND; new cycle started Oct 11 per Entry 204). WebSearch fallback.
+- **New ceiling: t/385923** (Oct 15, one day ago). Two new threads above prior ceiling t/385496:
+  - t/385654: "Is a third DGX Spark worth it? TP=3 vs TP=2 experiences" (Oct 12–13; INFO — multi-unit clustering discussion).
+  - t/385923: Hard power-off under sustained GPU load, FE unit, RMA open, warranty expires Oct 29 (Oct 15; INFO — different unit from t/383624).
+- **NV-Kernels PRs #590/#591/#623/#624: ALL CLOSED Sep 30** into Canonical `main-next` (commit `6cd2efe6ac6b`) and `nvidia-bos-next` (commit `a13abb6e7bba`). KHO disabled by default on arm64-nvidia now in Canonical pipeline. No new DGX OS or kernel package yet. **OTA hold STILL IN EFFECT** — wait for new DGX OS release (expected 7.7.0 or 7.6.1) with kernel 7.0.0-1020+.
+- t/383624: Warranty expired Oct 14, no visible NV CAS response post-expiry.
+- **64GB Spark on schedule Oct 23** (OEM-only, $4,999, Acer/ASUS/Dell/Gigabyte/HP/MSI). Sync Cluster: 2 units over QSFP → 128GB/546 GB/s pooled. 128GB FE backlog ~6 months.
+- DGX OS: 7.6.0 (Sep 14) still current; no 7.7.0/7.6.1 announced.
+
+### Cross-Correlated Findings
+
+1. **SVD 0.32.0rc1 + vLLM RC cycle [SVD + vLLM]:** SVD nightly-20261015 carries vLLM 0.32.0rc1.dev227 (labeled "New stable build"); vLLM check independently confirms v0.32.0rc1 is in active RC cycle. NVFP4 eval gate (v0.23.x threshold, Entry 094) cleared by two independent signals. High confidence.
+2. **NVFP4 recipe copy surge today + new SVD build [Arena + SVD]:** Poveda (+8 copies to 125) and Atlas (+4 copies to 173) both received community copies on Oct 16 — one day after nightly-20261015 dropped Oct 15. Suggests community preparing NVFP4 evals with the new build. Medium confidence.
+3. **OTA hold pipeline clearing [Forum]:** All 4 NV-Kernels PRs closed Sep 30 into Canonical branches. Next DGX OS release should include KHO-disabled-by-default fix. Single source, medium confidence.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `svd \| new prebuilt vllm version` | **FIRED** — nightly-20261015, vLLM 0.32.0rc1.dev227 (was 0.30.1rc1.dev723) |
+| `arena \| tok_s > baseline + 10%` | NOT FIRED — 80.27 tok/s (threshold 88.30) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.31.0 stable (no SM121 items); v0.32.0rc1 RC (no SM121 items confirmed) |
+| `huggingface \| Qwen4 OR Qwen3.6 successor` | NOT FIRED — Qwen4 still no weights; T-15 days |
+| `forum \| new GB10 performance/stability finding` | EGRESS_BLOCKED Day 6; KHO fix in pipeline (INFO); ceiling t/385923 (RMA, INFO) |
+
+### Overall: ACTION NEEDED
+
+SVD trigger fired with major vLLM version jump (0.30.1rc1.dev723 → 0.32.0rc1.dev227, labeled "New stable build"). The NVFP4 eval gate blocked since Entry 094 (2026-06-30) is now cleared. New Arm C eval target: nightly-20261015.
+
+### Recommendations
+
+1. **[ACTION — SCHEDULE ARM C EVAL: NVFP4 GATE CLEARED]** SVD nightly-20261015 (vLLM 0.32.0rc1.dev227, FlashInfer 0.7.2) is the new Arm C eval target. The v0.23.x NVFP4 gate from Entry 094 is cleared. Schedule B1 probe at next prod-down window using `nvidia/Qwen3.6-35B-A3B-NVFP4` (already cached, 22 GB). Apply bjk110 patches: (a) remove deprecated `tile_tokens_dim`; (b) `VLLM_USE_FLASHINFER_MOE_FP4=0`; (c) regex quant-ignore for GDN layers. Use ONLY `nvidia/Qwen3.6-35B-A3B-NVFP4` — NOT unsloth mirror (silently replaced ~Jul 10, Entry 207). Expected c1 ceiling: 103–119 tok/s (+55–78% vs prod 66.9). AEON `ghcr.io/aeon-7/aeon-vllm-ultimate:latest` (vLLM 0.27.1 sm_121a) remains as fallback.
+2. **[WATCH — OTA HOLD CLEARING IN PIPELINE]** NV-Kernels PRs #590/#591/#623/#624 all closed Sep 30 into Canonical branches. Watch for DGX OS 7.7.0 or 7.6.1 announcement. When confirmed: verify kernel 7.0.0-1020+ with KHO disabled by default on arm64-nvidia. Only then lift OTA hold. Do NOT apply current Sep 14 OTA (7.6.0).
+3. **[CARRY-FORWARD — POST-WARRANTY t/383624]** Warranty expired Oct 14. No NV CAS response visible. Direct CAS contact by phone/email only.
+4. **[INFO — 64GB SPARK OCT 23]** OEM-only, $4,999. Sync Cluster: 2 units over QSFP → 128GB/546 GB/s pooled. No production impact on current single-node FE.
+5. **[CARRY-FORWARD — QWEN4 WATCH]** T-15 days to Nov 1 (~74% prediction market). 27B dense only (NOT 35B-A3B MoE). No production action on Qwen4 release unless Qwen4-35B-A3B-FP8 variant announced separately.
+6. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) awaits decision.
+
+### SPARK_BASELINE.md diffs (applied in this commit)
+
+| Field | Old | New |
+|---|---|---|
+| `Last recon` | 2026-10-15 (Entry 208) | 2026-10-16 (Entry 209) |
+| `arena_top_fp8_qwen35_tok_s` | Poveda count 117 / updateTime 2026-09-21T09:34:23Z; Atlas count 169 / updateTime 2026-10-02 | Poveda count **125** / updateTime **2026-10-16T00:44:05.899039Z**; Atlas count **173** / updateTime **2026-10-16T00:19:47.888223Z**; FP8 vLLM (Stojanovic) UNCHANGED |
+| `svd_last_checked_date` | nightly-20261011 Arm C eval target; DeepGEMM fix + B12X FlashInfer mainlined | **nightly-20261015** (Oct 15 13:13 UTC, "New stable build"); vLLM **0.32.0rc1.dev227**; FlashInfer **0.7.2**; NVFP4 gate **CLEARED**; new Arm C eval target = nightly-20261015 |
+| `forum_last_checked_date` | EGRESS_BLOCKED day 5; ceiling t/385496; warranty expired Oct 14 | EGRESS_BLOCKED **day 6**; ceiling **t/385923**; KHO PRs **ALL CLOSED Sep 30** into Canonical branches (OTA hold persists); t/383624 no CAS response; 64GB Oct 23 |
+| Watch Items — NVFP4 eval | Entry 207 / nightly-20261011 | **GATE CLEARED** — new Arm C eval target nightly-20261015 (Entry 209) |
+| Watch Items — OTA hold | PRs #590-624 still open | **ALL CLOSED Sep 30** into Canonical branches — in pipeline, OTA hold persists pending new DGX OS release |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

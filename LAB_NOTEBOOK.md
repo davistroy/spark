@@ -17058,3 +17058,137 @@ SVD trigger fires with nightly-20261016 (v0.32.0rc1.dev301, +74 commits from yes
 | `forum_last_checked_date` | EGRESS_BLOCKED day 6; ceiling t/385923 | EGRESS_BLOCKED **day 7**; ceiling t/385923 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 211 — DGX Spark Recon (2026-10-17, weekly)
+
+**Date:** 2026-10-17 UTC (run from ubuntu-vm; same day as daily Entry 210)
+**Operator:** Claude Code (spark-recon skill, headless weekly run)
+**Status:** RECON — no changes made
+
+**Egress note:** From ubuntu-vm, the GitHub API and the NVIDIA forum JSON are both reachable. The cloud routine reports GitHub 403 and forum ENOTFOUND (forum EGRESS_BLOCKED days 1–7, Oct 11–17). This run closes the forum gap for Oct 10–17 and fills the GitHub PR-status gap from Entry 210.
+
+### Check 1 — Arena Check: NOT FIRED
+
+- Access: Firestore REST. Direct GETs work. **LIST also works today: 362 `benchmarks` docs** (3 pages × 300, `nextPageToken`). API key found in the `/leaderboard` and `/admin` JS chunks (not the homepage chunks).
+- Baseline docs (all UNCHANGED vs Entry 210):
+
+| Doc | tg128 c1 | recipeCopyCount | updateTime |
+|---|---|---|---|
+| sub1779297106805 Stojanovic FP8 DFlash (vLLM) | 80.27 | 233 | 2026-10-02T07:37:35Z |
+| sub1782803609803 Poveda NVFP4 (vLLM) | 118.91 | 125 | 2026-10-16T00:44:05Z |
+| sub1779495971526 Rawat Atlas NVFP4 | 218.85 | 173 | 2026-10-16T00:19:47Z |
+
+- Top FP8 Qwen3.6-35B-A3B on vLLM: Stojanovic 80.27 (threshold 88.30). Next: Walczak DFlash 77.88, Hobson MTP 60.70.
+- **Baseline correction:** "no FP8 Qwen3.6 vLLM submissions since 2026-05-26" is wrong. James LaCroix sub1787501539423 (2026-08-23) = 48.28 tok/s, no spec-decode. No threat.
+- Top non-vLLM: Atlas NVFP4 218.85 / 217.37 / 211.31; Atlas FP8 Qwen3.6 172.03 (Walczak, 2026-05-24); llama.cpp maple-preview TQ2_0 177.99; SGLang Ornith-1.5-35B-A3B NVFP4 104.27.
+- Top 5 single-node overall: LFM2.5-230M 465.6, LFM2.5-350M ×3 (366.07 / 364.39 / 228.0), Atlas Qwen3.6 NVFP4 218.85. Tiny-model outliers.
+- Top non-Qwen 30–35B vLLM: Nemotron-3.5-Lightning-30B-A3B NVFP4 + DSpark 125.13 (Pathak).
+- Since 2026-10-10: 7 submissions, none a threat (Devstral-Small-2 FP8 9.37; Qwen3.8-27B FP8/NVFP4 16–42; Qwen3.8-Flash-Next-hibrid48 53.32; 3-node Qwen3.8-Flash-Next TP3 103.09; Nemotron-3.5-Super-VL-120B and Bolt-74B with no tg128 data).
+- New runtime: **`tensorfold`** (EXL3, sub1790738008192, 2026-09-30, no tg data). Also `vLLM-Ray`.
+
+### Check 2 — vLLM Release Check: MEDIUM (no HIGH keywords)
+
+- Latest stable: **v0.31.0** (2026-10-05), UNCHANGED.
+- New tags (tags only, no release notes): **v0.32.0rc2** (2026-10-15, 7960eeb9d), **v0.32.0rc3** (2026-10-17 00:25 UTC, 82eb574d9), v0.31.1rc0 (2026-10-06, metrics patch).
+- rc1→rc3 = 8 commits. Keyword hits: #61763 DeepSeek-V4.1-Flash-NVFP4 CI pin; #61989 MNNVL single-node FlashInfer allreduce; #61718 Mamba2 NaN fix on sm90. No SM121/SM120/GB10 content.
+- PR/issue status (Entry 210 could not check — GitHub 403):
+
+| # | State |
+|---|---|
+| #52708 SM121 build targets | **closed, NOT merged** (2026-09-14) |
+| #39949 spec-decode hybrid attention | merged 2026-05-13 |
+| #58681 DeepGEMM SM12x grouped-GEMM alignment | **still OPEN** (updated 2026-10-15) |
+| #41063 DeepGEMM SM12.x coverage tracking | still OPEN (updated 2026-09-24) |
+
+### Check 3 — spark-vllm-docker Check: NO NEW BUILD
+
+- Newest build is still the 2026-10-16 one: `prebuilt-vllm-current` = vLLM **0.32.0rc1.dev301+g1ac942555.d20261016**; `prebuilt-flashinfer-current` = FlashInfer **0.7.2** (incl. `flashinfer_jit_cache_sm121a-0.7.2`). Matches Entry 210.
+- Notable commits since 2026-10-10:
+  - **09810b5d (10-11):** Qwen3.6-35B-A3B-FP8 recipe `max_num_batched_tokens` 16384→**4096**; `-fp8-dflash` recipe 16384→**8192**. Both recipes are TP=2, gpu_util 0.8, 262K ctx. Our prod uses 32768 on TP=1, so this does not transfer directly. Data point only.
+  - **ef086aea (10-11):** stop forcing expandable segments (OOM with the new autotuner).
+  - **69fcf1e9 (10-12):** b12x loader added to the regular lane (qwen3.8-flash-next only) + qwen3.8 patch-series resync.
+  - **4709188d (10-16):** qwen3.8-flash-next-nvfp4 solo/cluster recipes updated.
+  - 2f9854e5 / d7f44331 / 0bdc9c94 (10-15/16): new Nemotron recipes, recipe env overrides, GLM-5.3-Flash recipe update.
+  - No Dockerfile, DeepGEMM, or SM121 patches. No Qwen3.6-NVFP4-specific item.
+- Forum (t/386108): eugr now posts as **`eugr_nv`**. GLM-5.3-Flash-FP4-Local is now the default SVD recipe.
+
+### Check 4 — Qwen Model Check: NOT FIRED
+
+- No new Qwen LLM >10B on HF since 2026-10-10. Newest Qwen repo: `Qwen/Qwen-Image-2.1-Turbo` (image, Oct 9). No `Qwen4*` repos.
+- Qwen4: no news since the Sep 22 Apsara announcement. Open-weights tier = Qwen4-27B dense, "in training", no date. No market figure newer than the 74% (Nov 1) snapshot found.
+- Other labs, A3B class:
+  - **LiquidAI/LFM2.5-24B-A2B** (2026-10-12): 24B total / 2.45B active, hybrid (30 short-conv + 10 GQA attention), 64 experts top-4, `Lfm2MoeForCausalLM`. **Official FP8 pre-quant** (`LiquidAI/LFM2.5-24B-A2B-FP8`). 128K ctx. vLLM/SGLang supported. LFM license (non-Apache). Agentic/on-device target — likely weaker general quality than Qwen3.6. WATCH only.
+  - tencent/Hy-Memory-30B-A3B (Oct 15): memory-writer specialist. Not a drop-in.
+  - Ruled out: granite-switch-4.1-30b (dense), Nemotron-3.5-Bolt draft (0.67B), Nemotron-3.5-Super-VL-120B, DeepSeek-V4.1-Flash-1017, Ling-3.1-flash, Step-5-Preview (too large), Mistral Timestral (time-series).
+
+### Check 5 — NVIDIA Forum Check: REACHABLE from ubuntu-vm (first full read since ~Oct 10)
+
+- 120 active topics scanned (719 + 721, 4 latest pages each). **41 new topics since 2026-10-10. New ceiling: t/386112** (was t/385923).
+- Community focus has moved to Qwen3.8-Flash-Next, GLM-5.3-Flash, DeepSeek V4.1 Flash, Nemotron 3.5 on vLLM 0.29–0.32. Almost no Qwen3.6 talk.
+- Tracked threads:
+  - **t/383624** (warranty): no NVIDIA response. Oct 17 post (ronyfranca42) links an NVIDIA/open-gpu-kernel-modules issue: *"silent whole-host wedge after NVRM: NV_ERR_NO_MEMORY (_memdescAllocInternal) under sustained unified-memory pressure — no OOM, no panic, empty pstore."* **Relevant to our Entry 119/outage pattern** (concurrency-driven memory pressure).
+  - **t/385388** (b12x hard shutdown): staff (aniculescu, Oct 12) — shutdown during fieldiag = RMA-eligible. OP started RMA. Workaround: community `dgx-spark-fan-control`.
+  - **t/385262** (EC false over-temp hard power-off, RMA evidence pack): 2 posts, no replies. Matches RMA case 377365.
+  - DGX OS 7.7.0 / 7.6.1 / kernel 7.0.0-1020 / 64GB launch / driver 590: **no posts.** Field baseline: OTA 7.6.0, kernel 7.0.0-1019, driver 580.178.04.
+- ACTION/WATCH items:
+  1. **Shutdown cluster growing, staff-confirmed RMA path:** failing `partnerdiag --field` = RMA-eligible (t/385944, t/385388). Related: t/386102 (~95 °C abrupt outages, 122B inference, USB-C PD question), t/386025 (ThinkStation PGX self-off), t/385991 (thermal shutdowns at 32K+ ctx). Field mitigation: `nvidia-smi -lgc 200,2150`. Support tip: use the nvidia.custhelp.com/app/ask web form to reach a human. Aligns with Entry 157 EC/PD root cause.
+  2. **Kernel 7.0.0-1019 TCP RX corruption** (t/385733, Dell GB10): TLS "bad record mac", rising TcpInCsumErrors on r8127 + Wi-Fi. Not reproduced on 4 Sparks with 64k-page kernel. Check before any 7.0 move.
+  3. t/385673: no boot after `apt upgrade` — same hazard as our dist-upgrade rule (Entry 078).
+  4. t/386060: GPU clock stuck 500–800 MHz, no throttle reasons; detector script in post (580.178.04, kernel 6.17.0-1032).
+- INFO items:
+  - t/385994: NVIDIA published **`nvidia/Qwen3.8-Flash-Next-FP4-Local`** single-Spark checkpoint + recipe (`eugr/spark-vllm-b12x:latest`, MTP n=4, FP8 KV, 262K ctx, ~1.23M KV tokens).
+  - t/385463: Qwen3.8-Flash-Next NVFP4 single Spark = 67.5 tok/s median decode (~80 structured). Recipe: salient-data/qwen38-next-dgx-recipe.
+  - t/384765: veloGB10 v0.7.0 engine — Qwen3.8-Flash-Next 137 tok/s single Spark (code), 186 TP=2.
+  - t/385969 / t/385978: Nemotron-3.5-Super-VL-120B NVFP4 official Spark vLLM config + LiLiCorr drafter; 90/100 tool-eval-bench (vLLM 0.32.0rc1).
+  - t/384884: "DGX Spark Memory Saver" (christopher_owen) frees headroom on R580.
+  - Known builders: only eugr (`eugr_nv`) active. Oct 16 reply on t/385994 says NVIDIA appears to have hired builder Luke Alonso.
+
+### Cross-Correlated Findings
+
+1. **Qwen3.8-Flash-Next NVFP4 is the community center of gravity [Arena + SVD + Forum].** Arena (53.32 single-node hibrid48; 103.09 TP3), SVD (b12x loader + NVFP4 solo recipe, Oct 12/16), Forum (official NVIDIA FP4-Local checkpoint; 67.5 tok/s vLLM; 137 tok/s veloGB10). High confidence. It is 125B/6B-active (already tracked, Entry ~Aug 26) — a larger model than our 35B-A3B. Single-Spark vLLM decode (~67 tok/s) ≈ our current prod c1, with a bigger model. Worth a quality-per-token look; no throughput win at c1.
+2. **Nemotron-3.5 NVFP4 + drafter [Arena + SVD + Forum].** Lightning-30B-A3B DSpark 125.13 (Arena), new SVD Nemotron recipes, Super-VL-120B official config (forum). Medium confidence as a 30B-class alternative.
+3. **Spark hard-shutdown / memory-pressure wedge [Forum + our history].** Forum EC/thermal cluster + NV_ERR_NO_MEMORY wedge issue map onto our Entry 157 (EC/PD) and 2026-08-03 concurrency outages. Medium-high confidence that our unit has the same class of fault. RMA path is now staff-confirmed.
+4. **DeepGEMM SM12x [vLLM + SVD].** PR #58681 still open upstream; SVD has no new DeepGEMM change. Status quo.
+5. **LFM2.5 [HF + Arena].** LFM2.5-24B-A2B-FP8 released Oct 12; tiny LFM2.5 models top Arena. Low relevance at 2B-class; 24B-A2B is a watch item.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---|---|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch guard` | NOT FIRED — rc2/rc3 have no SM12x items |
+| `vllm_release \| DeepGEMM AND SM12` | NOT FIRED — #58681 still open |
+| `vllm_release \| #37754 OR FlashInfer+MTP crash` | NOT FIRED |
+| `svd \| new prebuilt vllm version` | NOT FIRED — still 0.32.0rc1.dev301 (Oct 16) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED |
+| `forum \| new GB10 performance/stability finding` | INFO — shutdown cluster + RMA path; NV_ERR_NO_MEMORY wedge issue; kernel 7.0.0-1019 TCP RX regression |
+
+### Overall: WORTH WATCHING
+
+No ACTION trigger fired. Landscape changes are INFO-level: forum reachable again with 41 new topics, a growing shutdown/RMA cluster that matches our known fault, a new memory-pressure wedge report, vLLM rc2/rc3 tags, and an SVD recipe change to `max_num_batched_tokens`.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — NVFP4 Arm C eval]** Target is still the Oct 16 SVD build (vLLM 0.32.0rc1.dev301, FI 0.7.2). Unchanged from Entry 210.
+2. **[WATCH — hardware fault / RMA]** Our unit has the same EC/PD shutdown class (Entry 157). Staff now confirm: failing `partnerdiag --field` = RMA-eligible. Consider one planned fieldiag run in a physical-access window. File via the nvidia.custhelp.com/app/ask web form.
+3. **[WATCH — memory-pressure wedge]** Read the NV_ERR_NO_MEMORY open-gpu-kernel-modules issue linked from t/383624. Compare with our 2026-08-03 outage evidence.
+4. **[WATCH — kernel 7.0.0-1019 TCP RX corruption]** t/385733. Block any 7.0 kernel move until resolved or ruled out for FE units.
+5. **[INFO — batched tokens]** SVD Qwen3.6-FP8 recipe dropped `max_num_batched_tokens` to 4096 (TP=2). Prod is 32768 (TP=1, Entry 073 measured). No change proposed. Note only.
+6. **[WATCH — models]** LFM2.5-24B-A2B-FP8; Nemotron-3.5-Lightning NVFP4; `tensorfold` runtime. Qwen4-27B still pending.
+7. **[CARRY-FORWARD]** qwen35 `--enforce-eager` drift (Entry 119, −27% c1) awaits decision.
+8. **[OPS]** The cloud recon routine cannot reach the forum or the GitHub API. ubuntu-vm can. Consider running forum + GitHub checks from ubuntu-vm cron.
+
+### SPARK_BASELINE.md diffs — NOT APPLIED (headless run; needs user confirmation)
+
+| Field | Current | Would become |
+|---|---|---|
+| `Last recon` | 2026-10-17 (Entry 210) | 2026-10-17 (Entry 211, weekly) |
+| `arena_top_fp8_qwen35_entry` | "No submissions since 2026-05-26" | Add: last FP8 Qwen3.6 vLLM submission = LaCroix sub1787501539423 2026-08-23, 48.28 tok/s |
+| `arena_access_method` | LIST fluctuating | LIST working 2026-10-17: 362 docs; key in `/leaderboard` + `/admin` chunks |
+| `vllm_last_checked_version` | v0.31.0 stable; 0.32.0rc1 | v0.31.0 stable; **v0.32.0rc3** (2026-10-17); #52708 closed-unmerged; #58681 open |
+| `svd_last_checked_date` | nightly-20261016 | Unchanged build; add commit 09810b5d (Qwen3.6-FP8 recipe batched tokens 16384→4096) |
+| `forum_last_checked_date` | EGRESS_BLOCKED day 7; ceiling t/385923 | **2026-10-17 full read from ubuntu-vm; ceiling t/386112**; 41 new topics |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -17192,3 +17192,96 @@ No ACTION trigger fired. Landscape changes are INFO-level: forum reachable again
 | `forum_last_checked_date` | EGRESS_BLOCKED day 7; ceiling t/385923 | **2026-10-17 full read from ubuntu-vm; ceiling t/386112**; 41 new topics |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 212 — DGX Spark Recon (2026-10-18)
+
+**Date:** 2026-10-18 UTC (cloud run; NVIDIA forum EGRESS_BLOCKED, HuggingFace API EGRESS_BLOCKED)
+**Operator:** Claude Code (spark-recon skill, daily headless run)
+**Status:** RECON — no changes made to running Spark system
+
+> ⚠ **ACTION NEEDED — vLLM v0.32.0 STABLE RELEASED TODAY (2026-10-18) WITH SM12x/DGX Spark CONTENT. Arch-guard trigger FIRED. Watch for SVD v0.32.0-based build (expect 1–3 days). New Arm C eval target = first SVD build based on v0.32.0.**
+
+### Check 1 — Arena Check: NOT FIRED
+
+- Firestore direct GET: sub1779297106805 (Stojanovic FP8 DFlash): recipeCopyCount **233** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED), tg128 c1 = **80.27 tok/s** (UNCHANGED).
+- 10% trigger (>88.30) **NOT FIRED** — static 22+ weeks (last submission 2026-05-26).
+- HuggingFace API and full LIST unreachable from cloud. Carried forward from Entry 211 (ubuntu-vm): Poveda NVFP4 118.91, Atlas NVFP4 218.85 — both UNCHANGED.
+
+### Check 2 — vLLM Releases: **ARCH-GUARD TRIGGER FIRED**
+
+- **vLLM v0.32.0 released 2026-10-18T06:50:48Z** — new stable release (prev: v0.31.0, 2026-10-05).
+- SM12x/SM121/DGX Spark content in v0.32.0:
+
+| PR | Description |
+|---|---|
+| #46963 | NVFP4 KV cache on SM8x and SM12x |
+| #60452 | XQA decode on SM12x |
+| #58495 | SM120 TP configs |
+| #58877 | OAI Triton MXFP4 MoE on SM12x |
+| #59604 | ModelOpt IQ2 quants on SM120/SM121 |
+| #59753/#59632/#60027 | DGX Spark Qwen4Exp GEMM plans |
+
+- MTP: MTP index sharing restored (#61079); fused DeepSeek V4 + MTP drafting (#58463); Mamba prefill checkpoints with MTP. These are not SM121-specific but relevant to our MTP=2 config.
+- **PR #58681** (DeepGEMM SM12x alignment fix): STILL OPEN as of 2026-10-15 per Entry 211. Cannot confirm inclusion in v0.32.0 without reading the full release body — SVD already carries the fix locally since Oct 9.
+- Breaking changes: drops Python 3.10; restricts default CORS origins; removes cascade attention and torch.compile sequence parallelism.
+
+### Check 3 — spark-vllm-docker Check: NO NEW BUILD (v0.32.0 stable expected soon)
+
+- Current: `prebuilt-vllm-current` = vLLM **0.32.0rc1.dev301** (Oct 16), FlashInfer **0.7.2** (Oct 16). Unchanged.
+- Recent commits since Entry 211 (Oct 17): none found after 0bdc9c9 Oct 16.
+- v0.32.0 stable dropped today — SVD typically rebuilds within 1–3 days of stable releases.
+- No new SM121/b12x/NVFP4-specific commits visible in top-10.
+
+### Check 4 — Qwen Model Check: NOT FIRED
+
+- HuggingFace API EGRESS_BLOCKED from cloud; web search: no new Qwen LLM >10B in October 2026.
+- Qwen4-27B: still "in training" (Sep 22 Apsara announcement), no weights on HF/ModelScope as of Oct 18.
+- No Qwen3.8-35B-A3B or Qwen4-35B-A3B variants found.
+- Trigger NOT FIRED.
+
+### Check 5 — NVIDIA Forum Check: EGRESS_BLOCKED (carried forward from Entry 211)
+
+- Forum JSON unreachable from cloud (EGRESS_BLOCKED). No new findings for Oct 18.
+- Carried forward: last full read 2026-10-17 (Entry 211, ubuntu-vm), ceiling t/386112. All Oct 10–17 findings stand.
+- Web search: DGX Spark Windows UEFI CA firmware addition (sign of future Windows support); Petronella Tech (Sep 25) 8-unit firmware field test (+4–8% LLM serving). No new actionable Oct 18 content.
+
+### Cross-Correlated Findings
+
+1. **vLLM v0.32.0 stable today + SVD near-stable (dev301, Oct 16) [vLLM + SVD].** SVD was built 2 days before the stable release. Expect SVD to ship a v0.32.0-based build within 1–3 days. The SM12x PRs (#46963, #60452, #58877, #59604) are additive to what dev301 already had. High confidence this is the next Arm C eval target.
+2. **DeepGEMM SM12x (#58681) status in v0.32.0 unclear [vLLM + SVD].** PR still OPEN Oct 17; SVD has local patch since Oct 9 (`0dd7c01f`). Whether #58681 landed in v0.32.0 requires reading the full release body or the commit log — check at eval time.
+3. **Arena FP8 frontier static, no threats [Arena only].** 22+ weeks since last FP8 vLLM submission. No cross-correlation.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---|---|
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | **FIRED — v0.32.0 stable with SM12x NVFP4 KV, XQA, MXFP4 MoE, IQ2, DGX Spark GEMM** |
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 unchanged |
+| `vllm_release \| DeepGEMM AND SM12` | UNCONFIRMED — #58681 OPEN Oct 17; need v0.32.0 full body check |
+| `vllm_release \| #37754 OR FlashInfer+MTP crash` | NOT FIRED |
+| `svd \| new prebuilt vllm version` | NOT FIRED — still dev301 (Oct 16); v0.32.0-based build expected |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED |
+| `forum \| new GB10 performance/stability finding` | EGRESS_BLOCKED — carried forward from Entry 211 |
+
+### Overall: ACTION NEEDED
+
+**vLLM v0.32.0 stable (released 2026-10-18) contains multiple SM12x/SM121/DGX Spark-targeted PRs and fires the arch-guard trigger.** This is the highest-confidence signal since the DeepGEMM alignment fix discovery (Entry 186/190). SVD will need to rebuild against v0.32.0; that build will become the new Arm C eval target.
+
+### Recommendations
+
+1. **[ACTION — ARCH-GUARD] vLLM v0.32.0 stable released today** — SM12x NVFP4 KV (#46963), XQA decode (#60452), SM12x MXFP4 MoE (#58877), SM120/SM121 IQ2 (#59604), DGX Spark Qwen4Exp GEMM (#59753). **Watch `eugr/spark-vllm-docker` for a v0.32.0-based `prebuilt-vllm-current` build (expect Oct 19–21). When it ships, that is the new Arm C eval target.** Read the v0.32.0 full release notes to confirm PR #58681 inclusion before scheduling eval.
+2. **[CARRY-FORWARD — NVFP4 Arm C eval]** NVFP4 eval gate cleared (Entry 209). Target = first v0.32.0-based SVD build (supersedes Oct 16 dev301 target). Use `nvidia/Qwen3.6-35B-A3B-NVFP4` only (NOT unsloth mirror).
+3. **[WATCH — PR #58681]** DeepGEMM SM12x alignment OPEN as of Oct 17. Verify inclusion in v0.32.0 at eval time. SVD local patch (`0dd7c01f`) already present, so eval results are clean regardless.
+4. **[CARRY-FORWARD — hardware]** OTA hold persists (Entry 209). RMA path staff-confirmed (Entry 211). All Entry 211 recs unchanged.
+5. **[OPS]** Cloud routine cannot reach HuggingFace API or NVIDIA forum. Forum and HF checks should be run from ubuntu-vm for completeness.
+
+### SPARK_BASELINE.md changes applied
+
+| Field | Old | New |
+|---|---|---|
+| `Last recon` | 2026-10-17 (Entry 210) | 2026-10-18 (Entry 212) |
+| `vllm_last_checked_version` | v0.31.0 stable; v0.32.0rc3 (Oct 17) | **v0.32.0 stable (2026-10-18)**; v0.31.0 (2026-10-05) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

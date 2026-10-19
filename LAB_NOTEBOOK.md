@@ -17285,3 +17285,106 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `vllm_last_checked_version` | v0.31.0 stable; v0.32.0rc3 (Oct 17) | **v0.32.0 stable (2026-10-18)**; v0.31.0 (2026-10-05) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 213 - DGX Spark Recon (2026-10-19)
+**Date:** 2026-10-19 11:15 UTC
+**Operator:** Claude Code (spark-recon skill, scheduled daily)
+**Status:** RECON — no changes made to running system
+
+### Check 1 — Arena Leaderboard: NO CHANGE
+
+- Top FP8 vLLM (single-node): **80.27 tok/s** (sub1779297106805, Stojanovic, vllm-node-tf5) — UNCHANGED. recipeCopyCount 233, updateTime 2026-10-02 (unchanged from prior entries).
+- 10% trigger threshold (>88.30 tok/s): **NOT FIRED**. Gap remains 8.03 tok/s.
+- NVFP4 reference (Poveda, sub1782803609803): 118.91 tok/s UNCHANGED. recipeCopyCount bumped 125 → **126** (metadata touch 2026-10-18T21:38Z, ~90 sec after Atlas batch update — automated sweep, not a new benchmark run).
+- Atlas reference (Rawat, sub1779495971526): 218.85 tok/s UNCHANGED. recipyCopyCount 173 → **175** (bumped 2026-10-18T21:37Z).
+- Arena site (spark-arena.com): ENOTFOUND from cloud — consistent with prior egress blocks on this domain. Firestore REST API remained reachable.
+- FP8 vLLM frontier static ~23 weeks (last submission 2026-05-26). No new submissions visible.
+
+### Check 2 — vLLM Release Check: NO NEW RELEASE
+
+- Latest release: **v0.32.0** (released 2026-10-18) — already logged in Entry 212 as ACTION NEEDED / arch-guard FIRED.
+- No release newer than v0.32.0 as of 2026-10-19.
+- Classification: NO NEW RELEASE (arch-guard trigger already fired and logged Entry 212).
+- PRs #39138, #40099 (Gemma4): not mentioned in v0.32.0 notes; presumed merged in earlier releases given current PR numbering (~#58k–#61k range).
+- Issue #41063 (DeepGEMM): not mentioned in v0.32.0 notes; presumed closed given extensive DeepGEMM work in v0.30–v0.32.
+- "Qwen4Exp" in vLLM (#59753/#59532/#60027): confirmed = **Qwen3.8-Flash-Next** (see Check 4). DGX Spark GEMM kernel work for that model, not a new Qwen4 model weight release.
+
+### Check 3 — spark-vllm-docker Check: NO NEW BUILD
+
+- Current: `prebuilt-vllm-current` = `0.32.0rc1.dev301+g1ac942555.d20261016` (nightly-20261016, pushed 2026-10-16 13:11 UTC) — UNCHANGED.
+- Latest commit: `0bdc9c9` 2026-10-16 19:48 UTC (GLM-5.3-Flash recipe update for B12X lane). No commits or builds after Oct 16.
+- FlashInfer: 0.7.2-7cf7517a-d20261016 — unchanged.
+- vLLM v0.32.0 stable released yesterday (Oct 18). SVD v0.32.0-based build expected within 1–3 days (Oct 19–21 window). **When it ships, it becomes the new Arm C eval target.**
+- Recent recipe additions (already in nightly-20261016): Nemotron 3.5 Bolt 74B-A9B-24GB (DFlash), Nemotron 3.5 Super VL 120B NVFP4 (DFlash/Mamba), GLM-5.3-Flash NVFP4 (B12X cluster only), Qwen3.8-Flash-Next NVFP4 (solo/cluster).
+- `qwen3.6-35b-a3b-nvfp4.yaml` and `qwen3.6-35b-a3b-nvfp4-no-mtp.yaml` remain in the recipe inventory — NVFP4 eval path still intact.
+
+### Check 4 — Qwen Model Check: NOT FIRED
+
+- **Qwen4 open weights: NO.** Still "in training" (Sep 22 Apsara Conference). Unverified Reddit claim of end-of-October release; Alibaba has NOT confirmed. Watch daily this week.
+- **Qwen3.7: API-only (no open weights).** Qwen3.7-Max (May 20) and Qwen3.7-Plus (Jun 1) are proprietary API models. Not open-source.
+- **"Qwen4Exp" = Qwen3.8-Flash-Next** (released Aug 26, 2026). Architecture: 125B total / 6B active, 48 layers (36 GDN + 12 QSA), 512 experts, ~173 GiB FP8. Multi-GPU only — NOT Spark-feasible as a single-node model. The "Qwen4Exp" label in vLLM reflects it being a Qwen4 architecture preview.
+- **Qwen3.8-27B**: dense (not MoE), 28B, VLM, Apache 2.0, released Aug 14. Not a throughput upgrade path.
+- No other new ~30-40B MoE / ~3B active models from any lab found.
+- **Qwen3.6-35B-A3B-FP8 remains the optimal single-Spark production fit.** No drop-in upgrade available today.
+
+### Check 5 — NVIDIA Forum Check: EGRESS_BLOCKED (WebSearch fallback)
+
+- Forum EGRESS_BLOCKED day 8 (cycle started Oct 11). Direct JSON API: ENOTFOUND.
+- **9+ new threads found above t/385923 ceiling** (Oct 17–19) via WebSearch:
+
+| Thread | Title / Summary | Date | Class |
+|--------|----------------|------|-------|
+| t/385994 | NVIDIA official Qwen3.8-Flash-Next checkpoint — better quality vs community builds, slower gen | Oct 17–18 | INFO |
+| t/386098 | DeepSeek V4.1-Flash-1017 discussion | Oct 18 | INFO |
+| t/386121 | DeepSeek-V4.1-Flash-1017 TensorFold + vLLM recipe thread | Oct 18 | INFO |
+| t/386130 | **RAIDFLASH: 2.5× decode on 2×GB10 GLM-5.3-Flash (TensorFold engine)** | Oct 18 | INFO |
+| t/386166 | ASUS GX10 firmware stuck on logo (not DGX FE, different SKU) | Oct 18–19 | SKIP |
+| t/386285 | 4×GB10 China OEM switchless: 90 tok/s c1, 296 tok/s c8, 1M prefill 5.8 min | Oct 19 | INFO |
+| t/386295 | DeepSeek-V4.1-Flash-1017 EXL3 2.75 bpw on 2× Spark — ready-to-pull image, 320K ctx, vision+tools | Oct 18 | INFO |
+
+- **New forum ceiling: t/386295** (or higher; WebSearch may not have captured all threads).
+- **t/383624 warranty** (expired Oct 14): still unresolved. No NV CAS response. Separate finding: NV confirmed replacements inherit ORIGINAL warranty term, not new. RMA cluster now 4+ active threads (t/383624, t/385716, t/385262, t/385923); one RMA pending shipment with original warranty expiring Oct 29.
+- **PR #52708 status** (SM121 to published vLLM build targets — upstream wheels usable on GB10 natively): merge status UNCONFIRMED in forum/search results. Critical to check at v0.32.0 eval time.
+- vLLM v0.32.0 community reaction: not yet visible (released same day as latest forum activity).
+- RAIDFLASH tool (t/386130): new technique/tool name claiming 2.5× decode via TensorFold engine on 2×GB10. Methodology not yet read — worth checking if detail becomes accessible.
+
+### Cross-Correlated Findings
+
+1. **v0.32.0 SM12x content confirmed across Check 2 + Check 5** [already ACTION NEEDED in Entry 212]: vLLM release notes (Check 2) and forum community discussion (Check 5) both confirm SM12x NVFP4 KV / XQA / MXFP4 MoE. High confidence. SVD v0.32.0 build pending (Check 3 shows no build yet).
+2. **Qwen3.8-Flash-Next / "Qwen4Exp" consistent across Check 3 + Check 4 + Check 5**: SVD recipes (qwen3.8-flash-next NVFP4 recipe in Check 3), model check (125B multi-GPU only in Check 4), forum discussion NVIDIA official checkpoint (Check 5) all reference the same model. Not single-Spark-feasible.
+3. **DeepSeek V4.1-Flash-1017 in forum (Check 5) + SVD recipes (Check 3)**: New model generating community recipe work. Not a Qwen3.6-FP8 replacement but emerging parallel ecosystem activity.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 tok/s, UNCHANGED |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | CARRIED FORWARD (fired Entry 212 Oct 18; no new release today) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261016 unchanged; v0.32.0-based build expected Oct 19–21 |
+| `huggingface \| Qwen4 open weights` | NOT FIRED — still in training; rumored end-of-October, watch daily |
+| `forum \| new GB10 performance/stability finding` | EGRESS_BLOCKED — WebSearch fallback; RAIDFLASH tool noted (INFO) |
+
+### Overall: WORTH WATCHING
+
+No new releases, Arena unchanged, SVD unchanged. Primarily a day of waiting: for SVD's v0.32.0-based build (expected Oct 19–21), for Qwen4 weights (rumored end-of-October), and for PR #52708 merge confirmation. Forum shows active community work on DeepSeek V4.1 and GLM-5.3 but nothing production-actionable for the single-Spark Qwen3.6-FP8 setup.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1 — watch daily] SVD v0.32.0-based build**: Watch `eugr/spark-vllm-docker` for a build based on vLLM v0.32.0 stable (expected Oct 19–21 window). When it ships, it becomes the new Arm C eval target. Verify PR #52708 merge status in the release notes at that time.
+2. **[CARRY-FORWARD — PRIORITY 2 — watch daily this week] Qwen4-27B weights**: Unverified rumor of end-of-October open-weight release. If a 27B MoE / ~3B active variant appears, it would be production-relevant. Check HuggingFace daily.
+3. **[CARRY-FORWARD — NVFP4 Arm C eval]** NVFP4 gate cleared (Entry 209). Use `nvidia/Qwen3.6-35B-A3B-NVFP4` only (NOT unsloth mirror, Entry 207). Target eval image = first v0.32.0-based SVD build (supersedes nightly-20261016).
+4. **[MONITOR — RAIDFLASH]** t/386130 claims 2.5× decode via TensorFold on 2×GB10 GLM-5.3-Flash. Methodology unclear from search. Read when forum egress unblocks.
+5. **[HARDWARE — WARRANTY]** t/383624 case still open post-expiry (Oct 14). RMA cluster at 4+ units. No action needed but track for pattern signals.
+6. **[OPS]** EGRESS_BLOCKED day 8 for cloud → forum. HF API also unreachable. Run full forum + HF checks from ubuntu-vm for completeness.
+
+### SPARK_BASELINE.md changes applied
+
+| Field | Old | New |
+|-------|-----|-----|
+| `Last recon` | 2026-10-18 (Entry 212) | 2026-10-19 (Entry 213) |
+| `forum_last_checked_date` | 2026-10-17 | 2026-10-19 (EGRESS_BLOCKED day 8; ceiling t/386295) |
+| `svd_last_checked_date` | 2026-10-17 | 2026-10-19 (NO NEW BUILD; nightly-20261016 still current) |
+| `sub1782803609803 recipeCopyCount` | 125 | 126 (+1, metadata sweep Oct 18 — performance value unchanged) |
+| `sub1779495971526 recipyCopyCount` | 173 | 175 (+2, metadata sweep Oct 18 — performance value unchanged) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

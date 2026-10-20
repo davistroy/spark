@@ -17388,3 +17388,91 @@ No new releases, Arena unchanged, SVD unchanged. Primarily a day of waiting: for
 | `sub1779495971526 recipyCopyCount` | 173 | 175 (+2, metadata sweep Oct 18 — performance value unchanged) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 214 - DGX Spark Recon (2026-10-20)
+
+### Check 1 — Arena Check: UNCHANGED
+
+- **sub1779297106805** (Stojanovic FP8, `Qwen/Qwen3.6-35B-A3B-FP8`, vLLM DFlash): tg128 c1 = **80.27 tok/s** UNCHANGED. updateTime 2026-10-02T07:37:35.719327Z (unchanged from Entry 213). recipeCopyCount **233** (UNCHANGED). 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~24 weeks (last submission 2026-05-26).
+- **sub1782803609803** (Poveda NVFP4): 118.91 tok/s UNCHANGED. updateTime **2026-10-20T09:15:40.085983Z** (bumped today — automated metadata sweep, performance unchanged). recipeCopyCount **127** (+1 from 126).
+- No new FP8 or NVFP4 Qwen3.6-35B-A3B single-node submissions detected.
+
+### Check 2 — vLLM Release Check: NO NEW RELEASE (arch-guard carried forward)
+
+- **v0.32.0 remains the latest stable** (released 2026-10-18 — arch-guard already fired Entry 212). No v0.33.0.
+- v0.31.0 (2026-10-05) retroactive note: included Gemma4 "DSpark adaptive verification", NoPE sparse MLA on FlashInfer SM120 backend, MXFP4 support for SM100. Not SM121-specific but confirms upstream SM12x investment.
+- **Gemma4 PRs #39138/#40099**: Cannot confirm specific PR status from search results. vLLM docs have Gemma4 API pages suggesting model support is present; unconfirmed for these PR numbers specifically. Mark for direct check at next ubuntu-vm session.
+- **DeepGEMM issue #41063**: Status unconfirmed from search. Mark for direct check.
+- Overall: CARRIED FORWARD from Entry 212. No new arch-guard trigger today.
+
+### Check 3 — spark-vllm-docker Check: NO NEW BUILD (window now overdue)
+
+- Current: `prebuilt-vllm-current` = `0.32.0rc1.dev301+g1ac942555.d20261016` (nightly-20261016, pushed 2026-10-16) — **UNCHANGED**.
+- FlashInfer: 0.7.2-7cf7517a-d20261016 — unchanged.
+- Expected v0.32.0-based build window was Oct 19–21. **Day 2 of window (Oct 20) passed with no new build.** Window may slip to Oct 21–22.
+- Recipe inventory unchanged: `qwen3.6-35b-a3b-nvfp4.yaml` still present; NVFP4 eval path intact.
+
+### Check 4 — Qwen Model Check: NOT FIRED
+
+- **Qwen4 open weights: NOT RELEASED.** Still "in training" (Sep 22 Apsara). "End of October" rumor is unverified; no Alibaba confirmation. Watch daily this week.
+- **Qwen3.7**: API-only (proprietary). No open-weights variant.
+- No new ~30-40B MoE / ~3B-active models from any lab.
+- Qwen3.6-35B-A3B-FP8 remains optimal single-Spark fit.
+
+### Check 5 — NVIDIA Forum Check: EGRESS_BLOCKED day 9 (WebSearch fallback)
+
+- Forum direct JSON API: ENOTFOUND (cloud egress blocked, day 9, cycle started Oct 11).
+- **NEW threads found above t/386295 ceiling** (Oct 19–20):
+
+| Thread | Title / Summary | Date | Class |
+|--------|----------------|------|-------|
+| t/386322 | **DGX Spark EOL?** — resellers claiming FE 128GB discontinued; OEM GB10 64GB reportedly coming Oct 2026 | Oct 19–20 | ⚠️ HARDWARE |
+| t/386377 | MiniMax M3.1 Flash (Bunny Speed) — new model thread, details inaccessible | Oct 20 | INFO |
+
+- **t/386322 detail**: A buyer reports resellers saying the NVIDIA-branded 128GB FE unit is "EOL" and won't be restocked. A reply states OEM GB10 systems are NOT discontinued and a 64GB OEM variant is expected "this month" (October 2026). **No official NVIDIA EOL announcement found.** The NVIDIA Founders Edition 128GB unit appears supply-constrained/discontinued at retail; OEM GB10 ecosystem continues.
+- t/385923: RMA warranty expires Oct 29. Still no NV CAS resolution; replacement not yet shipped.
+- **New forum ceiling: t/386377** (or higher; WebSearch may not have captured all threads).
+
+### Cross-Correlated Findings
+
+1. **SVD build still pending (Check 3) + v0.32.0 already released (Check 2)**: Build is overdue relative to the Oct 19–21 forecast. No new technical blocker identified — delay appears operational. Confidence: high.
+2. **DGX Spark FE EOL signal (Check 5 only)**: Reseller claims are forum-only, no official confirmation from NVIDIA in any check. Single-source. Low confidence as a hardware lifecycle signal, but worth monitoring for production planning.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 tok/s, UNCHANGED (~24 weeks static) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | CARRIED FORWARD (fired Entry 212 Oct 18; v0.32.0 still latest, no v0.33.0) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261016 unchanged; expected build window slipping past Oct 20 |
+| `huggingface \| Qwen4 open weights` | NOT FIRED — still in training; end-of-October rumor unverified |
+| `forum \| new GB10 performance/stability finding` | EGRESS_BLOCKED — WebSearch fallback; DGX Spark FE EOL rumors noted (HARDWARE, unconfirmed) |
+
+### Overall: WORTH WATCHING
+
+No new releases, Arena unchanged, SVD build still pending (now past start of expected window). Key new signal: DGX Spark FE EOL rumors from resellers (unconfirmed, hardware planning relevance). Qwen4 end-of-October window closing; watch daily. MiniMax M3.1 Flash thread appeared; details inaccessible.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1 — watch daily] SVD v0.32.0-based build**: Expected window has slipped past Oct 19–20. Monitor `eugr/spark-vllm-docker` releases daily. When it ships, verify PR #52708 merge status in release notes.
+2. **[CARRY-FORWARD — PRIORITY 2 — watch daily this week] Qwen4-27B weights**: End-of-October rumor window closing (11 days left). Check HuggingFace daily.
+3. **[NEW — HARDWARE — monitor] DGX Spark FE EOL rumors**: t/386322 reports resellers citing EOL for 128GB FE unit. No official NVIDIA statement. OEM GB10 64GB reportedly still coming. Track for production planning — if confirmed, affects hardware replacement/expansion strategy.
+4. **[CARRY-FORWARD — NVFP4 Arm C eval]** Target = first v0.32.0-based SVD build. Use `nvidia/Qwen3.6-35B-A3B-NVFP4` only.
+5. **[MONITOR] MiniMax M3.1 Flash (t/386377)**: New thread on forum; details inaccessible from cloud. Read when egress unblocks.
+6. **[CARRY-FORWARD — MONITOR] RAIDFLASH (t/386130)**: 2.5× decode claim on 2×GB10 via TensorFold. Read when forum egress unblocks.
+7. **[OPS]** EGRESS_BLOCKED day 9 for cloud → forum. Run full forum + HF + GitHub API checks from ubuntu-vm for completeness (Gemma4 PRs #39138/#40099, DeepGEMM issue #41063).
+
+### SPARK_BASELINE.md changes applied
+
+| Field | Old | New |
+|-------|-----|-----|
+| `Last recon` | 2026-10-19 (Entry 213) | 2026-10-20 (Entry 214) |
+| `forum_last_checked_date` | 2026-10-19 | 2026-10-20 (EGRESS_BLOCKED day 9; ceiling t/386377) |
+| `svd_last_checked_date` | 2026-10-19 | 2026-10-20 (NO NEW BUILD; nightly-20261016 still current; window slipping) |
+| `sub1782803609803 recipeCopyCount` | 126 | 127 (+1, metadata sweep Oct 20 — performance unchanged) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

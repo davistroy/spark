@@ -17476,3 +17476,82 @@ No new releases, Arena unchanged, SVD build still pending (now past start of exp
 | `sub1782803609803 recipeCopyCount` | 126 | 127 (+1, metadata sweep Oct 20 — performance unchanged) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 215 - DGX Spark Recon (2026-10-21)
+**Date:** 2026-10-21 11:20 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### Check 1 — Arena Check: NO CHANGE
+
+- **sub1779297106805** (Stojanovic FP8, `Qwen/Qwen3.6-35B-A3B-FP8`, vLLM DFlash): tg128 c1 = **80.27 tok/s** UNCHANGED. updateTime 2026-10-02T07:37:35.719327Z (UNCHANGED — 19 days no update). recipeCopyCount **233** (UNCHANGED). 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~25 weeks (last submission 2026-05-26).
+- **sub1782803609803** (Poveda NVFP4): 118.91 tok/s UNCHANGED. updateTime 2026-10-20T09:15:40.085983Z (same as Entry 214). recipeCopyCount **127** (UNCHANGED from Entry 214).
+- **sub1779495971526** (Atlas overall): 218.85 tok/s UNCHANGED. updateTime 2026-10-18T21:37:29.867343Z (same as Entry 214). recipyCopyCount **175** (UNCHANGED).
+- No new FP8 or NVFP4 Qwen3.6-35B-A3B single-node submissions detected.
+
+### Check 2 — vLLM Release Check: NO NEW RELEASE (arch-guard carried forward)
+
+- **v0.32.0 remains the latest stable** (PyPI-confirmed). No v0.33.0.
+- Arch-guard already fired Entry 212 (Oct 18). No new trigger today.
+- vllm.ai domain unreachable from cloud; confirmed via PyPI JSON API.
+
+### Check 3 — spark-vllm-docker Check: ⚠️ NIGHTLY CI GAP (5 days)
+
+- Docker Hub (`eugr/spark-vllm`): newest tag = **nightly-20261016** (pushed 2026-10-16 13:11 UTC) — UNCHANGED from Entry 214.
+- **NEW FINDING:** Nightly builds appear to have stopped after Oct 16. Docker Hub shows no nightly-20261017 through nightly-20261021. This is a 5-day gap in what is normally a daily CI pipeline.
+- Possible causes: pre-release freeze for v0.32.0 packaging, CI issue, or deliberate pause. No GitHub releases found for v0.32.0-based SVD build.
+- No v0.32.0-based prebuilt release. Window forecast from Entry 214 (Oct 19–21) has passed without a build.
+
+### Check 4 — Qwen Model Check: NOT FIRED
+
+- **Qwen4 open weights: NOT RELEASED.** End-of-October rumor window is closing (10 days left in Oct). No Alibaba confirmation.
+- Qwen3.8-Flash-Next (Aug 26 open weights): previously known; evaluated and rejected at Entry 165 for NVFP4 eval path incompatibility.
+- No new ~30-40B MoE / ~3B-active models from any lab detected.
+- `Qwen/Qwen3.6-35B-A3B-FP8` remains optimal single-Spark fit.
+
+### Check 5 — NVIDIA Forum Check: EGRESS_BLOCKED day 10 (WebSearch fallback)
+
+- Forum direct JSON API: ENOTFOUND (cloud egress blocked, day 10 — cycle started Oct 11; ceiling remains t/386377 from Entry 214).
+- WebSearch fallback yielded no new DGX Spark performance threads from Oct 21.
+- DGX Spark FE EOL rumors (t/386322) carry forward from Entry 214 — no new official NVIDIA statement found.
+
+### Cross-Correlated Findings
+
+1. **SVD nightly CI gap (Check 3 only — single source):** 5 days without a nightly build on Docker Hub is unusual. Could indicate a pre-release packaging freeze ahead of the v0.32.0 SVD build, or a CI issue. Low confidence without GitHub commit or forum confirmation. Monitor daily.
+2. **Qwen4 end-of-October window (Check 4 only — single source):** Now Oct 21, 10 days remain. Daily check remains warranted.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 tok/s, UNCHANGED (~25 weeks static) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | CARRIED FORWARD (fired Entry 212 Oct 18; v0.32.0 still latest, no v0.33.0) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261016 still newest; 5-day CI gap noted |
+| `huggingface \| Qwen4 open weights` | NOT FIRED — still in training; end-of-October window closing |
+| `forum \| new GB10 performance/stability finding` | EGRESS_BLOCKED day 10 — no new findings via WebSearch |
+
+### Overall: WORTH WATCHING
+
+Arena unchanged (~25 weeks static), vLLM v0.32.0 still latest, SVD nightly CI appears paused (5-day gap since Oct 16 — possible pre-release freeze ahead of v0.32.0 SVD packaging). Qwen4 window closing. No action items for Spark system today.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1 — watch daily] SVD v0.32.0-based build**: 5-day nightly CI gap may signal imminent v0.32.0 release packaging. Monitor `eugr/spark-vllm-docker` releases and Docker Hub daily. When v0.32.0-based build ships, target NVFP4 eval per Entry 212 arch-guard action plan.
+2. **[CARRY-FORWARD — PRIORITY 2 — watch daily this week] Qwen4-27B weights**: End-of-October window — 10 days remain. Check HuggingFace daily.
+3. **[CARRY-FORWARD — HARDWARE — monitor] DGX Spark FE EOL rumors**: t/386322 reseller claim, no official NVIDIA statement. Monitor for hardware planning.
+4. **[CARRY-FORWARD — NVFP4 Arm C eval]** Target = first v0.32.0-based SVD build. Use `nvidia/Qwen3.6-35B-A3B-NVFP4` only.
+5. **[CARRY-FORWARD — MONITOR] MiniMax M3.1 Flash (t/386377)**: Details inaccessible from cloud. Read when egress unblocks.
+6. **[CARRY-FORWARD — MONITOR] RAIDFLASH (t/386130)**: 2.5× decode claim on 2×GB10. Read when forum egress unblocks.
+7. **[OPS]** EGRESS_BLOCKED day 10 for cloud → forum. Run full forum + HF + GitHub API checks from ubuntu-vm (Gemma4 PRs #39138/#40099, DeepGEMM issue #41063, SVD CI gap investigation).
+
+### SPARK_BASELINE.md changes applied
+
+| Field | Old | New |
+|-------|-----|-----|
+| `Last recon` | 2026-10-20 (Entry 214) | 2026-10-21 (Entry 215) |
+| `forum_last_checked_date` | 2026-10-20 | 2026-10-21 (EGRESS_BLOCKED day 10; ceiling unchanged t/386377) |
+| `svd_last_checked_date` | 2026-10-20 | 2026-10-21 (NO NEW BUILD; 5-day CI gap since nightly-20261016; possible pre-release freeze) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -17645,3 +17645,83 @@ Arena unchanged (~25+ weeks static), vLLM v0.32.0 remains latest with no success
 | `forum_last_checked_date` | 2026-10-21 (Entry 215, EGRESS_BLOCKED day 10) | 2026-10-22 (Entry 216, EGRESS_BLOCKED day 11) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 217 - DGX Spark Recon (2026-10-23)
+**Date:** 2026-10-23 11:16 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### Check 1 — Arena Check: NO CHANGE (all 3 docs UNCHANGED)
+
+- **sub1779297106805** (Stojanovic FP8, `Qwen/Qwen3.6-35B-A3B-FP8`, vLLM+DFlash): tg128 c1 = **80.27 tok/s** UNCHANGED. updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED — 21 days no update). recipeCopyCount **233** (UNCHANGED). 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~25+ weeks (last submission 2026-05-26).
+- **sub1782803609803** (Poveda NVFP4): 118.91 tok/s UNCHANGED. updateTime **2026-10-22T11:22:57.885743Z** (automated metadata sweep Oct 22 post-Entry 216 check window). recipeCopyCount **128** (UNCHANGED — no new copy). Same automated sweep pattern as prior entries.
+- **sub1779495971526** (Atlas overall): 218.85 tok/s UNCHANGED. updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED). recipyCopyCount **175** (UNCHANGED).
+- No new FP8 or NVFP4 single-node Qwen3.6-35B-A3B submissions.
+
+### Check 2 — vLLM Release Check: NO NEW RELEASE (arch-guard carried forward)
+
+- **v0.32.0 remains the latest stable** (released Oct 18). No v0.33.0 found. GitHub API 403; WebSearch confirms.
+- Arch-guard already fired Entry 212 (Oct 18) for SM12x NVFP4 KV #46963, XQA decode #60452, SM12x MXFP4 MoE #58877, IQ2 SM120/SM121 #59604, DGX Spark Qwen4Exp GEMM #59753. No new arch-guard trigger today.
+- PR #40099 (Gemma4): OPEN, stalled ~31+ days (GitHub API 403; no new WebSearch data). DeepGEMM issue #41063: status unconfirmed.
+
+### Check 3 — spark-vllm-docker Check: ⚠️ NIGHTLY CI GAP EXTENDS TO 7 DAYS
+
+- Docker Hub (`eugr/spark-vllm`): newest tag = **nightly-20261016** (pushed 2026-10-16 13:11:30 UTC) — UNCHANGED from Entry 216.
+- **7-day CI gap confirmed** (nightly-20261017 through nightly-20261023 absent). Was 6 days at Entry 216.
+- GitHub releases API: 403. No v0.32.0-based SVD build confirmed.
+- Arm C eval target remains: **nightly-20261016** (carries SM12x DeepGEMM fix + B12X FlashInfer via `--exp-b12x`).
+
+### Check 4 — Qwen Model Check: NOT FIRED (8 days remain in end-of-Oct window)
+
+- **Qwen4 open weights: NOT RELEASED.** End-of-October window — 8 days remain (Oct 24-31). No Alibaba announcement.
+- HuggingFace ENOTFOUND from cloud (proxy egress). WebSearch: Oct 13 source confirms no Qwen4 repo on HuggingFace Qwen org.
+- Qwen3.8-27B (dense, Aug 13-14, Apache 2.0) = current open 27B; NOT a production upgrade path (rejected Entry 165).
+- One unverified WebSearch source suggests Dec 2026 open-weights; note for context only.
+- No Qwen3.7, Qwen3.9, or Qwen4-35B-A3B MoE models found.
+
+### Check 5 — NVIDIA Forum Check: EGRESS_BLOCKED day 12
+
+- Forum direct JSON API (categories 719, 721): ENOTFOUND (cloud egress blocked, day 12 — cycle from Oct 11). Ceiling unchanged: t/386377.
+- WebSearch fallback: no new DGX Spark performance/driver/firmware threads above ceiling found.
+- Carry-forward: t/386322 DGX Spark FE EOL rumors (unconfirmed), t/386377 MiniMax M3.1 Flash (inaccessible), t/383624 warranty expired Oct 14.
+
+### Cross-Correlated Findings
+
+1. **SVD nightly CI gap day 7 (Docker Hub + historical pattern, Check 3):** nightly-20261016 still newest; no builds Oct 17-23. Consistent with pre-v0.32.0 SVD packaging freeze theory; no disconfirming evidence.
+2. **Qwen4 end-of-October window closing (Check 4 + WebSearch):** 8 days remain. No HuggingFace repo, no Alibaba announcement. Unverified "Dec 2026" rumor beginning to surface in WebSearch results.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 tok/s UNCHANGED (~25+ weeks static) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | CARRIED FORWARD (fired Entry 212 Oct 18; v0.32.0 still latest, no v0.33.0) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261016 still newest; 7-day CI gap |
+| `huggingface \| Qwen4 open weights` | NOT FIRED — still in training; 8 days remain in end-of-Oct window |
+| `forum \| new GB10 performance/stability finding` | EGRESS_BLOCKED day 12 — no new findings via WebSearch |
+
+### Overall: WORTH WATCHING
+
+Arena unchanged (~25+ weeks static), vLLM v0.32.0 remains latest with no successor. SVD nightly CI gap extends to day 7 — likely pre-release freeze before v0.32.0-based SVD packaging; NVFP4 Arm C eval gate pending first v0.32.0 build. Qwen4 end-of-October window has 8 days remaining. No new action items — arch-guard from Entry 212 is the active gate.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — PRIORITY 1 — watch daily] SVD v0.32.0-based build**: 7-day CI gap. When first v0.32.0-based nightly drops, target NVFP4 Arm C eval using `--exp-b12x` flag (B12X/FlashInfer SM12x alignment fix included since Oct 7). Use `nvidia/Qwen3.6-35B-A3B-NVFP4` only.
+2. **[CARRY-FORWARD — PRIORITY 2 — watch daily this week] Qwen4-27B weights**: End-of-October window — 8 days remain. Check HuggingFace Qwen org daily. Note: unverified "Dec 2026" rumor beginning to appear; adjust expectations if window closes without release.
+3. **[CARRY-FORWARD — HARDWARE — monitor] DGX Spark FE EOL rumors**: t/386322 reseller claim, no official NVIDIA statement. Monitor for hardware planning.
+4. **[CARRY-FORWARD — MONITOR] MiniMax M3.1 Flash (t/386377)**: Details inaccessible from cloud. Read when forum egress unblocks.
+5. **[CARRY-FORWARD — MONITOR] RAIDFLASH (t/386130)**: 2.5× decode claim on 2×GB10. Read when forum egress unblocks.
+6. **[OPS]** EGRESS_BLOCKED day 12 for cloud → forum + HuggingFace. Run full checks from ubuntu-vm (forum ceiling t/386377, HuggingFace Qwen org for Qwen4, vLLM PR #40099, DeepGEMM issue #41063).
+
+### SPARK_BASELINE.md changes applied
+
+| Field | Old | New |
+|-------|-----|-----|
+| `Last recon` | 2026-10-22 (Entry 216) | 2026-10-23 (Entry 217) |
+| `arena_top_fp8_qwen35_tok_s` (Poveda) | updateTime Oct 21T18:28:57 | updateTime Oct 22T11:22:57 (post-Entry 216 sweep, count unchanged 128) |
+| `svd_last_checked_date` | 2026-10-22 (Entry 216, 6-day gap) | 2026-10-23 (Entry 217, 7-day gap) |
+| `forum_last_checked_date` | 2026-10-22 (Entry 216, EGRESS_BLOCKED day 11) | 2026-10-23 (Entry 217, EGRESS_BLOCKED day 12) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

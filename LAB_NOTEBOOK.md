@@ -17805,3 +17805,118 @@ Arena unchanged (~26 weeks static), vLLM v0.32.0 remains latest with no successo
 | `forum_last_checked_date` | 2026-10-23 (Entry 217, EGRESS_BLOCKED day 12) | 2026-10-24 (Entry 218, EGRESS_BLOCKED day 14) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 219 — DGX Spark Recon (2026-10-24, weekly)
+
+**Date:** 2026-10-24 UTC (run from ubuntu-vm; same day as daily Entry 218)
+**Operator:** Claude Code (spark-recon skill, headless weekly run)
+**Status:** RECON — no changes made to the Spark system. SPARK_BASELINE.md NOT updated (headless; proposed diffs listed at the end).
+
+**Egress note:** From ubuntu-vm, Firestore LIST, the GitHub API, HuggingFace and the NVIDIA forum JSON are all reachable. The cloud daily routine (Entry 218) reported forum ENOTFOUND (day 14), GitHub 403 and HF ENOTFOUND, and read only the 3 baseline Arena docs by ID. This run fills those gaps for Oct 17–24.
+
+### Check 1 — Arena Check: NOT FIRED
+
+- Access: Firestore REST, `benchmarks` LIST works with no API key: **373 docs** (2 pages × 300). Was 362 at Entry 211 → **11 new since Oct 17.**
+- Baseline docs (performance UNCHANGED):
+
+| Doc | tg128 c1 | recipeCopyCount | updateTime |
+|---|---|---|---|
+| sub1779297106805 Stojanovic FP8 DFlash (vLLM) | 80.27 | 233 | 2026-10-02T07:37:35Z |
+| sub1782803609803 Poveda NVFP4 (vLLM) | 118.91 | 128 | 2026-10-23T16:18:31Z |
+| sub1779495971526 Rawat Atlas NVFP4 | 218.85 | 175 | 2026-10-18T21:37:29Z |
+
+- Top FP8 Qwen3.6-35B-A3B single-node on vLLM: Stojanovic **80.27** (delta 0.0%; threshold 88.30). Top FP8 Qwen3.6 non-vLLM: Atlas 172.03 (Walczak, 2026-05-24) — unchanged.
+- Top single-node overall: LFM2.5-230M IQ2_M llama.cpp **681.76** (new, Oct 21) — tiny-model outlier, not comparable. Top Qwen3.6 single-node overall: Atlas NVFP4 218.85 (unchanged).
+- The 11 new docs (Oct 19–24): DeepSeek-V4.1-Flash-1017 EXL3 2-node 53.1; Nemotron-3.5-Super-VL-120B FP8 2-node 40.6; LFM2.5-230M ×3 (602–682); Ornith-1.5-122B EXL3 33.1; Sage-A1.5 BF16 29.0; `nvidia/Qwen3.8-Flash-Next-FP4-Local` 2-node 45.5; Nemotron-Labs-Dory1.0-4B NVFP4 231.8; `nvidia/GLM-5.3-Flash-FP4-Local` 2-node 38.9; GLM-5.3-Flash EXL3 2-node 42.8. **None in our class, none a threat.**
+- No new runtime since Entry 211 (TensorFold, vLLM-Ray already noted).
+
+### Check 2 — vLLM Release Check: MEDIUM (no new release; HIGH already handled)
+
+- Latest stable: **v0.32.0** (2026-10-18). Its SM12x / GB10 items (#58877, #59753/#59632/#60027, #58482, #58495) already fired the arch-guard at Entry 212. No re-fire.
+- New tag: **v0.32.1rc0** (2026-10-18) = main-branch cut marker after the v0.32.0 branch, tags only, no release notes. Range v0.32.0…v0.32.1rc0 = 370 commits. Relevant items (will land in v0.33):
+  - **#57378** — fall back to torch when device-level NVML memory is unsupported **(GB10)**. Directly addresses GB10 UMA memory reporting.
+  - #61274 — auto-disable DeepGEMM for Kolibri 1 on SM12x (model-specific).
+  - #59511 — DFlash: capture context combine + anchor in the draft CUDA graph. #59468 — don't reserve DFlash/DSpark draft slots in the scheduler budget.
+  - #60948 / #61913 — FlashInfer 0.7.1 → **0.7.2** (matches SVD Oct 16 FI 0.7.2).
+  - #61538 — DeepGEMM MegaMoE unified, adds NVFP4.
+- PR status: **#58681** (DeepGEMM SM12x alignment) still OPEN (upd 10-15). **#41063** (DeepGEMM SM12.x tracking) still OPEN. **#40099** OPEN (stale since 07-08).
+
+### Check 3 — spark-vllm-docker Check: NO NEW BUILD
+
+- `prebuilt-vllm-current` = **0.32.0rc1.dev301+g1ac942555.d20261016** (asset 2026-10-16T13:00Z). `prebuilt-flashinfer-current` = FI 0.7.2 (Oct 16). Unchanged since Entry 210.
+- Commits since Oct 16: only 3, all Oct 16 (4709188d recipes, d7f44331 recipe env overrides, 0bdc9c94 GLM 5.3 Flash recipe). **Zero commits Oct 17–24** — 8-day gap confirmed via GitHub (matches cloud Docker Hub finding).
+
+### Check 4 — Qwen Model Check: NOT FIRED
+
+- Qwen org newest repos: `Qwen-Image-2.1-Turbo` (Oct 9). Newest Qwen LLM >10B still Qwen3.8-Flash-Next / -FP8 (Aug 24). **No Qwen4, Qwen3.7, Qwen3.9 or Qwen3.8-35B-A3B official repo.**
+- Name-squat: `IteraCompute/Qwen4-27B-NVFP4` (Oct 14, 0 downloads, no base_model). Not an official release. Ignore.
+- Community "Qwen3.8 35B-A3B" repos (pragmaticcs KAT-AgentWorld, OpenFlowLM distill, lododoai distill) are fine-tunes or distills of the Qwen3.6-35B-A3B base. Not new architectures.
+- Other labs since Oct 17: `MiniMaxAI/MiniMax-M3.1-Flash` (Oct 17, 220B, MXFP8) — too large for one Spark. `deepseek-ai/DeepSeek-V4.1-Flash-1017` (763B) — multi-node only. `LiquidAI/LFM2.5-24B-A2B-DSpark` (Oct 19, 0.33B drafter for LFM2.5-24B-A2B; watch item from Entry 211). tencent Hy-Memory-30B-A3B GGUF (specialist). No new A3B-class general model that beats our current one.
+
+### Check 5 — NVIDIA Forum Check: ⚠ ACTION — October 2026 OTA released
+
+- 180 topics scanned (719 + 721, 6 pages each). **New ceiling: t/386742** (was t/386112 at Entry 211; cloud ceiling t/386377). ~40 new topics since Oct 17.
+- **ACTION — t/386341 "DGX Spark Software Updates - October 2026 Release" (aniculescu, NVIDIA staff, 2026-10-21).** This is the OTA we have tracked as overdue for weeks ("OTA2608 NOT ANNOUNCED"; "OTA HOLD in pipeline"). Field name: **OTA2610.** Contents:
+  - **Linux 7.0 kernel** (was 6.17): pfnmap, EGM split into 1 GB chunks, MPAM.
+  - **New FE EC firmware 0x03000508 → 0x03000d07** ("improves the performance and stability of the Embedded Controller", per fwupd prompt in t/386507). Our power-cut root cause (Entry 157) and the EC 0x03000508 fan regression are both EC-side. This may be the fix. Not yet confirmed by NVIDIA.
+  - Dynamic Display Reserved Memory (UEFI option; headless → 512 MB carveout — frees a little UMA for us).
+  - 64 GB system support, cloud-init, DGX Spark Skills (via NVIDIA Sync / OpenCode), Dashboard Wi-Fi assistant.
+- **Rollout problems, Oct 21–23:**
+  - t/386507 "FW upgrade fail" (32 posts): LVFS 502/504 on day 1. Staff (Neill) acknowledged. Later posters got the 3 firmware updates after a reboot, with several automatic reboots during apply.
+  - t/386495: after updates, `sudo reboot` → box did not come back (pingable, no SSH). Needed physical power-button presses. `nvidia-smi` showed ERR! between reboots.
+  - t/386696: a user reports an earlier "accidental push of kernel 7" that burned people. **Staff (aniculescu, Oct 23): "All update issues have been addressed, you should be able to update."** ASUS GX10 owners still cannot get OTA2610-level firmware.
+- **INFO / WATCH:**
+  - t/386469: hard resets from **SBSA Generic Watchdog timeout** (CPU 6 stops answering IPIs while idle). Workaround: disable deep cpuidle states (`/sys/devices/system/cpu/cpu*/cpuidle/state{1,2,3}/disable`) → 10 days with no reset. Different signature from our outages; useful if we ever see watchdog panics in pstore.
+  - t/386489: Qwen3.6-35B-A3B **NVIDIA NVFP4 77.9 tok/s** c1 vs FP8 52.6 (vLLM 0.28 vs 0.18, their stack). Two-models-on-one-Spark shares bandwidth (aggregate lower than either alone). **EngineDeadError crashes at c1–3 after NVFP4 = FlashInfer #3566 cuDNN FP8 GEMM on GB10; fix = force `cublas` backend.** vLLM exits 0 on EngineDeadError → use `Restart=always`. Directly relevant to the NVFP4 Arm C eval.
+  - t/386436: **NVIDIA "Flare"** (`NVIDIA/flare-local-inference`, Apache 2.0) — Rust serving runtime for SM120/SM121, FP8 KV by default, CUDA graphs pre-captured, recipes for Qwen Flash / GLM / DeepSeek. New runtime candidate. Not on Arena yet.
+  - t/386465: FieldDiag PowerStress fail (MODS-020000600139) confirmed as hardware fault, but warranty declined for a non-authorised reseller. Owner workaround: GPU cap 2200 MHz + max 4 concurrent sequences (same shape as our concurrency finding).
+  - t/386556: log-less hard power-off + implausible ACPI zone 0/5 spikes (21 °C in 5 s); FieldDiag PASS; on kernel 7.0.0-1019 + EC 0x03000508.
+  - t/386322 (EOL rumor): 7 posts, no NVIDIA statement. t/383624 (warranty): last post Oct 23; links the open-gpu-kernel-modules NV_ERR_NO_MEMORY wedge issue (595.84 / 6.17.0-1032).
+  - t/386124: claim of Qwen3.8-27B at 60.6 tok/s single Spark (Arena shows max 42.2 for 27B NVFP4). Not our model.
+- Known builders: eugr (`eugr_nv`) only. No new builder posts on Qwen3.6.
+
+### Cross-Correlated Findings
+
+1. **OTA2610 + EC firmware + our power-cut history [Forum + Entry 157 + baseline watch items].** The long-awaited OTA shipped Oct 21 with a new FE EC firmware. Our two open EC-side issues (load-transient power cut; EC 0x03000508 fan regression) may be addressed. Kernel jumps 6.17 → 7.0, which triggers our dist-upgrade/DKMS/MOK hazard rule (Entry 078) and the 7.0.0-1019 TCP RX watch item (t/385733). Medium confidence that it helps; high confidence it is a physical-access job.
+2. **NVFP4 path keeps converging [Arena + Forum + vLLM].** Poveda 118.91 (Arena), 77.9 tok/s production NVFP4 report (t/386489), FI 0.7.2 in both SVD and vLLM main. New concrete risk for Arm C: FlashInfer #3566 cuDNN FP8 GEMM crash on GB10 — plan the `cublas` override into the eval.
+3. **GB10 memory reporting [vLLM #57378 + forum ERR! reports].** vLLM main now falls back to torch when NVML device memory is unsupported on GB10. Lands in v0.33.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---|---|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch guard` | NOT RE-FIRED — v0.32.0 handled at Entry 212; v0.32.1rc0 is a tag only (#57378 GB10 noted) |
+| `vllm_release \| DeepGEMM AND SM12` | NOT FIRED — #58681 still open |
+| `svd \| new prebuilt vllm version` | NOT FIRED — still 0.32.0rc1.dev301 (Oct 16) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — only a name-squat |
+| `forum \| new GB10 performance/stability finding` | **FIRED — OTA2610 (kernel 7.0 + EC 0x03000d07) released; rollout issues declared fixed Oct 23** |
+
+### Overall: ACTION NEEDED
+
+One action: the October 2026 OTA (OTA2610) is out, with a new EC firmware that may address our EC power-cut fault. It needs a planned, physical-access maintenance window. Everything else is static: Arena unchanged in our class, no new vLLM stable, no new SVD build, no new Qwen model.
+
+### Recommendations
+
+1. **[ACTION — PLAN, do not run headless] OTA2610 update window.** Needs physical console access (kernel 6.17 → 7.0 + EC/SoC/PD firmware + several auto-reboots). Before: snapshot `/home/claude/docker-compose.yml`, record `uname -r`, `nvidia-smi`, `fwupdmgr get-devices`, `dpkg -l | grep nvidia`. Follow the Entry 078 rule: after `apt dist-upgrade`, check for `nvidia-dkms-580-open` and the unenrolled MOK key; restore prebuilt `linux-modules-nvidia-580-open-*` for the new kernel and verify the Canonical signer **before** reboot. Wait a few more days for late rollout reports first (t/386495 boot-hang reports). Afterward: re-run the MTP baseline (c1/c4/c8/c16) on the new kernel and watch for TCP RX errors (t/385733).
+2. **[CARRY-FORWARD — NVFP4 Arm C eval]** Still waiting for a v0.32.0-based SVD build. Add to the eval plan: force FlashInfer FP8 GEMM backend `cublas` (FlashInfer #3566) and `Restart=always`-style supervision.
+3. **[WATCH] NVIDIA Flare** (`NVIDIA/flare-local-inference`). Check for a Qwen3.6-35B-A3B recipe and an Arena submission.
+4. **[WATCH] Qwen4** — no weights; end-of-October window has 7 days left.
+5. **[OPS]** Cloud daily routine remains blind to forum/GitHub/HF. Keep the weekly ubuntu-vm run.
+
+### Proposed SPARK_BASELINE.md changes (NOT applied — headless run, needs user confirmation)
+
+| Field | Current | Proposed |
+|---|---|---|
+| `Last recon` | 2026-10-24 (Entry 218) | 2026-10-24 (Entry 219, weekly ubuntu-vm) |
+| `arena_top_fp8_qwen35_tok_s` | 80.27 | 80.27 (no change; note LIST 373 docs, 11 new since Oct 17, none relevant) |
+| `arena_top_overall_tok_s` | 218.85 (Atlas Qwen3.6 NVFP4) | No change for the Qwen3.6 frame. Tiny-model outlier is now LFM2.5-230M IQ2_M llama.cpp 681.76 (informational) |
+| `arena_access_method` | LIST fluctuating | LIST working 2026-10-24 with no API key: 373 docs |
+| `vllm_last_checked_version` | v0.32.0 | v0.32.0 (+ tag v0.32.1rc0, Oct 18) |
+| `svd_last_checked_date` | 2026-10-24 (Entry 218) | 2026-10-24 (Entry 219): GitHub confirms zero commits Oct 17–24 |
+| `forum_last_checked_date` | 2026-10-24 (Entry 218, EGRESS_BLOCKED day 14) | 2026-10-24 (Entry 219, reachable from VM): ceiling **t/386742**; **OTA2610 released Oct 21** (kernel 7.0, FE EC 0x03000d07); mark "OTA2608 NOT ANNOUNCED" watch item CLOSED |
+| Watch items | OTA hold; EC 0x03000508 fan regression | Replace OTA-hold with "OTA2610 update window pending (physical access)"; EC regression → "possible fix in EC 0x03000d07, verify after update" |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

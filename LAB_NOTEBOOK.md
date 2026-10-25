@@ -17920,3 +17920,59 @@ One action: the October 2026 OTA (OTA2610) is out, with a new EC firmware that m
 | Watch items | OTA hold; EC 0x03000508 fan regression | Replace OTA-hold with "OTA2610 update window pending (physical access)"; EC regression → "possible fix in EC 0x03000d07, verify after update" |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 220 - DGX Spark Recon (2026-10-25)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 15, same pattern as prior cloud runs). GitHub API blocked to external repos (vllm-project/vllm, eugr/spark-vllm-docker). WebSearch fallback used for checks 2, 3, 4, 5._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST | **UNREACHABLE** — `{}` from cloud proxy (consistent pattern). WebSearch indirect: t/373995 "80 t/s with Qwen3.6-35B-A3B-FP8" and t/379766 cross-runtime benchmark thread corroborate ~80 tok/s range. No evidence of >88.30 trigger. Baseline 80.27 unchanged by all indirect signals. |
+| 2 vLLM | WebSearch | **v0.32.0 still latest** (released Oct 18, confirmed). No v0.33.0. Notable in v0.32.0: SM12x NVFP4 KV cache + XQA decode + CuTe-DSL MoE NVFP4 + **fix for NVFP4 0% draft acceptance** (directly relevant to Coder-Next Entry 072 rejection). No new SM121/GB10 arch-guard beyond Entry 212. |
+| 3 SVD | WebSearch | **No new build.** GitHub API blocked; WebSearch found no October 2026 releases. SVD CI gap continues at day 9 (nightly-20261016 still latest). v0.32.0-based SVD build still pending. |
+| 4 Qwen models | WebSearch | **Qwen3.8-27B** (dense, 27B, Apache 2.0, Aug 2026) — NOT a 35B-A3B MoE drop-in. **Qwen3.8-2.4T-A95B MoE** (Aug 2026) — too large (95B active). No Qwen3.8-35B-A3B. No Qwen4 weights. Oct 25: end-of-October Qwen4 window essentially closed (6 days remain at most). |
+| 5 Forum | WebSearch (partial) | **EGRESS_BLOCKED day 15** (cloud). Snippets: **NEW veloGB10** inference engine (t/377565 — Qwen3.6-27B NVFP4 ~40 tok/s single, ~50 tok/s 2-node); **Flare** Rust runtime confirmed SM120/SM121 target (no Arena submission yet); **N1X notebook** (Dell/Computex May 2026 — community: "cousin, not Spark successor"); SM121 NVFP4 CUTLASS 4.4.0 = 356 TFLOPS dense native kernel (t/364607); OTA2610 action from Entry 219 still pending. |
+
+### Cross-Correlated Findings
+
+1. **vLLM v0.32.0 NVFP4 0% draft acceptance fix × Coder-Next 0% MTP rejection (Entry 072) [Check 2 + baseline].** The fix in v0.32.0 for NVFP4 checkpoints with 0% draft acceptance is the exact failure mode that blocked Coder-Next (vllm#37554 q_scale fallback). When SVD drops a v0.32.0-based build, a Coder-Next NVFP4 re-eval is warranted. Medium confidence — fix must be verified in the SVD build context.
+2. **veloGB10 + Flare = two new alternative runtimes emerging [Forum × Forum].** Neither is on Arena yet. veloGB10 (GB10-optimized C++ inference) is distinct from Flare (NVIDIA Rust runtime). Community activity around non-vLLM runtimes is increasing.
+3. **Qwen4 window closing [HF × Forum × baseline].** Oct 25, end-of-October window, no weights. Confidence in Oct 2026 Qwen4 drops significantly; extend to November watch window.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore blocked; indirect confirms no change) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT RE-FIRED — v0.32.0 handled Entry 212; no v0.33.0 |
+| `vllm_release \| DeepGEMM AND SM12` | UNKNOWN — #58681 status unverifiable (GitHub API blocked) |
+| `svd \| new prebuilt vllm version` | NOT FIRED — CI gap day 9; no new build |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — Qwen3.8-27B is dense 27B (not MoE drop-in); no Qwen3.8-35B-A3B; no Qwen4 |
+| `forum \| new GB10 performance/stability finding` | CARRY-FORWARD — OTA2610 (Entry 219 ACTION) still pending; veloGB10 NEW runtime (WATCH) |
+
+### Overall: WORTH WATCHING
+
+Entry 219 ACTION (OTA2610 update window) carries forward — no new trigger-level events today. Primary new finding is **veloGB10** alternative inference engine (Qwen3.6-27B NVFP4, ~40 tok/s single Spark). vLLM v0.32.0 NVFP4 0% draft acceptance fix re-opens Coder-Next eval path when SVD builds on v0.32.0.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0, EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol. Re-run MTP baseline afterward.
+2. **[NEW WATCH — veloGB10]** New inference engine (forum t/377565): Qwen3.6-27B NVFP4 ~40 tok/s single Spark. Distinct from Flare. Check if a Qwen3.6-35B-A3B recipe exists; watch for Arena submission.
+3. **[CARRY-FORWARD — NVFP4 Arm C eval]** Still waiting for v0.32.0-based SVD build. Add Coder-Next NVFP4 re-eval to plan (v0.32.0 draft-acceptance fix now in scope). Plan FlashInfer #3566 `cublas` override per Entry 219.
+4. **[WATCH — Qwen4]** End-of-October window closing. Extend to November watch window.
+5. **[WATCH — NVIDIA Flare]** Rust runtime for SM120/SM121 active. Monitor for Qwen3.6-35B-A3B recipe or Arena submission.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 219) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-10-24 (Entry 219) | 2026-10-25 (Entry 220, daily cloud) |
+| `svd_last_checked_date` | 2026-10-24 (Entry 218) — 8-day CI gap | 2026-10-25 (Entry 220) — NO NEW BUILD, CI gap day 9; GitHub API blocked from cloud |
+| `forum_last_checked_date` | 2026-10-24 (Entry 218) EGRESS_BLOCKED day 14 | 2026-10-25 (Entry 220) EGRESS_BLOCKED day 15; new snippets: veloGB10, Flare confirmed, N1X=cousin |
+| Watch items | OTA2610 pending; Qwen4 Oct window; Flare | Add veloGB10 new runtime; extend Qwen4 to November window |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

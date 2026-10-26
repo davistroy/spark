@@ -17976,3 +17976,58 @@ Entry 219 ACTION (OTA2610 update window) carries forward — no new trigger-leve
 | Watch items | OTA2610 pending; Qwen4 Oct window; Flare | Add veloGB10 new runtime; extend Qwen4 to November window |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 221 - DGX Spark Recon (2026-10-26)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 16, consistent pattern). GitHub API 403 to external repos (vllm-project/vllm, eugr/spark-vllm-docker). Firestore REST API world-readable (3 docs fetched directly). WebSearch fallback used for checks 2, 3, 4, 5._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs) | **NO CHANGE.** Stojanovic sub1779297106805: tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime 2026-10-02T07:37:35.719327Z (UNCHANGED), recipeCopyCount **233** (UNCHANGED). Poveda sub1782803609803 NVFP4: 118.91 tok/s (UNCHANGED), updateTime 2026-10-23T16:18:31.724495Z (UNCHANGED), recipeCopyCount **128** (UNCHANGED). Atlas sub1779495971526: 218.85 tok/s (UNCHANGED), updateTime 2026-10-18T21:37:29.867343Z (UNCHANGED), recipyCopyCount **175** (UNCHANGED). All 3 docs FULLY UNCHANGED. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~24 weeks (last submission 2026-05-26). |
+| 2 vLLM | WebSearch + GitHub releases page | **v0.32.0 still latest** (released Oct 18 2026 — confirmed via github.com/vllm-project/vllm/releases). No v0.33.x. Entry 212 arch-guard already fired on v0.32.0. NO NEW RELEASE since last check. |
+| 3 SVD | Docker Hub tags | **No new build.** Latest tag nightly-20261016 (pushed 10 days ago = Oct 16 2026), UNCHANGED from Entry 220. SVD CI gap now **day 10**. `latest` image = same digest as nightly-20261016. v0.32.0-based SVD build still pending. |
+| 4 Qwen models | WebSearch | **Qwen4 NOT released.** End-of-October window now closed (Oct 26). Qwen3.8-Flash-Next-FP8 (`Qwen/Qwen3.8-Flash-Next-FP8`) exists on HF — architecture preview for Qwen4, small dense model (not 35B-A3B MoE drop-in). `Qwen4ExpForConditionalGeneration` arch tag in Transformers docs suggests internal testing. No Qwen3.8-35B-A3B. No Qwen4 open weights. No new ~30-40B MoE contenders found. |
+| 5 Forum | WebSearch (partial; EGRESS_BLOCKED day 16) | No new actionable DGX Spark performance threads surfaced via WebSearch. OTA2610 carry-forward action still pending (no new forum confirmation). |
+
+### Cross-Correlated Findings
+
+1. **Arena static × vLLM v0.32.0 unchanged × SVD CI gap day 10 [Checks 1+2+3].** Consistent explanation: no new SVD performance build available → no new Arena submissions → FP8 frontier frozen at 80.27 since May 2026. SVD CI gap may indicate pre-release freeze ahead of a v0.32.0-based build. Medium confidence — watch for sudden SVD resume.
+2. **Qwen4 window shift × Qwen4-Exp Transformers tag [Check 4 × baseline].** Qwen4 did not ship in October. The `qwen4_exp` architecture in Transformers (not the full model) and Qwen3.8-Flash-Next as "Qwen4 preview architecture" suggest internal activity but no open-weights release. Extend watch window to November–December 2026.
+3. **SVD CI gap day 10 × v0.32.0 stable for 8 days [Checks 2+3].** Longest CI gap in recent history. v0.32.0 has been stable for 8 days. Historical pattern: SVD resumes with a new base vLLM version after release stabilizes. A v0.32.0-based SVD build appears imminent.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, all 3 docs UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT RE-FIRED — v0.32.0 handled Entry 212; no v0.33.0 |
+| `svd \| new prebuilt vllm version` | NOT FIRED — CI gap day 10; no new build |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Qwen3.8-35B-A3B; no Qwen4 weights; Qwen4-Exp tag only internal |
+| `forum \| new GB10 performance/stability finding` | CARRY-FORWARD — OTA2610 (Entry 219 ACTION) still pending |
+
+### Overall: WORTH WATCHING
+
+No new trigger-level events today. All three Firestore docs fully confirmed UNCHANGED. SVD CI gap reaches day 10 — longest gap this cycle, likely pre-release freeze ahead of v0.32.0 SVD build. Qwen4 October window closed with no release; extend to November–December. OTA2610 ACTION from Entry 219 remains the primary open item.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0, EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol. Re-run MTP baseline afterward. No new forum confirmation of issues; safe to proceed when convenient.
+2. **[HIGH WATCH — SVD imminent build]** SVD CI gap day 10 + v0.32.0 stable 8 days = strong pre-release freeze signal. Watch eugr/spark-vllm-docker Docker Hub and GitHub for nightly-2026102x tags. A v0.32.0-based build unlocks NVFP4 Arm C eval path.
+3. **[CARRY-FORWARD — NVFP4 Arm C eval]** Waiting for v0.32.0-based SVD build. Once available: test `nvidia/Qwen3.6-35B-A3B-NVFP4` on new image. Also add Coder-Next NVFP4 re-eval (v0.32.0 NVFP4 0% draft-acceptance fix, Entry 220). Use FlashInfer #3566 `cublas` override per Entry 219.
+4. **[WATCH — Qwen4]** October window closed without release. Extend to November–December 2026. Qwen4-Exp arch tag in Transformers is a weak signal of imminent public release; monitor `Qwen/` HF org.
+5. **[WATCH — veloGB10 / Flare]** Two alternative runtimes (Entry 220). No Arena submissions yet. Monitor for Qwen3.6-35B-A3B recipes.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 220) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-10-25 (Entry 220) | 2026-10-26 (Entry 221, daily cloud) |
+| `svd_last_checked_date` | 2026-10-25 (Entry 220) CI gap day 9 | 2026-10-26 (Entry 221) — NO NEW BUILD, CI gap day 10; Docker Hub confirmed |
+| `forum_last_checked_date` | 2026-10-25 (Entry 220) EGRESS_BLOCKED day 15 | 2026-10-26 (Entry 221) EGRESS_BLOCKED day 16; no new actionable threads |
+| Watch items | Qwen4 Oct window (closing) | Shift to November–December window; add SVD imminent build signal |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

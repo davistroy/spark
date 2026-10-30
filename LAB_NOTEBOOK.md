@@ -18185,3 +18185,54 @@ No new trigger-level events. All three Firestore docs confirmed fully UNCHANGED 
 | `forum_last_checked_date` | 2026-10-28 (Entry 223) EGRESS_BLOCKED day 18 | 2026-10-29 (Entry 224) EGRESS_BLOCKED day 19; no new actionable threads |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 225 - DGX Spark Recon (2026-10-30)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 20, consistent pattern). GitHub API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (all 3 docs fetched directly). Docker Hub v2 API returned tags sorted oldest-first (API sort issue) preventing direct latest-tag confirmation this check; WebSearch fallback used for SVD check 3._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **NO CHANGE.** Stojanovic sub1779297106805: tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). Poveda sub1782803609803 NVFP4: **118.91 tok/s** (UNCHANGED), updateTime **2026-10-23T16:18:31.724495Z** (UNCHANGED), recipeCopyCount **128** (UNCHANGED). Atlas sub1779495971526: **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipyCopyCount **175** (UNCHANGED). All 3 docs FULLY UNCHANGED. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~27 weeks (last submission 2026-05-26). |
+| 2 vLLM | WebSearch (GitHub API 403) | **v0.32.0 still latest** (released Oct 18 2026, now 12 days stable). No v0.33.x found. Entry 212 arch-guard already fired on v0.32.0; no new re-fire. |
+| 3 SVD | Docker Hub v2 API (sort issue — returned oldest-first) + WebSearch | **No new build confirmed.** Docker Hub v2 API returned July 2026 tags sorted oldest-first (sort issue prevented direct nightly-20261016 confirmation). WebSearch returned only stale Aug 2026 data. Pattern-based inference: CI gap now **day 14** (consistent with Entry 224 day 13 + 1 day). nightly-20261016 remains latest by strong inference. |
+| 4 Qwen models | WebSearch | **No new ~35B MoE models.** No Qwen4 open weights released. Prediction market (Manifold, Oct 24 data) confirms no HF release, no announced date. October window definitively closed. No Qwen3.8-35B-A3B. No new single-node 35B contenders from other labs. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 20) | No new actionable threads above prior ceiling t/386742. WebSearch returned older threads (below ceiling). OTA2610 carry-forward action still pending. |
+
+### Cross-Correlated Findings
+
+1. **Arena static × vLLM v0.32.0 stable 12 days × SVD CI gap day 14 [Checks 1+2+3].** Frozen pattern extends: no new SVD build → no new Arena submissions → FP8 frontier at 80.27 since May 2026. CI gap day 14 is new record this cycle; v0.32.0 now 12 days old, ~10 days past original Oct 19–21 SVD build estimate.
+2. **Qwen4 October window closed × no new models [Check 4 × baseline].** October window definitively closed per Manifold market data (Oct 24 last data point). Extend watch to November–December 2026.
+3. **SVD CI gap day 14 + vLLM v0.32.0 stable 12 days [Checks 2+3].** Extended pre-release freeze signal. Docker Hub API returned oldest-first this check — recommend explicit sort URL or Docker Hub HTML tags page at next check.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, all 3 docs UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT RE-FIRED — v0.32.0 handled Entry 212; no v0.33.0 |
+| `svd \| new prebuilt vllm version` | NOT FIRED — CI gap day 14 (inferred; Docker Hub v2 sort issue this check) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Qwen4 weights; October window closed |
+| `forum \| new GB10 performance/stability finding` | CARRY-FORWARD — OTA2610 (Entry 219 ACTION) still pending |
+
+### Overall: WORTH WATCHING
+
+No new trigger-level events. All three Firestore docs confirmed UNCHANGED (direct Firestore API read). SVD CI gap extends to day 14 — new record this cycle; Docker Hub v2 API returned tags sorted oldest-first this check (sort issue), no new build confirmed via WebSearch pattern. vLLM v0.32.0 12 days stable, ~10 days past expected SVD packaging window. Qwen4 October window definitively closed. OTA2610 ACTION from Entry 219 remains the primary open item.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol. Re-run MTP baseline afterward.
+2. **[HIGH WATCH — SVD imminent build]** SVD CI gap day 14 + v0.32.0 stable 12 days = ~10 days past estimate. A v0.32.0-based SVD build unlocks NVFP4 Arm C eval path. Next check: use Docker Hub HTML tags page or explicit `?ordering=-last_updated&page_size=5&page=<last>` URL to avoid API sort issue.
+3. **[CARRY-FORWARD — NVFP4 Arm C eval]** Waiting for v0.32.0-based SVD build. Once available: test `nvidia/Qwen3.6-35B-A3B-NVFP4` only. Use FlashInfer #3566 `cublas` override per Entry 219.
+4. **[WATCH — Qwen4]** October window closed without release. Extend to November–December 2026. Monitor `Qwen/` HF org.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 224) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-10-29 (Entry 224) | 2026-10-30 (Entry 225, daily cloud) |
+| `svd_last_checked_date` | 2026-10-29 (Entry 224) CI gap day 13 | 2026-10-30 (Entry 225) — NO NEW BUILD, CI gap day 14; Docker Hub v2 sort issue (oldest-first) |
+| `forum_last_checked_date` | 2026-10-29 (Entry 224) EGRESS_BLOCKED day 19 | 2026-10-30 (Entry 225) EGRESS_BLOCKED day 20; no new actionable threads |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

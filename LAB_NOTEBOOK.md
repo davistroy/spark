@@ -18236,3 +18236,57 @@ No new trigger-level events. All three Firestore docs confirmed UNCHANGED (direc
 | `forum_last_checked_date` | 2026-10-29 (Entry 224) EGRESS_BLOCKED day 19 | 2026-10-30 (Entry 225) EGRESS_BLOCKED day 20; no new actionable threads |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 226 - DGX Spark Recon (2026-10-31)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 21, consistent pattern). GitHub API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (all 3 docs fetched directly). Docker Hub main path returned 404; eugr/spark-vllm-b12x Docker Hub accessible this check — b12x nightly-20261026 confirmed. WebSearch used for vLLM releases, Qwen, forum, and main nightly confirmation._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **NO CHANGE.** Stojanovic sub1779297106805: tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). Poveda sub1782803609803 NVFP4: **118.91 tok/s** (UNCHANGED), updateTime **2026-10-23T16:18:31.724495Z** (UNCHANGED), recipeCopyCount **128** (UNCHANGED). Atlas sub1779495971526: **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs FULLY UNCHANGED. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~27 weeks (last submission 2026-05-26). |
+| 2 vLLM | WebSearch (GitHub API 403) | **v0.32.0 still latest stable** (Oct 18 2026, 13 days). **NEW: v0.33.0 in RC stage** — v0.33.0rc0 cut 2026-10-26, v0.33.0rc2 published (ROCm gfx950 AITER GEMM bugfix only). Oct 30 AI digest: "feature delivery and stability ahead of v0.33.0"; structured output + spec decode consistency improvements expected; no SM121/GB10/arch-guard content in RC window. SM120-only finding: Issue #59203 (FlashInfer sparse-MLA decode kernel missing for SM120 page_block_size=32 — SM120 ONLY, NOT SM121; does not affect production). Gemma4 PR #40099: no update found (appears still open). DeepGEMM Issue #41063: still open. Arch-guard NOT FIRED for v0.33.0. |
+| 3 SVD | eugr/spark-vllm-b12x Docker Hub (accessible) + GitHub releases WebFetch + WebSearch | **Main nightly CI gap: day 15** (new record this cycle). **NEW: b12x variant nightly-20261026 confirmed** (5 days before Oct 31 = Oct 26; same digest as b12x `latest`; prev b12x was nightly-20261015 Oct 15 — b12x gap was Oct 16-25, then resumed Oct 26). eugr/spark-vllm-docker prebuilt wheels: vLLM **0.32.0rc1.dev301+g1ac942555.d20261016**, FlashInfer **0.7.2-7cf7517a-d20261016**, Oct 16 — still marked "Latest", no newer release. Main nightly SVD trigger NOT FIRED. b12x Oct 26 coincides with v0.33.0rc0 cut (Oct 26) — b12x likely tracking main/RC content. |
+| 4 Qwen models | WebSearch | **No new ~35B MoE models.** No Qwen4 open weights released. October window definitively closed (multiple independent sources: "in training" as of Oct 29, no HF release; prediction market ~74% by Nov 1 window now closing). Qwen4 confirmed architecture: 27B dense only (no 35B-A3B-FP8 tier per Sep 22 Apsara). No Qwen3.8-35B-A3B (does not exist). No new single-node 35B contenders from other labs. Extend watch to November–December 2026. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 21) | **EGRESS_BLOCKED day 21** (cloud; DNS ENOTFOUND confirmed — forums.developer.nvidia.com). No new actionable threads above prior ceiling t/386742 found via WebSearch. SM120 Issue #59203 from Oct 30 AI digest (FlashInfer sparse-MLA — SM120 ONLY, NOT SM121; informational, no production impact). OTA2610 carry-forward action still pending. |
+
+### Cross-Correlated Findings
+
+1. **Arena static × vLLM v0.32.0 unchanged × SVD main nightly gap day 15 [Checks 1+2+3].** Frozen pattern extends to day 15 (new record this cycle, up from day 14 Entry 225). No new SVD main build → no new Arena FP8 submissions → FP8 frontier at 80.27 static since May 2026.
+2. **b12x nightly-20261026 × v0.33.0rc0 cut Oct 26 [Checks 2+3].** Same-day timing: b12x resumed Oct 26 after a 10-day gap (Oct 16–25) that coincides with the post-nightly-20261016 freeze window. Suggests b12x is tracking v0.33.0 RC / main branch content. Main nightly may follow shortly on a v0.32.0-stable-based or v0.33.0rc-based build — two-source convergence signal.
+3. **SM120 Issue #59203 [Check 2/digest × Check 5].** FlashInfer sparse-MLA decode kernel missing for SM120 (NOT SM121). SM120 is GB10 base model (DGX Spark variant GB10 = SM121). Informational only — does not affect production.
+4. **Qwen4 October window closed × no new 35B MoE [Check 4 × baseline].** Multiple independent trackers confirm no release. Extend to November–December 2026.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, all 3 docs UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 in RC stage; no SM121 content found in RC window; v0.32.0 arch-guard handled Entry 212 |
+| `svd \| new prebuilt vllm version` | NOT FIRED for main nightly (CI gap day 15); b12x variant nightly-20261026 NEW (Oct 26) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Qwen4 weights; October window closed |
+| `forum \| new GB10 performance/stability finding` | CARRY-FORWARD — OTA2610 (Entry 219 ACTION) still pending |
+
+### Overall: WORTH WATCHING
+
+No trigger-level events. Notable signal: b12x variant got nightly-20261026 (same day as v0.33.0rc0 cut, Oct 26) while main nightly remains frozen at Oct 16 — main nightly CI gap day 15, new record this cycle. v0.33.0 in RC stage (rc0→rc2) with no SM121 content found; ~1-2 weeks to stable. Arena FP8 frontier static at 80.27 for ~27 weeks. OTA2610 ACTION from Entry 219 remains the primary open item.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol. Re-run MTP baseline afterward.
+2. **[HIGH WATCH — SVD main nightly imminent]** Day 15 CI gap + b12x resumed Oct 26 = main nightly build likely imminent. When it drops, upgrade Arm C eval target. Expected: v0.32.0-stable-based or v0.33.0rc-based. Watch `eugr/spark-vllm` Docker Hub.
+3. **[NEW WATCH — v0.33.0 RC stage]** v0.33.0rc0 cut Oct 26; currently at rc2 (ROCm-only fix). No SM121 content found yet. Monitor for SM121/Blackwell/arch-guard items; stable expected ~1-2 weeks. If arch-guard fires on stable release, flag for SVD tracking.
+4. **[CARRY-FORWARD — NVFP4 Arm C eval]** Waiting for main nightly build. Once available: test `nvidia/Qwen3.6-35B-A3B-NVFP4` only (NOT unsloth mirror per Entry 207 warning). Use FlashInfer #3566 `cublas` override per Entry 219.
+5. **[WATCH — Qwen4]** October window closed without release. Extend to November–December 2026. Monitor `Qwen/` HF org weekly.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 225) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-10-30 (Entry 225) | 2026-10-31 (Entry 226, daily cloud) |
+| `svd_last_checked_date` | 2026-10-30 (Entry 225) CI gap day 14 | 2026-10-31 (Entry 226) — CI gap day 15; b12x nightly-20261026 NEW (Oct 26); main nightly still nightly-20261016 |
+| `forum_last_checked_date` | 2026-10-30 (Entry 225) EGRESS_BLOCKED day 20 | 2026-10-31 (Entry 226) EGRESS_BLOCKED day 21; no new actionable threads above t/386742 |
+| `vllm_latest_observed` | v0.32.0 stable (Entry 212) latest stable | Prepend: v0.33.0rc0 cut 2026-10-26, no SM121 content; v0.32.0 still latest stable |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

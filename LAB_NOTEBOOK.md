@@ -18290,3 +18290,56 @@ No trigger-level events. Notable signal: b12x variant got nightly-20261026 (same
 | `vllm_latest_observed` | v0.32.0 stable (Entry 212) latest stable | Prepend: v0.33.0rc0 cut 2026-10-26, no SM121 content; v0.32.0 still latest stable |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 227 - DGX Spark Recon (2026-11-01)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 22, consistent pattern). GitHub API 403 to vllm-project/vllm and eugr/spark-vllm-docker (consistent). Firestore REST API world-readable (all 3 docs fetched directly). Docker Hub v2 API returned stale/wrong-order results for both eugr/spark-vllm and eugr/spark-vllm-b12x (sort issue persists). WebSearch used for vLLM releases, Qwen, forum, and SVD pattern inference._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **NO CHANGE.** Stojanovic sub1779297106805: tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). Poveda sub1782803609803 NVFP4: **118.91 tok/s** (UNCHANGED), updateTime **2026-10-23T16:18:31.724495Z** (UNCHANGED), recipeCopyCount **128** (UNCHANGED). Atlas sub1779495971526: **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs FULLY UNCHANGED. 10% trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~27.5 weeks (last submission 2026-05-26). |
+| 2 vLLM | WebSearch (GitHub API 403) | **v0.32.0 still latest stable** (Oct 18 2026, now 14 days). v0.33.0 in RC stage (rc0 cut Oct 26 per Entry 226; rc2 published; no stable release confirmed as of Nov 1). PyPI confirms v0.32.0 as latest stable. No SM121/GB10/Blackwell/arch-guard content found in v0.33.0 RC window. Arch-guard NOT FIRED. PR #40099 status unclear (appears still open). DeepGEMM Issue #41063 still open per tracking. Informational: `dgx-spark-vllm` PyPI package RSS appeared in WebSearch (untracked community package; informational only). |
+| 3 SVD | Docker Hub v2 API (sort issue — both main & b12x returned stale/oldest-first) + WebSearch | **No new build confirmed.** Docker Hub v2 API returned nightly-20260711 as "latest" for main (July 2026) and nightly-20260822 for b12x (Aug 2026) — both clearly stale due to persistent sort issue (same v2 API ordering problem as prior entries). WebSearch returned only old Aug 2026 cached data; no new nightly confirmed. By pattern inference: **main CI gap day 16** (new record this cycle; nightly-20261016 still latest by inference). **b12x last confirmed nightly-20261026 (Entry 226)** — cannot confirm or deny new b12x build today. GitHub releases API 403. |
+| 4 Qwen models | WebSearch (extended) | **No new ~35B MoE models. No official Qwen4 weights released.** Qwen4-27B dense only (NOT 35B-A3B-FP8 drop-in per Sep 22 Apsara confirmation). Manifold market: ~42% probability of open-weights release by Nov 25 (last data Oct 24). October window closed; **November window now open** (Nov 25 resolution deadline active). No new single-node 35B contenders from other labs. Qwen3.8-Flash-Next remains current Qwen4-architecture preview (already tracked). Unofficial HF "Qwen4" repos confirmed name-squats — ignored per protocol. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 22) | **EGRESS_BLOCKED day 22** (cloud; DNS ENOTFOUND — forums.developer.nvidia.com; consistent pattern). No new actionable threads above prior ceiling t/386742 found via WebSearch. OTA2610 carry-forward action still pending. |
+
+### Cross-Correlated Findings
+
+1. **Arena static × vLLM v0.32.0 stable × SVD main CI gap day 16 [Checks 1+2+3].** Frozen pattern extends to day 16 (new record this cycle, up from day 15 Entry 226). No new SVD main build → no new Arena FP8 submissions → FP8 frontier at 80.27 static since May 2026.
+2. **v0.33.0 RC stage × SVD main gap [Checks 2+3].** v0.33.0rc0 cut Oct 26; stable likely ~Nov 1–7 window. SVD main nightly likely frozen waiting on v0.33.0 stable. When stable lands, expect SVD main nightly to resume promptly (per prior pattern: v0.32.0 Oct 18 → SVD nightly-20261016 same day).
+3. **Qwen4 November window now open [Check 4 × baseline].** First day of active Manifold watch window (Nov 25 deadline). Architecture confirmed 27B dense only — no 35B-A3B-FP8 drop-in forthcoming from this generation.
+4. **Docker Hub v2 API sort issue persists for both repos [Check 3].** Both `eugr/spark-vllm` and `eugr/spark-vllm-b12x` returned clearly-stale oldest-first results. Reliable check requires HTML tags page or direct `latest`-tag digest comparison.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, all 3 docs UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 in RC; no SM121 content found; v0.32.0 arch-guard handled Entry 212 |
+| `svd \| new prebuilt vllm version` | NOT FIRED — CI gap day 16 inferred; Docker Hub v2 sort issue; no new build confirmed |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Qwen4 weights; November window now open |
+| `forum \| new GB10 performance/stability finding` | CARRY-FORWARD — OTA2610 (Entry 219 ACTION) still pending |
+
+### Overall: WORTH WATCHING
+
+No trigger-level events. SVD main CI gap extends to day 16 (new record this cycle). v0.33.0 approaching stable (~Nov 1–7 estimate). Qwen4 November watch window opens today (42% by Nov 25, 27B dense only). Arena FP8 frontier static at 80.27 for ~27.5 weeks. OTA2610 ACTION from Entry 219 remains the primary open item. Docker Hub v2 API sort issue prevents reliable confirmation of both main nightly and b12x build status.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol. Re-run MTP baseline afterward.
+2. **[HIGH WATCH — v0.33.0 stable + SVD main nightly]** v0.33.0 stable likely ~Nov 1–7 window. When it drops: (a) check for SM121/arch-guard content; (b) watch SVD main nightly for corresponding build. Either event unblocks Arm C NVFP4 eval upgrade.
+3. **[NEW — Docker Hub API approach]** Docker Hub v2 API sort issue now confirmed for both `eugr/spark-vllm` and `eugr/spark-vllm-b12x`. Next check: use HTML tags page `https://hub.docker.com/r/eugr/spark-vllm/tags` or fetch `latest`-tag digest directly.
+4. **[CARRY-FORWARD — NVFP4 Arm C eval]** Waiting for SVD main nightly update (expected on v0.33.0 stable). Once available: test `nvidia/Qwen3.6-35B-A3B-NVFP4` only (NOT unsloth mirror per Entry 207 warning). Use FlashInfer #3566 `cublas` override per Entry 219.
+5. **[WATCH — Qwen4 November window]** November window now open (Nov 25 Manifold deadline). Monitor `Qwen/` HF org daily. If released: architecture is 27B dense (NOT a drop-in 35B-A3B-FP8 replacement for production).
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 226) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-10-31 (Entry 226) | 2026-11-01 (Entry 227, daily cloud) |
+| `svd_last_checked_date` | 2026-10-31 (Entry 226) CI gap day 15; b12x nightly-20261026 NEW | 2026-11-01 (Entry 227) CI gap day 16 (new record); Docker Hub v2 API stale/wrong-order for both main & b12x; main nightly inferred nightly-20261016; b12x last confirmed nightly-20261026 |
+| `forum_last_checked_date` | 2026-10-31 (Entry 226) EGRESS_BLOCKED day 21 | 2026-11-01 (Entry 227) EGRESS_BLOCKED day 22; ceiling t/386742 unchanged |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -18398,3 +18398,52 @@ SVD trigger fired: both main and b12x updated to nightly-20261101 (vLLM 0.33.0rc
 | `arena_top_fp8_qwen35_tok_s` | Poveda recipeCopyCount 128, updateTime 2026-10-23 | Poveda recipeCopyCount **129** (+1, 2026-11-01T20:29:51Z — same day as SVD nightly-20261101); performance 118.91 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 229 - DGX Spark Recon (2026-11-03)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 24, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (3 docs fetched by ID). Docker Hub HTML tags page (eugr/spark-vllm) used for SVD. PyPI simple index used for vLLM version check. HuggingFace/Qwen ENOTFOUND from cloud; WebSearch fallback used._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-01T20:29:51.969151Z** (UNCHANGED from Entry 228), recipeCopyCount **129** (UNCHANGED). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs FULLY UNCHANGED vs Entry 228. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~27.6 weeks. |
+| 2 vLLM | PyPI simple index (GitHub API 403; WebSearch) | **v0.33.0 still latest stable** (released 2026-11-02, Entry 228). No v0.33.1 or newer found (PyPI simple index, aarch64+x86_64 wheels confirmed for 0.33.0 only). WebSearch returned no SM121/GB10-specific content in v0.33.0. Arch-guard NOT FIRED. PR #40099, DeepGEMM #41063 status carry-forward (no new data). |
+| 3 SVD | Docker Hub HTML tags (hub.docker.com/r/eugr/spark-vllm/tags) | **nightly-20261101 still latest** (pushed "2 days ago" = Nov 1; same digest as `latest` tag 113d319c5693). No nightly-20261102 or nightly-20261103. CI gap **2 days** (normal interval post-stable; nightly-20261101 = vLLM 0.33.0rc1.dev465, FI 0.7.3). No new build to trigger Arm C eval. |
+| 4 Qwen | WebSearch (HF ENOTFOUND from cloud) | **No Qwen4 weights released.** November window day 3 (Manifold 42% by Nov 25, carry-forward). No Qwen3.7/3.9 or 35B-A3B-FP8 drop-in models found. A community snippet mentioning "Qwen3.8-27B" discussing 35B successor is unverified non-official noise. No new ~30-40B MoE/~3B-active contenders from other labs found. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 24) | **EGRESS_BLOCKED day 24** (DNS ENOTFOUND; consistent cloud pattern). WebSearch threads all pre-ceiling (IDs below t/386742). No new actionable DGX Spark performance/firmware/model/quant threads found above prior ceiling. OTA2610 carry-forward still pending. |
+
+### Cross-Correlated Findings
+
+1. **All 5 checks quiet on day 1 post-v0.33.0 stable [Checks 1-5].** v0.33.0 stable released Nov 2; SVD nightly-20261101 (effectively a v0.33.0 pre-release build) remains latest; Arena community practitioners have not yet submitted new benchmarks. This is a normal post-stable settling day.
+2. **SVD CI gap 2 days normal × v0.33.0 stable now tagged [Checks 2+3].** Expected pattern: SVD typically cuts a new nightly 1-3 days after upstream stable tags. Next build window: Nov 3-5. If a new nightly appears, it will be a true v0.33.0-based image (vs nightly-20261101 which was dev465 pre-stable).
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, Stojanovic UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest stable; no v0.33.1; no SM121 content found |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261101 still latest; CI gap 2 days (normal) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Qwen4 weights; November window day 3 |
+| `forum \| new GB10 performance/stability finding` | CARRY-FORWARD — OTA2610 (Entry 219 ACTION) still pending |
+
+### Overall: NO ACTION
+
+All checks static on day 1 post-v0.33.0 stable. Arena all 3 docs fully unchanged (80.27/118.91/218.85 — 27.6-week FP8 frontier streak). SVD CI gap 2 days is normal; next nightly expected Nov 3-5. No Qwen4 weights (November window day 3). Forum EGRESS_BLOCKED day 24. OTA2610 carry-forward remains the only open action item.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[WATCH — SVD next nightly]** nightly-20261101 is 2 days old post v0.33.0 stable; next build expected Nov 3-5. If it drops, it becomes the new Arm C eval target for NVFP4 (previously nightly-20261101).
+3. **[WATCH — Qwen4 November window]** Day 3 of November window (Nov 25 Manifold deadline, 42%). Monitor `Qwen/` HF org daily.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 228) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-02 (Entry 228) | 2026-11-03 (Entry 229, daily cloud) |
+| `svd_last_checked_date` | 2026-11-02 (Entry 228) nightly-20261101 (both main+b12x) | 2026-11-03 (Entry 229) nightly-20261101 still latest; CI gap 2 days (normal) |
+| `forum_last_checked_date` | 2026-11-02 (Entry 228) EGRESS_BLOCKED day 23 | 2026-11-03 (Entry 229) EGRESS_BLOCKED day 24; ceiling t/386742 unchanged |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

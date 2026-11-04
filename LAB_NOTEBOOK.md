@@ -18447,3 +18447,54 @@ All checks static on day 1 post-v0.33.0 stable. Arena all 3 docs fully unchanged
 | `forum_last_checked_date` | 2026-11-02 (Entry 228) EGRESS_BLOCKED day 23 | 2026-11-03 (Entry 229) EGRESS_BLOCKED day 24; ceiling t/386742 unchanged |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 230 - DGX Spark Recon (2026-11-04)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 25, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (3 docs fetched by ID). Docker Hub HTML tags page (hub.docker.com/r/eugr/spark-vllm/tags) used for SVD. WebSearch fallback used for vLLM version and Qwen/forum checks._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-10-02T07:37:35.719327Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-01T20:29:51.969151Z** (UNCHANGED from Entry 228/229), recipeCopyCount **129** (UNCHANGED). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs FULLY UNCHANGED vs Entry 229. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~27.9 weeks. |
+| 2 vLLM | WebSearch (GitHub API 403) | **v0.33.0 still latest stable** (released 2026-11-02, Entry 228). No v0.33.1 found. WebSearch returned no SM121/GB10-specific content in v0.33.0. Arch-guard NOT FIRED. PR #40099, DeepGEMM #41063 status carry-forward (no new data). |
+| 3 SVD | Docker Hub HTML tags page | **nightly-20261101 still latest** (pushed "3 days ago" = Nov 1; same digest 113d319c5693 as `latest` tag). No nightly-20261102, -20261103, or -20261104. CI gap **3 days** (normal post-stable; was 2 days Entry 229). No new Arm C eval target. |
+| 4 Qwen | WebSearch | **No Qwen4 weights released.** CTO Feifei Li at Amsterdam Apsara (Oct 29) reportedly said "within the week" (i.e., week of Nov 2) but that week has now passed without release. Manifold 42% by Nov 25 still standing but window slipping. No Qwen3.7/3.9 or Qwen3.8-35B-A3B-FP8 drop-in found. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 25) | **EGRESS_BLOCKED day 25** (DNS ENOTFOUND; consistent cloud pattern). WebSearch found **2 NEW threads above prior ceiling t/386742**: **t/387857 "Inventorization!"** (community setups inventory; asks when **driver 595.58.03 ARM64** and **CUDA 13.2** will be available for DGX Spark GB10 — first 595.x driver inquiry observed); **t/387929 "Let's optimize ... DGX Spark"** (framework-agnostic optimization, GPU clock cap workaround, Nov 3). New ceiling: **t/387929**. OTA2610 carry-forward still pending. |
+
+### Cross-Correlated Findings
+
+1. **All Arena + vLLM + SVD checks quiet on day 2 post-v0.33.0 stable [Checks 1-3].** Expected settling behavior; no immediate upgrade signal.
+2. **Qwen4 "week of Nov 2" window slipped [Check 4].** CTO Oct 29 Apsara remark ("within the week") went unfulfilled — no weights through Nov 4. Consistent with Entry 191 "early 2027" independent estimate. November window probability declining.
+3. **t/387857 driver 595.58.03 inquiry × CLAUDE.md "stay on 580.x" rule [Check 5].** Community asking about 595.x availability for DGX Spark GB10. 595.x is the generation after 590.x (which had the GB10 UMA leak and was rejected). If 595 is confirmed safe, it may open the path beyond 580.x. Early signal; no production relevance today.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, Stojanovic UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest stable; no v0.33.1; no SM121 content found |
+| `svd \| new prebuilt vllm version` | NOT FIRED — nightly-20261101 still latest; CI gap 3 days (normal) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Qwen4 weights; "week of Nov 2" window slipped |
+| `forum \| new GB10 performance/stability finding` | PARTIAL — 2 new INFO threads above ceiling (t/387857, t/387929); no ACTION content. New ceiling t/387929. OTA2610 carry-forward still pending. |
+
+### Overall: WORTH WATCHING
+
+Qwen4 "week of Nov 2" CTO window slipped without release; November probability declining. Forum has 2 new INFO threads above ceiling — most notable t/387857's 595.x driver inquiry (first observed 595.x generation question for DGX Spark GB10). Arena all 3 docs fully unchanged (80.27/118.91/218.85 — 27.9-week FP8 streak). SVD CI gap 3 days normal. No v0.33.1.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[WATCH — SVD next nightly]** nightly-20261101 is 3 days old post v0.33.0 stable; next build expected Nov 3-6. If it drops, it becomes the new Arm C eval target for NVFP4.
+3. **[WATCH — Qwen4 November window]** "Week of Nov 2" CTO window slipped. Nov 25 Manifold deadline 21 days away; probability declining. Reduce check frequency if no release by Nov 10.
+4. **[WATCH — Driver 595.x on DGX Spark]** t/387857 community inquiry about 595.58.03 ARM64 for GB10. If community confirms 595.x safe (SecureBoot prebuilt modules, no UMA leak like 590.x), log and assess vs 580.x hold. No action today.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 229) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-03 (Entry 229) | 2026-11-04 (Entry 230, daily cloud) |
+| `svd_last_checked_date` | 2026-11-03 (Entry 229) nightly-20261101 still latest; CI gap 2 days | 2026-11-04 (Entry 230) nightly-20261101 still latest; CI gap 3 days (normal) |
+| `forum_last_checked_date` | 2026-11-03 (Entry 229) EGRESS_BLOCKED day 24; ceiling t/386742 | 2026-11-04 (Entry 230) EGRESS_BLOCKED day 25; ⚠ 2 NEW threads above prior ceiling: t/387857 "Inventorization!" (595.x driver inquiry), t/387929 "Let's optimize DGX Spark"; new ceiling t/387929 |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

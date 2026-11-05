@@ -18498,3 +18498,55 @@ Qwen4 "week of Nov 2" CTO window slipped without release; November probability d
 | `forum_last_checked_date` | 2026-11-03 (Entry 229) EGRESS_BLOCKED day 24; ceiling t/386742 | 2026-11-04 (Entry 230) EGRESS_BLOCKED day 25; ⚠ 2 NEW threads above prior ceiling: t/387857 "Inventorization!" (595.x driver inquiry), t/387929 "Let's optimize DGX Spark"; new ceiling t/387929 |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+## Entry 231 - DGX Spark Recon (2026-11-05)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 26, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (3 docs fetched by ID). Docker Hub HTML tags page (hub.docker.com/r/eugr/spark-vllm/tags) used for SVD. WebSearch fallback used for vLLM version and Qwen/forum checks._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27.413279Z** (bumped from 2026-10-02T07:37:35Z — automated metadata sweep Nov 5 ~02:05 UTC), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-05T02:10:37.915711Z** (bumped from 2026-11-01T20:29:51Z — another metadata sweep, same ~02:10 UTC window), recipeCopyCount **130** (+1 from 129). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs: performance FULLY UNCHANGED. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~28.0 weeks. Stojanovic+Poveda metadata sweep happened together (02:05–02:10 UTC) — automated batch pattern. |
+| 2 vLLM | WebSearch (GitHub API 403) | **v0.33.0 still latest stable** (released 2026-11-01). No v0.33.1 found. Summary confirms v0.33.0 drops CUDA 12.9 support → CUDA 13.0 only going forward. No SM121/GB10/Blackwell-specific content found in v0.33.0 summary. Arch-guard NOT FIRED. PR #40099, DeepGEMM #41063 status carry-forward (GitHub API 403). |
+| 3 SVD | Docker Hub HTML tags page | **⚠ TRIGGER FIRED: nightly-20261104 NEW** (pushed ~14 hours before check, ~Nov 4 21:00 UTC; digest e608a6c31e6f; size **10.80 GB** vs 10.76 GB for nightly-20261101 = +40 MB). CI gap nightly-20261101 → nightly-20261104 = 3 days (normal). b12x variant not visible in tags listing this check (last confirmed nightly-20261026 per Entry 226). vLLM version in new build: unknown (GitHub API 403; likely v0.33.0-based stable). New Arm C eval target: **nightly-20261104**. |
+| 4 Qwen | WebSearch | **No Qwen4 weights released.** "Week of Nov 2" CTO window slipped again (now Nov 5 with nothing released). No Qwen3.7/3.9 or Qwen3.8-35B-A3B-FP8 drop-in found. Official Qwen lineup confirmed as Qwen3.8-27B and Qwen3.8-2.4T-A95B (both Aug 2026). Community actively requesting Qwen3.8-35B-A3B variant (HF comments) — not yet released by Qwen. No new ~30-40B-MoE model from other labs found. Manifold 42% by Nov 25 probability still standing but window narrowing. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 26) | **EGRESS_BLOCKED day 26** (DNS ENOTFOUND; consistent cloud pattern). No new threads found above ceiling t/387929. t/387929 "Let's optimize DGX Spark" still the highest-numbered relevant thread observed. t/386805 "fans barely speed up at high temps" (below ceiling, Oct 2026) returned; not new. No OTA announcement found. Ceiling UNCHANGED at **t/387929**. OTA2610 carry-forward still pending. |
+
+### Cross-Correlated Findings
+
+1. **SVD nightly-20261104 NEW × v0.33.0 stable [Checks 2+3].** The new SVD nightly (+40 MB size bump) was built 3 days after v0.33.0 stable dropped. This nightly is very likely based on v0.33.0 (not a dev build). v0.33.0 drops CUDA 12.x — this doesn't affect SVD arm64 builds directly but confirms the upstream ecosystem has fully committed to CUDA 13. The nightly-20261104 becomes the new Arm C eval target for NVFP4; vLLM version unconfirmed until image is inspected.
+2. **Stojanovic + Poveda metadata sweep together (Nov 5 ~02:05–02:10 UTC) [Check 1].** Same automated batch pattern as prior entries (Oct 16, 20, 21, 23 sweeps). No performance change; no new FP8 submissions. 28.0-week FP8 frontier stasis.
+3. **Qwen4 November window narrowing [Check 4].** CTO "week of Nov 2" window slipped; Nov 25 Manifold deadline 20 days away; probability declining. No new MoE model of interest from other labs.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, Stojanovic UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest stable; no v0.33.1; no SM121 content found |
+| `svd \| new prebuilt vllm version` | **⚠ FIRED — nightly-20261104 NEW** (digest e608a6c31e6f, 10.80 GB, +40 MB vs nightly-20261101). New Arm C eval target. |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no drop-in successor; Qwen4 no weights; "week of Nov 2" CTO window slipped |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — no new threads above t/387929 ceiling; day 26 EGRESS_BLOCKED |
+
+### Overall: WORTH WATCHING
+
+New SVD nightly-20261104 triggered the SVD alert — +40 MB size bump vs nightly-20261101, likely v0.33.0-based stable build, now the Arm C eval target for NVFP4. All Arena docs unchanged (80.27/118.91/218.85 — 28.0-week FP8 streak). No v0.33.1. Qwen4 November window narrowing. Forum ceiling unchanged.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[ACTION — SVD nightly-20261104 eval]** New build is the Arm C eval target. Next step: deploy to eval Spark, confirm vLLM version (likely v0.33.0), run NVFP4 benchmark suite. If NVFP4 performance matches or exceeds Entry 149 (103.96 tok/s Sawotin baseline), proceed to production eval gate.
+3. **[WATCH — Qwen4 November window]** No weights through Nov 5. Nov 25 Manifold deadline 20 days away; probability declining. If no release by Nov 10, reduce to weekly check frequency.
+4. **[WATCH — Driver 595.x on DGX Spark]** Carry-forward from Entry 230. Community inquiry t/387857 about 595.58.03 ARM64 for GB10. No confirmation of safety yet. No action today.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 230) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-04 (Entry 230) | 2026-11-05 (Entry 231, daily cloud) |
+| `svd_last_checked_date` | 2026-11-04 (Entry 230) nightly-20261101 CI gap 3 days | 2026-11-05 (Entry 231) ⚠ TRIGGER FIRED: **nightly-20261104 NEW** (digest e608a6c31e6f, 10.80 GB, +40 MB); b12x last confirmed nightly-20261026 (not visible this check); new Arm C eval target |
+| `forum_last_checked_date` | 2026-11-04 (Entry 230) EGRESS_BLOCKED day 25; ceiling t/387929 | 2026-11-05 (Entry 231) EGRESS_BLOCKED day 26; ceiling t/387929 UNCHANGED |
+| `arena_top_fp8_qwen35_tok_s` | 80.27 (Stojanovic UNCHANGED, updateTime 2026-10-02) | 80.27 (Stojanovic UNCHANGED; metadata sweep 2026-11-05T02:05:27Z — automated batch, performance UNCHANGED); Poveda updateTime 2026-11-05T02:10:37Z, recipeCopyCount 130 (+1) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._
+

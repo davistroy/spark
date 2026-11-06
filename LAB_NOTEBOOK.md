@@ -18550,3 +18550,55 @@ New SVD nightly-20261104 triggered the SVD alert — +40 MB size bump vs nightly
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
 
+## Entry 232 - DGX Spark Recon (2026-11-06)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 27, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (3 docs fetched by ID). Docker Hub v2 API (hub.docker.com/v2/repositories/eugr/spark-vllm/tags) used for SVD. WebSearch fallback used for vLLM version and forum checks._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27.413279Z** (UNCHANGED from Entry 231), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-06T07:47:08.266463Z** (⚠ NEW — bumped from 2026-11-05T02:10:37Z — solo metadata sweep Nov 6 ~07:47 UTC, Stojanovic NOT included this time), recipeCopyCount **131** (+1 from 130). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs: performance FULLY UNCHANGED. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~28.1 weeks. |
+| 2 vLLM | WebSearch (GitHub API 403) | **v0.33.0 still latest stable** (released 2026-11-01). No v0.33.1. Arch-guard NOT FIRED. NOTABLE: community GB10 builds active — `timothystewart6/vllm-gb10 v0.33.0-gb10.0` (vLLM 0.33.0, FlashInfer 0.7.2.post1; bumped from v0.32.0) and `zbrad/vllm` cu134 GB10 wheels (`v0.33.1.dev147+gb10.cu134.20261102.0`, `v0.33.1.dev149+gb10.cu134.20261102.1`). Both are unofficial SM121-targeted builds, not upstream. v0.33.0 upstream: PyTorch 2.14.0, CUDA 13.0-only going forward; NVFP4 DeepGEMM MegaMoE items included; no SM121/GB10 direct mention. |
+| 3 SVD | Docker Hub v2 API | **nightly-20261104 still latest nightly** (digest e608a6c3..., 10.80 GB — same as Entry 231; CI gap day 2 since nightly-20261104, normal). ⚠ **TWO NEW TAG PATTERNS OBSERVED**: `station-20261104` (pushed 2026-11-05 19:56:46 UTC, digest bbaf609e..., **10.92 GB** = +120 MB vs nightly-20261104) and `muse-spark` (pushed 2026-11-05 20:47:39 UTC, digest 24e75d49..., **14.42 GB** = +3.6 GB vs nightly-20261104). Both appeared together on Nov 5. `station-*` and `muse-spark` are new tag name patterns — never seen in prior entries. No documentation found via WebSearch. |
+| 4 Qwen | WebSearch | **No Qwen4 weights released.** CTO "week of Nov 2" window slipped again (now Nov 6+, day 4 past CTO window). Qwen3.8-Flash-Next confirmed as open-weights preview of Qwen4 architecture (no 35B-A3B-FP8 drop-in). No Qwen3.8-35B-A3B-FP8 found. Expected Qwen4 lineup: Max/Plus/Flash/27B; 27B open-weights reportedly first. No new ~30-40B MoE model from other labs. November window still open but probability declining daily. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 27) | **EGRESS_BLOCKED day 27** (DNS ENOTFOUND; consistent cloud pattern). No new threads found above ceiling t/387929 via WebSearch. OTA2610 carry-forward (Entry 219). |
+
+### Cross-Correlated Findings
+
+1. **SVD `muse-spark` (+3.6 GB vs nightly) × community vllm-gb10 v0.33.0 builds [Checks 2+3].** The same week community GB10 builds (vllm-gb10 v0.33.0-gb10.0, zbrad cu134 wheels) appeared, SVD gained a 14.42 GB `muse-spark` tag — 3.6 GB larger than the standard nightly, suggesting bundled content (model checkpoint, additional runtime, or merged image). `station-20261104` (+120 MB) is consistent with a stable tagged variant of the Nov 4 nightly. Neither tag has documentation; both need community investigation.
+2. **Poveda metadata solo sweep (Nov 6 07:47Z) × no Arena performance change [Check 1].** Unlike yesterday's paired Stojanovic+Poveda batch, today only Poveda was swept. Pattern is becoming more varied (solo vs pair sweeps); still automated, still no performance change. FP8 vLLM frontier static 28.1 weeks.
+3. **Qwen4 November window slipping daily × no new models on Arena [Checks 1+4].** Through Nov 6, no Qwen4 or competing drop-in model has appeared. Arena FP8 frontier unchanged since May 26. If Qwen4 open weights miss November entirely, the production model landscape is stable well into Q1 2027.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Firestore confirmed, Stojanovic UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED (upstream) — v0.33.0 still latest; no v0.33.1; no SM121 content. NOTED: community vllm-gb10 v0.33.0-gb10.0 and zbrad cu134 builds (unofficial). |
+| `svd \| new prebuilt vllm version / new tag pattern` | **⚠ FIRED — `station-20261104` NEW (10.92 GB) and `muse-spark` NEW (14.42 GB)** — both appeared 2026-11-05. New tag name patterns, no documentation. |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no drop-in successor; Qwen4 no weights; CTO window slipped past day 4 |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 27; ceiling t/387929 carry-forward |
+
+### Overall: WORTH WATCHING
+
+Two new SVD tag patterns appeared Nov 5: `station-20261104` (10.92 GB, +120 MB vs nightly) and `muse-spark` (14.42 GB, +3.6 GB vs nightly). The `muse-spark` tag is significantly larger than any prior nightly — unknown purpose; could indicate bundled content, a new project integration, or expanded runtime. Community vllm-gb10 v0.33.0-gb10.0 (FI 0.7.2) active. Arena performance FULLY UNCHANGED (80.27/118.91/218.85 — 28.1-week FP8 streak). No v0.33.1. Qwen4 no weights (CTO window +4 days overdue).
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[ACTION — Investigate SVD `muse-spark` and `station-*` tags]** `muse-spark` at 14.42 GB is 3.6 GB larger than the nightly — investigate on eugr Discord/GitHub. If it bundles a model or integrates a new feature, assess impact on NVFP4 eval path. `station-20261104` is likely a stable-tagged nightly variant; lower priority.
+3. **[ACTION — SVD nightly-20261104 eval (carry-forward Entry 231)]** New Arm C eval target is nightly-20261104. Deploy to eval Spark, confirm vLLM version (likely v0.33.0), run NVFP4 benchmark suite. `muse-spark` context may affect what build to use.
+4. **[WATCH — Qwen4 November window]** No weights through Nov 6. If no release by Nov 10, reduce to weekly check frequency.
+5. **[WATCH — Driver 595.x on DGX Spark]** Carry-forward from Entry 230. Community inquiry t/387857 about 595.58.03 ARM64 for GB10. No confirmation of safety yet.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 231) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-05 (Entry 231) | 2026-11-06 (Entry 232, daily cloud) |
+| `arena_top_fp8_qwen35_tok_s` | Poveda updateTime 2026-11-05T02:10:37Z, recipeCopyCount 130 | Poveda updateTime **2026-11-06T07:47:08Z** (solo sweep Nov 6), recipeCopyCount **131** (+1); performance UNCHANGED |
+| `svd_last_checked_date` | nightly-20261104 (Entry 231 trigger); b12x not visible | ⚠ **NEW: `station-20261104` (10.92 GB) and `muse-spark` (14.42 GB)** appeared Nov 5; nightly-20261104 still latest nightly; CI gap day 2 (normal) |
+| `forum_last_checked_date` | 2026-11-05 (Entry 231) EGRESS_BLOCKED day 26; ceiling t/387929 | 2026-11-06 (Entry 232) EGRESS_BLOCKED day 27; ceiling t/387929 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

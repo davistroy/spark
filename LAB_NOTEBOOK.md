@@ -18709,3 +18709,57 @@ SVD nightly-20261107 appeared Nov 7 (12:53 UTC, after Entry 233's check window).
 | `vllm_latest_observed` | v0.33.0 (2026-11-02) | v0.33.0 UNCHANGED; NOTED: CUDA 13.0-only going forward (CUDA 12.9 wheels removed in v0.33.0) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 235 - DGX Spark Recon (2026-11-09)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 30, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases API 503/403 to vllm-project/vllm (consistent). Firestore REST API world-readable (3 docs fetched by ID directly). Docker Hub v2 API accessible. SVD prebuilt wheel versions NOW CONFIRMED via GitHub releases page (resolves Entry 234 carry-forward). HuggingFace EGRESS_BLOCKED from cloud session; Qwen check via WebSearch fallback._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27.413279Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-06T07:47:08.266463Z** (UNCHANGED), recipeCopyCount **131** (UNCHANGED). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29.867343Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs: performance FULLY UNCHANGED. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static ~28.4 weeks. |
+| 2 vLLM | WebSearch (GitHub API 403) | **v0.33.0 still latest stable** (released 2026-11-01/02). No v0.33.1. CUDA 13.0-only going forward (CUDA 12.9 wheels removed in v0.33.0); Medusa/MLP speculators removed. No SM121/GB10/Blackwell/arch-guard content. Arch-guard NOT FIRED. PR #40099 carry-forward (status UNKNOWN — GitHub API 403); issue #41063 (DeepGEMM) status UNKNOWN (GitHub API 403). Community: Gemma4 MTP PR #41745 nearing merge (first non-bot approval). |
+| 3 SVD | Docker Hub v2 API + GitHub releases page | **nightly-20261107 STILL LATEST** (11.01 GB, pushed 2026-11-07T12:53Z). No nightly-20261108 or nightly-20261109 as of check (2-day CI gap; within normal observed pause patterns). **NEW CONFIRMED:** GitHub releases page: `prebuilt-vllm-current` = **vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107** (Nov 7); `prebuilt-flashinfer-current` = **FlashInfer 0.7.3-56bc1f85-d20261107** (Nov 7). dev1016 = +25 commits over dev991 (Entry 233/nightly-20261106). `muse-spark` (14.42 GB) UNCHANGED. `station-20261104` UNCHANGED. Resolves Entry 234 carry-forward. |
+| 4 Qwen | WebSearch (HuggingFace EGRESS_BLOCKED) | **No Qwen4 open weights.** No official Qwen4 HuggingFace repo indexed as of Nov 9. CTO "week of Nov 2" window slipped — Day 7+. No Qwen3.8-35B-A3B; `Qwen-AgentWorld-35B-A3B` exists (~Jun 2026, niche world-model, NOT a main Qwen release). WebSearch returned a stale Manifold ~42% snapshot from Oct 24; Entry 234 reported ~61% — carry forward the Nov 8 reading as more recent. No new MoE successors from other labs. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 30) | **EGRESS_BLOCKED day 30** (DNS ENOTFOUND; consistent cloud pattern). No new threads above ceiling t/387929 found via WebSearch. t/364688 "595.58.03 Certified Linux-aarch64 Driver and CUDA 13.2 — when for DGX Spark GB10" resurfaced (below ceiling; relevant to carry-forward driver 595.x watch item). OTA2610 carry-forward. |
+
+### Cross-Correlated Findings
+
+1. **Arena × vLLM × Qwen all static [Checks 1+2+4].** Through Nov 9, no Arena performance change, no vLLM patch release, and no Qwen successor has materialized. FP8 vLLM frontier frozen at 80.27 tok/s since May 26 (28.4 weeks). Production model landscape fully stable well into Q1 2027 at current trajectory.
+2. **SVD nightly-20261107 wheel versions confirmed [Check 3].** vLLM dev1016 + FI 0.7.3 now confirmed from the GitHub releases page. The +25 commits over dev991 (nightly-20261106) are a routine daily progression. No new nightly on Nov 8 or 9 — 2-day CI gap is within normal observed pause patterns (see prior CI gaps of 3-16 days). nightly-20261107 remains the current eval target.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 Firestore docs confirmed UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest; no v0.33.1; no SM121 content. |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (no new nightly-20261108/109). **RESOLVED: wheel versions confirmed** (vLLM dev1016 + FI 0.7.3 from GitHub releases; Entry 234 carry-forward closed). |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no weights; CTO window slipped Day 7+; no HF repo (HF EGRESS_BLOCKED from cloud; WebSearch confirms no new release indexed) |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 30; ceiling t/387929 carry-forward |
+
+### Overall: WORTH WATCHING
+
+Arena performance FULLY UNCHANGED (80.27/118.91/218.85 — 28.4-week FP8 streak). No v0.33.1 upstream. Qwen4 no weights (CTO window +7 days overdue). Forum EGRESS_BLOCKED day 30. SVD nightly-20261107 wheel versions now confirmed (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3); 2-day CI gap is within normal. No action triggers fired. Single notable positive: Entry 234 carry-forward on SVD wheel confirmation is now closed.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[CLOSED — SVD wheel confirmation]** nightly-20261107 = vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3 confirmed (Entry 234 carry-forward closed).
+3. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target is nightly-20261107 (vLLM dev1016 + FI 0.7.3). Run NVFP4 benchmark suite on eval Spark with this build.
+4. **[CARRY-FORWARD — muse-spark investigation]** `muse-spark` tag (14.42 GB, +3.6 GB vs nightly) still unexplained. Check eugr Discord/GitHub for context.
+5. **[WATCH — Qwen4 November window]** CTO window +7 days overdue. Reduce to 2×/week check frequency if no weights by Nov 10–12. Manifold ~61% (Nov 8 reading) by Nov 25.
+6. **[WATCH — Driver 595.x on DGX Spark]** t/364688 resurfaced. Community inquiry ongoing. No confirmation of safety yet.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 234) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-08 (Entry 234) | 2026-11-09 (Entry 235, daily cloud) |
+| `svd_last_checked_date` | nightly-20261107 (pushed Nov 7 12:53Z); prebuilt wheel versions UNCONFIRMED | **nightly-20261107 UNCHANGED; wheel versions NOW CONFIRMED: vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107 + FlashInfer 0.7.3-56bc1f85-d20261107** (GitHub releases page, Nov 7). No nightly-20261108/109 as of check. |
+| `forum_last_checked_date` | 2026-11-08 (Entry 234) EGRESS_BLOCKED day 29; ceiling t/387929 | 2026-11-09 (Entry 235) EGRESS_BLOCKED day 30; ceiling t/387929 UNCHANGED |
+| `arena_top_fp8_qwen35_tok_s` | Unchanged — all 3 docs confirmed identical to Entry 233 | UNCHANGED — all 3 docs confirmed identical to Entry 234 (Stojanovic 80.27; Poveda 118.91 recipeCopyCount 131; Atlas 218.85) |
+| `vllm_latest_observed` | v0.33.0 UNCHANGED | v0.33.0 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

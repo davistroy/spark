@@ -18817,3 +18817,56 @@ No triggers fired. All five data sources show continuity with Entry 235: Arena p
 | `vllm_latest_observed` | v0.33.0 UNCHANGED | v0.33.0 UNCHANGED (confirmed via WebSearch; GitHub API 403) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 237 - DGX Spark Recon (2026-11-11)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 32, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (3 docs fetched by ID directly). Docker Hub v2 API still returning 404; SVD check via GitHub releases page. HuggingFace EGRESS_BLOCKED from cloud session; Qwen check via WebSearch fallback._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-09T13:38:12Z** (UNCHANGED from Entry 236), recipeCopyCount **132** (UNCHANGED). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs fully UNCHANGED from Entry 236. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static **28.7 weeks** (since 2026-05-26). |
+| 2 vLLM | GitHub releases page (API 403 bypass) | **v0.33.0 still latest stable** (released 2026-11-02). No v0.33.1 or v0.34.0. No SM121/GB10/Blackwell/arch-guard content in v0.33.0. NOTABLE: v0.33.0 release notes mention "Qwen3.8 NVFP4 checkpoint fitting on one DGX Spark" — upstream vLLM now explicitly references DGX Spark for Qwen3.8-Flash-Next NVFP4. v0.32.0 SM12x notes (already tracked). PR #40099/issue #41063 status UNKNOWN (GitHub API 403). Arch-guard NOT FIRED. |
+| 3 SVD | GitHub releases page | **nightly-20261107 STILL LATEST** (confirmed via GitHub releases: `prebuilt-vllm-current` = vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107, `prebuilt-flashinfer-current` = FlashInfer 0.7.3-56bc1f85-d20261107; both labeled "New stable build" Nov 7). No new nightly after Nov 7 as of this check — **4-day CI gap** (Nov 7–11; well within normal, longest observed: 16 days). `muse-spark` (14.42 GB) UNCHANGED. Docker Hub v2 API returning 404 again; GitHub releases is reliable source. |
+| 4 Qwen | WebSearch (HuggingFace EGRESS_BLOCKED) | **No official Qwen4 open weights.** CTO "week of Nov 2" window +9 days overdue (Nov 11). ⚠ **NEW: `IteraCompute/Qwen4-27B-NVFP4` placeholder repo on HuggingFace** — third-party NVFP4 quantization pre-staged; repo explicitly notes no Qwen4 weights available yet. First NVFP4 placeholder of this kind; suggests weight release perceived as imminent by community. ⚠ **NEW: `Qwen4-Exp` / `qwen4_exp` model type added to Transformers library** (class `Qwen4ExpForConditionalGeneration`; base: Qwen/Qwen3.8-Flash-Next; architecture: Gated Delta Network + Qwen Sparse Attention). Community vLLM/SGLang kernel PRs for `qwen4_exp` noted (unmerged). Qwen3.8-Flash-Next (Aug 26) = Qwen4 architecture preview (125B MoE, 11B active), NOT a 35B-A3B MoE drop-in. No Qwen3.7, no Qwen4-35B-A3B. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 32) | **EGRESS_BLOCKED day 32** (DNS ENOTFOUND; consistent cloud pattern). WebSearch found no threads above ceiling t/387929. Highest thread ID in search results: t/386341 (October 2026 OTA thread, below ceiling). OTA2610 carry-forward. |
+
+### Cross-Correlated Findings
+
+1. **Arena × vLLM × SVD all static [Checks 1+2+3].** Through Nov 11, no Arena performance change, no vLLM patch release, and no new SVD nightly. FP8 vLLM frontier frozen at 80.27 tok/s since May 26 (28.7 weeks). Production model landscape fully stable.
+2. **Qwen4-27B NVFP4 placeholder + Transformers qwen4_exp support [Check 4].** Two independent ecosystem signals that Qwen4-27B weights are perceived as imminent: IteraCompute has staged an NVFP4 quantization repo, and the `qwen4_exp` architecture class is now in Transformers. NOTE: Qwen4-27B is a 27B DENSE model (Gated Delta Network + QSA hybrid architecture), NOT a 35B-A3B MoE drop-in — it would require a full eval cycle, not just a swap.
+3. **vLLM v0.33.0 → "Qwen3.8 NVFP4 on one DGX Spark" [Checks 2+4].** Upstream vLLM release notes now explicitly reference DGX Spark for Qwen3.8-Flash-Next NVFP4 (the Qwen4 architecture preview model). Corroborates ecosystem maturation around qwen4_exp models on GB10.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 Firestore docs confirmed UNCHANGED from Entry 236) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest; no SM121 content in v0.33.0; GitHub API 403. |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (4-day CI gap; no new builds Nov 8–11). |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no official weights; CTO window +9 days; IteraCompute placeholder created (27B DENSE only, not 35B-A3B MoE). |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 32; ceiling t/387929 carry-forward. |
+
+### Overall: WORTH WATCHING
+
+No triggers fired. All five data sources show continuity with Entry 236: Arena performance static (80.27/118.91/218.85 — 28.7-week FP8 streak), vLLM v0.33.0 unchanged, SVD CI quiet (4-day gap, normal), Forum EGRESS_BLOCKED day 32. Notable new: Qwen4 ecosystem pre-positioning signals — IteraCompute NVFP4 placeholder repo staged and `qwen4_exp` architecture added to Transformers library. These are the strongest proximity signals for Qwen4-27B weights seen to date. Weights are still not released; CTO window +9 days overdue.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target is nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3). Run NVFP4 benchmark suite on eval Spark with this build.
+3. **[CARRY-FORWARD — muse-spark investigation]** `muse-spark` tag (14.42 GB, +3.6 GB vs nightly) still unexplained. Check eugr Discord/GitHub for context.
+4. **[WATCH — Qwen4-27B imminent, NOT a production drop-in]** IteraCompute NVFP4 placeholder is the strongest release-proximity signal yet. Recommend maintaining daily checks. NOTE: Qwen4-27B is a 27B DENSE model (Gated Delta Network + QSA), NOT a 35B-A3B MoE drop-in — will require full eval cycle, not just a swap. When weights appear: (a) check SVD for `qwen4_exp` vLLM kernel support before attempting to load; (b) note that community SGLang/vLLM PRs for qwen4_exp are unmerged as of this entry.
+5. **[NEW WATCH — qwen4_exp in Transformers]** Architecture class `Qwen4ExpForConditionalGeneration` now in Transformers library. Monitor vLLM for `qwen4_exp` kernel support PRs (unmerged as of this check). Required before Qwen4-27B can run on SVD.
+6. **[WATCH — Driver 595.x on DGX Spark]** t/364688 carry-forward. No confirmation of safety yet.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 236) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-10 (Entry 236) | 2026-11-11 (Entry 237, daily cloud) |
+| `svd_last_checked_date` | 2026-11-10 (Entry 236) — nightly-20261107 STILL LATEST (3-day CI gap) | **nightly-20261107 STILL LATEST** (4-day CI gap; no builds Nov 8–11); prebuilt wheels UNCHANGED |
+| `forum_last_checked_date` | 2026-11-10 (Entry 236) EGRESS_BLOCKED day 31; ceiling t/387929 | 2026-11-11 (Entry 237) EGRESS_BLOCKED day 32; ceiling t/387929 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

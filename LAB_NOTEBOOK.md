@@ -18870,3 +18870,57 @@ No triggers fired. All five data sources show continuity with Entry 236: Arena p
 | `forum_last_checked_date` | 2026-11-10 (Entry 236) EGRESS_BLOCKED day 31; ceiling t/387929 | 2026-11-11 (Entry 237) EGRESS_BLOCKED day 32; ceiling t/387929 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 238 - DGX Spark Recon (2026-11-12)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 33, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases API 403 to vllm-project/vllm (consistent). Firestore REST API world-readable (3 docs fetched by ID directly). Docker Hub v2 API still returning 404; SVD check via GitHub releases page. HuggingFace EGRESS_BLOCKED from cloud session; Qwen check via WebSearch fallback. runtimewire.com EGRESS_BLOCKED (domain unreachable from cloud; Qwen3.8-Max "next week" weights claim unverifiable directly)._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-09T13:38:12Z** (UNCHANGED from Entry 237), recipeCopyCount **132** (UNCHANGED). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-10-18T21:37:29Z** (UNCHANGED), recipeCopyCount **175** (UNCHANGED). All 3 docs fully UNCHANGED from Entry 237. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static **28.8 weeks** (since 2026-05-26). |
+| 2 vLLM | GitHub releases page (API 403 bypass) | **v0.33.0 still latest stable** (released 2026-11-02). No v0.33.1 or v0.34.0. No SM121/GB10/Blackwell/arch-guard content in v0.33.0 release notes. v0.33.0 continues to mention "Qwen3.8-Flash-Next-NVFP4 on one DGX Spark" (carry-forward). PR #40099/#39138/#41063 status UNKNOWN (GitHub API 403). Arch-guard NOT FIRED. |
+| 3 SVD | GitHub releases page | **nightly-20261107 STILL LATEST** (confirmed via GitHub releases: `prebuilt-vllm-current` = vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107, `prebuilt-flashinfer-current` = FlashInfer 0.7.3-56bc1f85-d20261107; both labeled "New stable build" Nov 7). No new nightly after Nov 7 as of this check — **5-day CI gap** (Nov 7–12; well within normal, longest observed: 16 days). `muse-spark` tag not visible in this check (GitHub releases page partial load; prior entries confirmed 14.42 GB present on Nov 5). Eval target unchanged: nightly-20261107. |
+| 4 Qwen | WebSearch (HuggingFace EGRESS_BLOCKED) | **⚠ Qwen3.8-Max preview live on Alibaba Cloud** (confirmed by multiple sources; cloud-only subscription access via Alibaba Cloud Token Plan, QwenWork, Qoder, QwenStudio). Architecture = Qwen4 family (GDN + QSA = same as Qwen3.8-Flash-Next). One source (runtimewire.com, EGRESS_BLOCKED; unverifiable directly) claims **"open weights scheduled next week"** — single source, cannot confirm. Second search found no Alibaba official confirmation of open-weight date. No Qwen4 open weights on HuggingFace. No Qwen4-27B weights released. Naming confusion: some sites call Qwen3.8-Max "Qwen4-Max preview" (aifirstlook.com). CTO "week of Nov 2" window **+10 days overdue** (Nov 12). |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 33) | **EGRESS_BLOCKED day 33** (DNS ENOTFOUND; consistent cloud pattern). WebSearch found no threads above ceiling t/387929. Highest thread ID in search results: t/383406 (DGPP, well below ceiling). OTA2610 carry-forward. |
+
+### Cross-Correlated Findings
+
+1. **Arena × vLLM × SVD all static [Checks 1+2+3].** Through Nov 12, no Arena performance change, no vLLM patch release, and no new SVD nightly. FP8 vLLM frontier frozen at 80.27 tok/s since May 26 (28.8 weeks). Production model landscape fully stable.
+2. **Qwen3.8-Max preview on Alibaba Cloud [Check 4].** Cloud preview of the Qwen4-architecture model is confirmed live. This is consistent with Alibaba's pattern of cloud preview preceding open-weight release by 2–6 weeks (observed in Qwen2.5, Qwen3 families). Single unverifiable source (runtimewire.com, EGRESS_BLOCKED from cloud) claims "open weights next week." Cannot be confirmed but is the strongest proximity signal to date.
+3. **Qwen3.8-Max is NOT a 35B-A3B MoE drop-in [Check 4].** The model is Qwen4 architecture (GDN + QSA, 125B+/11B active parameters), different from production's 35B MoE with 3B active. Full eval cycle required; not a hot-swap. The trigger `Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) model weights` will NOT fire for Qwen3.8-Max weights specifically (unless a 35B-A3B MoE variant appears separately).
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 Firestore docs confirmed UNCHANGED from Entry 237) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest; no SM121 content; GitHub API 403 for PR status |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (5-day CI gap; no new builds Nov 8–12) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no official weights released. Qwen3.8-Max cloud preview noted; "next week" weights claim unverified (single source). |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 33; ceiling t/387929 carry-forward |
+
+### Overall: WORTH WATCHING
+
+No triggers formally fired. Arena, vLLM, and SVD fully static (28.8-week FP8 streak, v0.33.0 unchanged, 5-day CI gap). Key new signal: Qwen3.8-Max cloud preview is now confirmed live on Alibaba Cloud — the first Qwen4-architecture model in production cloud service. One unverifiable source claims open weights are "scheduled next week." This is consistent with Alibaba's historical pattern. NOTE: Qwen3.8-Max uses the Qwen4 architecture (GDN + QSA, 125B+/11B active), NOT a 35B-A3B MoE drop-in — will require a full eval cycle, not a production swap. CTO "week of Nov 2" window +10 days overdue; watch HuggingFace Qwen org closely.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target is nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3). Run NVFP4 benchmark suite on eval Spark with this build.
+3. **[CARRY-FORWARD — muse-spark investigation]** `muse-spark` tag (14.42 GB, +3.6 GB vs nightly) still unexplained. Not visible in today's SVD GitHub releases page (partial load); check eugr Discord/GitHub for context.
+4. **[ESCALATING WATCH — Qwen3.8-Max open weights]** Cloud preview confirmed live. Single source (unverifiable) claims weights "next week." Check HuggingFace Qwen org daily. When weights appear: (a) check SVD for Qwen4-arch (`qwen4_exp`) vLLM kernel support before attempting to load; (b) note unmerged community vLLM/SGLang PRs for `qwen4_exp` as of Entry 237; (c) this is NOT a production drop-in — full eval cycle required.
+5. **[CARRY-FORWARD — qwen4_exp in Transformers]** Architecture class `Qwen4ExpForConditionalGeneration` now in Transformers library. Monitor vLLM for `qwen4_exp` kernel support PRs (unmerged as of Entry 237). Required before Qwen3.8-Max can run on SVD.
+6. **[WATCH — Driver 595.x on DGX Spark]** t/364688 carry-forward. No confirmation of safety yet.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 237) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-11 (Entry 237) | 2026-11-12 (Entry 238, daily cloud) |
+| `svd_last_checked_date` | 2026-11-11 (Entry 237) — nightly-20261107 STILL LATEST (4-day CI gap) | **2026-11-12 (Entry 238) — nightly-20261107 STILL LATEST** (5-day CI gap; no new builds Nov 8–12); wheels UNCHANGED (vLLM dev1016 + FI 0.7.3) |
+| `forum_last_checked_date` | 2026-11-11 (Entry 237) EGRESS_BLOCKED day 32; ceiling t/387929 | 2026-11-12 (Entry 238) EGRESS_BLOCKED day 33; ceiling t/387929 UNCHANGED |
+| Watch Items — Qwen3.8-Max | No specific entry | Add: Qwen3.8-Max preview live on Alibaba Cloud; "next week" weights claim (single source, unverified); NOT a 35B-A3B MoE drop-in |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

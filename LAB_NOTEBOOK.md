@@ -18924,3 +18924,58 @@ No triggers formally fired. Arena, vLLM, and SVD fully static (28.8-week FP8 str
 | Watch Items — Qwen3.8-Max | No specific entry | Add: Qwen3.8-Max preview live on Alibaba Cloud; "next week" weights claim (single source, unverified); NOT a 35B-A3B MoE drop-in |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 239 - DGX Spark Recon (2026-11-13)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 34, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases API 403 (vllm-project/vllm and eugr/spark-vllm-docker); web page bypass used. Firestore REST API world-readable (3 docs fetched by ID directly). HuggingFace EGRESS_BLOCKED; Qwen check via WebSearch fallback._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-09T13:38:12Z** (UNCHANGED), recipeCopyCount **132** (UNCHANGED). **⚠ Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-11-13T10:49:54Z** (CHANGED from 2026-10-18T21:37:29Z — doc updated today, 25 days since last activity), recipyCopyCount **178** (+3 from 175). Performance value unchanged; metadata/recipe copy activity only. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static **28.9 weeks** (since 2026-05-26). |
+| 2 vLLM | GitHub releases page (API 403 bypass) | **v0.33.0 still latest stable** (released 2026-11-02). No v0.33.1 or v0.34.0. Blackwell content in notes (SM100, SM10x, FA4 sparse MLA decode on Blackwell) but no SM121/GB10 specifically. DGX Spark mentioned re Qwen3.8-Flash-Next NVFP4 (carry-forward). PR #40099/#39138/#41063 status UNKNOWN (GitHub API 403). Arch-guard NOT FIRED. |
+| 3 SVD | GitHub releases page (API 403 bypass) | **nightly-20261107 STILL LATEST** (confirmed via GitHub releases: `prebuilt-vllm-current` = vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107, `prebuilt-flashinfer-current` = FlashInfer 0.7.3-56bc1f85-d20261107; both labeled "New stable build" Nov 7). No new nightly after Nov 7 as of this check — **6-day CI gap** (Nov 7–13; well within normal, longest observed: 16 days). `muse-spark` not visible in this check (consistent with Entry 238; prior entries confirmed 14.42 GB on Nov 5). Eval target unchanged: nightly-20261107. |
+| 4 Qwen | WebSearch (HuggingFace EGRESS_BLOCKED) | **⚠ Qwen4-Max officially launched as cloud preview Nov 11** (confirmed by official Alibaba_Qwen tweet: "Qwen4-Max is now in preview on Alibaba's Token Plan" — upgrades Entry 238 unverified runtimewire claim to confirmed official launch). No Qwen4 open weights on HuggingFace. 27B model first in line for open weights (confirmed by multiple sources). Manifold market ~59–62% for open weights by Nov 25 (dropped from ~83% on Nov 5 — declining confidence over 8 days). CTO "week of Nov 2" window **+11 days overdue** (Nov 13). Community sentiment: anecdotal "disappointing" rumor (single unverified source). Architecture = GDN + QSA (NOT 35B-A3B MoE drop-in). No Qwen3.7, no Qwen4-35B-A3B. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 34) | **EGRESS_BLOCKED day 34** (DNS ENOTFOUND; consistent cloud pattern). No threads above ceiling t/387929. OTA2610 not found in search results (latest public reference: OTA2604, July 2026). **⚠ NEW via WebSearch:** Community report of driver **590.48.01** "critical memory leak" on GB10/DGX Spark hardware (anecdotal user report; recommended fix: downgrade to 580.126.09). Not an official NVIDIA advisory. Relevant to Driver 595.x Watch Item — broadens scope to include 590.x. OTA2610 carry-forward. |
+
+### Cross-Correlated Findings
+
+1. **Arena × vLLM × SVD all static [Checks 1+2+3].** Through Nov 13, no Arena performance change, no vLLM patch release, and no new SVD nightly. FP8 vLLM frontier frozen at 80.27 tok/s since May 26 (28.9 weeks). Production model landscape fully stable.
+2. **Atlas doc updated today [Check 1].** Atlas (218.85 tok/s) doc metadata updated 2026-11-13T10:49:54Z after 25 days static (since Oct 18). RecipyCopyCount +3 to 178 — small organic uptick. No new submission, no performance change. Pattern consistent with periodic metadata sweeps (similar to Oct 18 +2 copies, Nov 5 Stojanovic batch).
+3. **Qwen4-Max official launch confirmed [Check 4].** Official Alibaba_Qwen tweet (Nov 11) confirms Qwen4-Max now in cloud preview — upgrades Entry 238 unverified claim. Manifold market probability declining (83%→59-62% over ~8 days) — open-weight release confidence weakening. 27B DENSE model (GDN+QSA), NOT a 35B-A3B MoE drop-in.
+4. **Driver 590.x community memory leak report [Check 5].** Anecdotal community finding — not official NVIDIA advisory. If confirmed, reinforces staying on 580.x. Production is on 580.159.03; no immediate action needed. Broadens driver watch scope to include 590.x alongside 595.x.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 Firestore docs fetched; Stojanovic/Poveda performance UNCHANGED; Atlas metadata updated but performance 218.85 UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest; Blackwell content (SM100/SM10x) but no SM121/GB10; GitHub API 403 for PR status |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (6-day CI gap; no new builds Nov 8–13) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no official weights; Qwen4-Max cloud preview confirmed but no open weights released |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 34; no new threads above t/387929; 590.x community report anecdotal/not forum-sourced |
+
+### Overall: WORTH WATCHING
+
+No triggers fired. Arena, vLLM, and SVD fully static (28.9-week FP8 streak, v0.33.0 unchanged, 6-day CI gap). Notable: (1) Atlas doc updated today +3 recipe copies (metadata only, no perf change); (2) Qwen4-Max official cloud launch confirmed Nov 11 (Alibaba_Qwen tweet; still no open weights, Manifold confidence declining to ~59-62%); (3) community report of driver 590.x memory leak on GB10 (anecdotal; reinforces 580.x production policy, broadens watch scope).
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target is nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3). Run NVFP4 benchmark suite on eval Spark with this build.
+3. **[CARRY-FORWARD — muse-spark investigation]** `muse-spark` tag (14.42 GB, +3.6 GB vs nightly) still unexplained; not visible in today's SVD check. Check eugr Discord/GitHub for context.
+4. **[ESCALATING WATCH — Qwen4 open weights declining probability]** Qwen4-Max cloud preview confirmed Nov 11 (official). Manifold declining (83%→59-62% over 8 days). Check HuggingFace Qwen org daily. When weights appear: (a) check SVD for `qwen4_exp` vLLM kernel support; (b) `qwen4_exp` in Transformers but vLLM PRs unmerged; (c) NOT a production drop-in — full eval required.
+5. **[NEW WATCH — Driver 590.x memory leak on GB10]** Community anecdotal report of driver 590.48.01 "critical memory leak" on GB10/DGX Spark. Watch for official NVIDIA advisory. No action needed on production (580.159.03). Extends driver watch scope to 590.x.
+6. **[WATCH — Driver 595.x on DGX Spark]** t/364688 carry-forward. No confirmation of safety yet.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 238) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-12 (Entry 238) | 2026-11-13 (Entry 239) |
+| `arena_top_fp8_qwen35_tok_s` | NOT FIRED (Entry 236, 2026-11-10); Atlas updateTime 2026-10-18T21:37:29Z, recipyCopyCount 175 | NOT FIRED (Entry 239, 2026-11-13); Atlas updateTime 2026-11-13T10:49:54Z, recipyCopyCount 178 (+3) |
+| `svd_last_checked_date` | 2026-11-12 (Entry 238) — nightly-20261107 STILL LATEST (5-day CI gap) | 2026-11-13 (Entry 239) — nightly-20261107 STILL LATEST (6-day CI gap) |
+| `forum_last_checked_date` | 2026-11-12 (Entry 238) EGRESS_BLOCKED day 33; ceiling t/387929 | 2026-11-13 (Entry 239) EGRESS_BLOCKED day 34; ceiling t/387929 UNCHANGED; ⚠ community 590.x memory leak report (anecdotal) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

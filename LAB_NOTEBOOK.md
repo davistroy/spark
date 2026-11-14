@@ -18979,3 +18979,59 @@ No triggers fired. Arena, vLLM, and SVD fully static (28.9-week FP8 streak, v0.3
 | `forum_last_checked_date` | 2026-11-12 (Entry 238) EGRESS_BLOCKED day 33; ceiling t/387929 | 2026-11-13 (Entry 239) EGRESS_BLOCKED day 34; ceiling t/387929 UNCHANGED; ⚠ community 590.x memory leak report (anecdotal) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 240 - DGX Spark Recon (2026-11-14)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 35, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases API 403 (vllm-project/vllm and eugr/spark-vllm-docker); web page bypass used. Firestore REST API world-readable (3 docs fetched by ID directly). HuggingFace EGRESS_BLOCKED; Qwen check via WebSearch fallback._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-09T13:38:12Z** (UNCHANGED), recipeCopyCount **132** (UNCHANGED). **⚠ Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-11-13T16:31:28Z** (CHANGED from Entry 239's 2026-11-13T10:49:54Z — 2nd update on Nov 13, 5h41m after Entry 239's check), **recipyCopyCount 179** (+1 from 178). Two metadata updates on a single day unusual but performance value unchanged. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static **29.0 weeks** (since 2026-05-26). |
+| 2 vLLM | GitHub releases page (API 403 bypass) | **v0.33.0 still latest stable** (released 2026-11-02, tagged v0.33.0rc3). No v0.33.1 or v0.34.0. v0.33.0: "small-batch Blackwell decode kernels", "mHC TileLang on Blackwell", "FA4 sparse MLA decode on Blackwell" — no SM121/GB10 specifically. v0.32.0 had SM12x content (NVFP4 KV cache on SM8x/SM12x, XQA decode on SM12x) — already known. PR #40099/#39138/#41063 status UNKNOWN (GitHub API 403). Arch-guard NOT FIRED. |
+| 3 SVD | GitHub releases page (API 403 bypass) | **nightly-20261107 STILL LATEST** (confirmed: vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107, FlashInfer 0.7.3-56bc1f85-d20261107; both labeled "New stable build" Nov 7). No new nightly after Nov 7 — **7-day CI gap** (Nov 7–14; within observed normal range). `muse-spark` not visible. Eval target unchanged: nightly-20261107. |
+| 4 Qwen | WebSearch (HuggingFace EGRESS_BLOCKED) | **⚠ CORRECTIVE: Qwen3.8-Max open weights (`Qwen/Qwen3.8-2.4T-A95B`) confirmed released August 12, 2026** — 2.4T total / 95B active parameters, Qwen4 architecture (GDN+QSA), custom license (stricter than Apache 2.0). Qwen3.8-27B companion released August 14. NOT a DGX Spark production drop-in (95B active >> 128GB unified memory budget). Prior entries (238-239) tracked "Qwen3.8-Max cloud preview" with language suggesting weights pending — nomenclature ambiguity; weights have been on HuggingFace since August. **Qwen4 (true 4th-gen):** cloud API preview confirmed Nov 11 (official Alibaba_Qwen tweet), no open weights as of today (Nov 14). Manifold ~59-62% by Nov 25, declining. CTO "week of Nov 2" window **+12 days overdue**. No Qwen4-35B-A3B or Spark-compatible MoE drop-in announced. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 35) | **EGRESS_BLOCKED day 35** (DNS ENOTFOUND; consistent cloud pattern). No threads above ceiling t/387929. OTA2610 not found in search results. ⚠ Community 590.x memory leak report (Entry 239) — no new corroborating evidence today; not escalated. Carry-forward: OTA2610, driver 590.x watch. |
+
+### Cross-Correlated Findings
+
+1. **Arena × vLLM × SVD all static [Checks 1+2+3].** Through Nov 14, no Arena performance change, no vLLM patch release, and no new SVD nightly. FP8 vLLM frontier frozen at 80.27 tok/s since May 26 (29.0 weeks). Production model landscape fully stable.
+2. **Atlas received a 2nd metadata update on Nov 13 [Check 1].** At 16:31Z — 5h41m after Entry 239's check window (10:49Z). RecipyCopyCount +1 to 179 (now +4 from 175 on Nov 10). Performance unchanged (218.85 tok/s). Two updates on the same day is unusual but consistent with organic recipe copy activity. No new submission.
+3. **Qwen3.8-Max weights clarified [Check 4].** `Qwen/Qwen3.8-2.4T-A95B` has been publicly available since August 12, 2026. Prior entries' language around "Qwen3.8-Max cloud preview" and "weights next week" appears to have conflated the cloud API tier with the open-weight model (which shipped months earlier). Neither the 2.4T/95B-active model nor the 27B dense companion is a DGX Spark production candidate. The unresolved watch item remains Qwen4 (true 4th-gen, no weights).
+4. **SVD 7-day CI gap continuing [Check 3].** Now 7 days since nightly-20261107. Normal CI cadence can produce multi-week gaps; no action until gap exceeds 16 days (longest observed).
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 Firestore docs fetched; Stojanovic/Poveda UNCHANGED; Atlas metadata +1 recipe copy to 179, performance 218.85 UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest; Blackwell content (SM100/SM10x) but no explicit SM121/GB10; PR status unavailable (GitHub API 403) |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (7-day CI gap; no new builds Nov 8–14) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible production drop-in weights; Qwen3.8-2.4T-A95B exists (Aug 2026) but too large (95B active); no Qwen4 open weights |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 35; no new threads above t/387929; 590.x report unescalated (anecdotal, no new corroboration) |
+
+### Overall: WORTH WATCHING
+
+No triggers fired. Arena, vLLM, and SVD fully static (29.0-week FP8 streak, v0.33.0 unchanged, 7-day CI gap). Key corrective: Qwen3.8-Max open weights (`Qwen/Qwen3.8-2.4T-A95B`, 2.4T/95B-active) confirmed released August 12, 2026 — prior entries had nomenclature ambiguity between this and Qwen4-Max (true 4th-gen, still no open weights). Neither model is a DGX Spark production candidate. Atlas received a 2nd metadata update on Nov 13 after Entry 239's check window; performance unchanged.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol.
+2. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target is nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3). Run NVFP4 benchmark suite on eval Spark with this build.
+3. **[CARRY-FORWARD — muse-spark investigation]** `muse-spark` tag (14.42 GB, +3.6 GB vs nightly) still unexplained; not visible in today's SVD check.
+4. **[UPDATED WATCH — Qwen4 open weights / Qwen3.8-Max clarified]** Qwen3.8-Max (`Qwen/Qwen3.8-2.4T-A95B`) weights confirmed August 12, 2026 — too large for Spark (95B active), no action needed. True Qwen4 (4th-gen) still no open weights. Manifold declining (83%→59-62% over 9 days). Check HuggingFace Qwen org daily. When Qwen4 weights appear: (a) check SVD for `qwen4_exp` vLLM kernel support; (b) `qwen4_exp` in Transformers but vLLM PRs unmerged as of Entry 237; (c) NOT a production drop-in — full eval required.
+5. **[CARRY-FORWARD — qwen4_exp in Transformers]** Architecture class `Qwen4ExpForConditionalGeneration` now in Transformers library. Monitor vLLM for `qwen4_exp` kernel support PRs (unmerged as of Entry 237). Required before any Qwen4 model can run on SVD.
+6. **[WATCH — Driver 590.x memory leak on GB10]** Community anecdotal report (Entry 239). No new corroboration today. Watch for official NVIDIA advisory. No action needed on production (580.159.03).
+7. **[WATCH — Driver 595.x on DGX Spark]** t/364688 carry-forward. No confirmation of safety yet.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 239) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-13 (Entry 239) | 2026-11-14 (Entry 240) |
+| `arena_top_fp8_qwen35_tok_s` | NOT FIRED (Entry 239); Atlas updateTime 2026-11-13T10:49:54Z, recipyCopyCount 178 (+3) | NOT FIRED (Entry 240); Atlas updateTime **2026-11-13T16:31:28Z** (2nd update on Nov 13), recipyCopyCount **179** (+1) |
+| `svd_last_checked_date` | 2026-11-13 (Entry 239) — nightly-20261107 STILL LATEST (6-day CI gap) | 2026-11-14 (Entry 240) — nightly-20261107 STILL LATEST (7-day CI gap) |
+| `forum_last_checked_date` | 2026-11-13 (Entry 239) EGRESS_BLOCKED day 34; ceiling t/387929 | 2026-11-14 (Entry 240) EGRESS_BLOCKED day 35; ceiling t/387929 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

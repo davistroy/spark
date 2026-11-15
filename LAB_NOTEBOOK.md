@@ -19035,3 +19035,59 @@ No triggers fired. Arena, vLLM, and SVD fully static (29.0-week FP8 streak, v0.3
 | `forum_last_checked_date` | 2026-11-13 (Entry 239) EGRESS_BLOCKED day 34; ceiling t/387929 | 2026-11-14 (Entry 240) EGRESS_BLOCKED day 35; ceiling t/387929 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 241 - DGX Spark Recon (2026-11-15)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 36, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases API accessible via web page bypass. Firestore REST API world-readable (3 docs fetched by ID directly). HuggingFace/Qwen check via WebSearch fallback._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED), updateTime **2026-11-05T02:05:27Z** (UNCHANGED), recipeCopyCount **233** (UNCHANGED). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED), updateTime **2026-11-09T13:38:12Z** (UNCHANGED), recipeCopyCount **132** (UNCHANGED). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED), updateTime **2026-11-13T16:31:28Z** (UNCHANGED), recipeCopyCount **179** (UNCHANGED). All 3 docs fully static. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static **29.1 weeks** (since 2026-05-26). |
+| 2 vLLM | GitHub releases page | **v0.33.0 still latest stable** (released 2026-11-02, tagged v0.33.0rc3). No v0.33.1 or v0.34.0. v0.33.0 highlights: Blackwell fused kernels (Reflection Beam), FA4 sparse MLA decode on Blackwell, small-batch Blackwell decode kernels, mHC TileLang on Blackwell, dropped CUDA 12.9 wheels, PyTorch 2.14. No SM121/GB10/SM12x-specific content found. v0.32.0 (Oct 18) had SM12x content (NVFP4 KV cache SM8x/SM12x + XQA decode SM12x) — already known. Arch-guard NOT FIRED. PR #40099/#39138/#41063 status unconfirmed this check. |
+| 3 SVD | GitHub releases page | **nightly-20261107 STILL LATEST** (vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107 + FlashInfer 0.7.3-56bc1f85-d20261107; both labeled "New stable build"). No new nightly after Nov 7 — **8-day CI gap** (Nov 7–15). Staging tags also confirmed (staging-current-unix-ts pattern). Eval target unchanged: nightly-20261107. Trigger NOT FIRED. |
+| 4 Qwen | WebSearch (HuggingFace EGRESS_BLOCKED) | **No Qwen4 open weights on HuggingFace as of Nov 14–15.** Qwen4-Max available cloud-preview-only (subscription, not open weights). Lineup confirmed: Qwen4-Max/Plus/Flash/27B — four tiers named, zero weights published. Manifold market ~62% by Nov 25 (essentially flat from Entry 240's 59-62%). CTO "week of Nov 2" window **+13 days overdue**. No Qwen3.8-35B-A3B-FP8 exists (confirmed again). Trigger NOT FIRED. `pirahansiah/Qwen4-27B-1bit-GGUF` HF repo found but no model weights — likely empty placeholder/name-squat. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 36) | **EGRESS_BLOCKED day 36** (DNS ENOTFOUND; consistent cloud pattern). Ceiling t/387929 confirmed in search results (unchanged from Entry 240). No new threads above ceiling. ⚠ Weak signal: search snippet mentions UEFI display reservation now configurable (2 GB default → 512 MiB auto when headless), attributed to OTA2610+ — low-confidence, source unclear, possibly pre-existing thread below ceiling. 595.71.05 user report (Ubuntu 26.04) also surfaced — anecdotal. Neither actionable vs production (580.159.03). Carry-forward: OTA2610, driver 590.x watch. |
+
+### Cross-Correlated Findings
+
+1. **Arena × vLLM × SVD all fully static [Checks 1+2+3].** Through Nov 15, no Arena performance change, no vLLM patch release, and no new SVD nightly. FP8 vLLM frontier frozen at 80.27 tok/s since May 26 (29.1 weeks). All 3 Firestore docs identical to Entry 240.
+2. **Qwen4 open-weights probability continuing to decline [Check 4].** Manifold holding ~62% (by Nov 25 deadline). CTO window +13 days overdue. No new signals that weights are imminent. Qwen4-Max cloud preview only. The Nov 25 Manifold deadline is 10 days away.
+3. **SVD CI gap extending to 8 days [Check 3].** Now 8 consecutive days without a new nightly (Nov 7–15). Normal observed range goes up to 16 days (Entry 227 record), so no alert yet, but gap is widening.
+4. **Forum OTA2610 weak signal [Check 5].** Unverified search snippet mentions OTA2610 providing configurable UEFI display reservation (2GB → 512MiB headless). Cannot confirm thread ID, date, or accuracy from EGRESS_BLOCKED position. If confirmed, this would be a positive firmware change but does NOT lift the OTA hold (KHO PRs still the gate). Do not act without forum access or user confirmation.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 Firestore docs fetched; all UNCHANGED from Entry 240) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest; Blackwell content (SM100/SM10x) but no explicit SM121/GB10/SM12x; arch-guard NOT FIRED |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (8-day CI gap; no new builds Nov 8–15) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible production drop-in weights; no Qwen4 open weights; Qwen3.8-35B-A3B confirmed non-existent |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 36; ceiling t/387929 UNCHANGED; OTA2610 signal unconfirmed/low-confidence |
+
+### Overall: WORTH WATCHING
+
+No triggers fired. Arena, vLLM, and SVD fully static (29.1-week FP8 streak, v0.33.0 unchanged, 8-day CI gap). Qwen4 open-weights probability declining with Manifold ~62% and CTO window 13 days overdue — the Nov 25 deadline is 10 days away; expect resolution signal soon. OTA2610 weak forum signal (UEFI display reservation) unconfirmed from EGRESS_BLOCKED position.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610 (kernel 7.0.0, FE EC 0x03000d07). Follow Entry 078 DKMS/MOK protocol. ⚠ Weak forum signal suggests OTA2610 may add configurable UEFI display reservation — verify before applying.
+2. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target is nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3). Run NVFP4 benchmark suite on eval Spark with this build.
+3. **[CARRY-FORWARD — muse-spark investigation]** `muse-spark` tag (14.42 GB, +3.6 GB vs nightly) still unexplained.
+4. **[ESCALATING WATCH — Qwen4 open weights 10 days to Nov 25 deadline]** Manifold ~62% by Nov 25. CTO window +13 days overdue. `pirahansiah/Qwen4-27B-1bit-GGUF` HF squat found — no weights, confirms no official release yet. When official weights appear: (a) architecture = 27B dense (GDN class), NOT a Spark production drop-in; (b) check SVD for `qwen4_exp` vLLM support; (c) full eval required. Market deadline Nov 25 approaching.
+5. **[CARRY-FORWARD — qwen4_exp in Transformers]** Architecture class `Qwen4ExpForConditionalGeneration` in Transformers. Monitor vLLM for `qwen4_exp` kernel support PRs.
+6. **[WATCH — Driver 590.x memory leak on GB10]** Community anecdotal report (Entry 239). No new corroboration. Watch for official NVIDIA advisory. No action on production (580.159.03).
+7. **[WATCH — Driver 595.x on DGX Spark]** t/364688 carry-forward. 595.71.05 with Ubuntu 26.04 user report surfaced (anecdotal, not official).
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 240) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-14 (Entry 240) | 2026-11-15 (Entry 241) |
+| `arena_top_fp8_qwen35_tok_s` | NOT FIRED (Entry 240); all docs UNCHANGED; Atlas updateTime 2026-11-13T16:31:28Z, recipyCopyCount 179 | NOT FIRED (Entry 241); all 3 docs UNCHANGED; Stojanovic/Poveda/Atlas all static |
+| `svd_last_checked_date` | 2026-11-14 (Entry 240) — nightly-20261107 STILL LATEST (7-day CI gap) | 2026-11-15 (Entry 241) — nightly-20261107 STILL LATEST (8-day CI gap) |
+| `forum_last_checked_date` | 2026-11-14 (Entry 240) EGRESS_BLOCKED day 35; ceiling t/387929 | 2026-11-15 (Entry 241) EGRESS_BLOCKED day 36; ceiling t/387929 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

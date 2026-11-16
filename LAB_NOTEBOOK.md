@@ -19091,3 +19091,58 @@ No triggers fired. Arena, vLLM, and SVD fully static (29.1-week FP8 streak, v0.3
 | `forum_last_checked_date` | 2026-11-14 (Entry 240) EGRESS_BLOCKED day 35; ceiling t/387929 | 2026-11-15 (Entry 241) EGRESS_BLOCKED day 36; ceiling t/387929 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 242 - DGX Spark Recon (2026-11-16)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 37, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases page accessible via WebFetch. Firestore REST API world-readable (3 docs fetched by ID directly). Qwen/HuggingFace check via WebSearch. vLLM GitHub API 403 — releases page used instead._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED from Entry 241). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED). **Atlas sub1779495971526:** **218.85 tok/s** (UNCHANGED). All 3 docs fully static. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static **29.2 weeks** (since 2026-05-26). |
+| 2 vLLM | GitHub releases page (WebFetch) | **v0.33.0 still latest stable** (released 2026-11-02). No v0.33.1 or v0.34.0. v0.33.0 highlights: Blackwell fused kernels (FA4 sparse MLA decode on Blackwell, small-batch Blackwell decode, mHC TileLang on Blackwell, Reflection Beam). No SM121/GB10/sm_12-specific content found. v0.32.0 had SM12x content (already known). Arch-guard NOT FIRED. |
+| 3 SVD | Docker Hub v2 API | **nightly-20261107 STILL LATEST** (vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107 + FlashInfer 0.7.3-56bc1f85-d20261107). No new nightly after Nov 7 — **9-day CI gap** (Nov 7–16). `muse-spark` (14.42 GB, Nov 5) and `station-20261104` (10.92 GB) unchanged. Trigger NOT FIRED. |
+| 4 Qwen | WebSearch | **No Qwen4 open weights on HuggingFace as of Nov 15–16.** Qwen4-Max available cloud-preview-only since Nov 11 (subscription). Lineup: Qwen4-Max/Plus/Flash/27B — four tiers named, zero weights published. Manifold market ~42–62% by Nov 25 (conflicting sources, trending down). CTO "week of Nov 2" window **+14 days overdue**. Trigger NOT FIRED. |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 37) | **EGRESS_BLOCKED day 37** (DNS ENOTFOUND; consistent cloud pattern). **2 NEW THREADS above prior ceiling t/387929:** **t/388728** "GTC - DC - DGX Spark / GB10" (Nov 10) — GTC meetup, session on 11/30; INFO only. **t/388950** "GLM NVFP4 8 Spark" (Nov 13) — 8×DGX Spark GLM-5.3 NVFP4 multi-node comparison (SGLang vs vLLM); INFO only (multi-node only). **New ceiling: t/388950.** Carry-forward: OTA2610, driver 590.x watch. |
+
+### Cross-Correlated Findings
+
+1. **Arena × vLLM × SVD all fully static [Checks 1+2+3].** Through Nov 16, no Arena performance change, no vLLM patch release, and no new SVD nightly. FP8 vLLM frontier frozen at 80.27 tok/s since May 26 (29.2 weeks). 9-day SVD CI gap — within normal observed range (record 16 days, Entry 227).
+2. **Qwen4 open-weights probability declining [Check 4].** Manifold market conflicting at ~42–62%, trending lower. CTO window +14 days overdue; Nov 25 deadline 9 days away. Qwen4-27B architecture is 27B dense (NOT a 35B-A3B MoE drop-in). No imminent signals.
+3. **Forum 2 new threads, both INFO-only [Check 5].** t/388728 (GTC session Nov 30) and t/388950 (8×Spark multi-node) are both below severity threshold for production. Ceiling advances to t/388950.
+4. **GTC session Nov 30 is a forward-watch [Check 5 × Qwen4].** t/388728 references a DGX Spark GTC session on Nov 30 — potential for Qwen4 open-weights announcement or SM121 roadmap update at that venue.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 Firestore docs UNCHANGED) |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.33.0 still latest; Blackwell content (SM100/SM10x) but no SM121/GB10/SM12x; arch-guard NOT FIRED |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (9-day CI gap) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible weights; no Qwen4 open weights |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 37; 2 new threads, both INFO-only (t/388728, t/388950) |
+
+### Overall: WORTH WATCHING
+
+No triggers fired. Arena, vLLM, and SVD fully static (29.2-week FP8 streak, v0.33.0 unchanged, 9-day CI gap). Qwen4 open-weights probability declining with market ~42–62% and CTO window 14 days overdue — Nov 25 deadline 9 days away. Forum has 2 new threads (ceiling advances to t/388950) but neither is actionable. GTC session Nov 30 is a forward-watch for potential Qwen4 or SM121 roadmap news.
+
+### Recommendations
+
+1. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610. Follow Entry 078 DKMS/MOK protocol. Weak forum signal suggests configurable UEFI display reservation in OTA2610 — verify before applying.
+2. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target: nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3). Run NVFP4 benchmark suite on eval Spark.
+3. **[CARRY-FORWARD — muse-spark investigation]** `muse-spark` tag (14.42 GB, +3.6 GB vs nightly) still unexplained.
+4. **[ESCALATING WATCH — Qwen4 open weights, 9 days to Nov 25 deadline]** Market declining (~42–62%). CTO window +14d overdue. When official weights appear: (a) architecture = 27B dense (NOT 35B-A3B MoE drop-in); (b) check SVD for `qwen4_exp` support; (c) full eval required. Architecture class `Qwen4ExpForConditionalGeneration` already in Transformers.
+5. **[FORWARD WATCH — GTC session Nov 30]** t/388728 references a DGX Spark GTC session on Nov 30. Monitor for Qwen4 open-weights announcement or SM121 roadmap update.
+6. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal report (Entry 239). No new corroboration. No action on production (580.159.03).
+7. **[CARRY-FORWARD — Driver 595.x on DGX Spark]** t/364688 carry-forward; anecdotal 595.71.05 user report (Entry 241). No official advisory.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 241) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-15 (Entry 241) | 2026-11-16 (Entry 242) |
+| `svd_last_checked_date` | 2026-11-15 (Entry 241) — nightly-20261107 STILL LATEST (8-day CI gap) | 2026-11-16 (Entry 242) — nightly-20261107 STILL LATEST (9-day CI gap) |
+| `forum_last_checked_date` | 2026-11-15 (Entry 241) EGRESS_BLOCKED day 36; ceiling t/387929 | 2026-11-16 (Entry 242) EGRESS_BLOCKED day 37; **NEW ceiling t/388950** |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

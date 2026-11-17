@@ -19146,3 +19146,64 @@ No triggers fired. Arena, vLLM, and SVD fully static (29.2-week FP8 streak, v0.3
 | `forum_last_checked_date` | 2026-11-15 (Entry 241) EGRESS_BLOCKED day 36; ceiling t/387929 | 2026-11-16 (Entry 242) EGRESS_BLOCKED day 37; **NEW ceiling t/388950** |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 243 - DGX Spark Recon (2026-11-17)
+
+_Automated daily recon from cloud session. Forum DNS-unreachable from cloud (EGRESS_BLOCKED day 38, consistent pattern; forums.developer.nvidia.com ENOTFOUND). GitHub releases page accessible via WebFetch. Firestore REST API world-readable (3 docs fetched by ID directly). Qwen/HuggingFace check via WebSearch. SVD Docker Hub v2 API 404 — confirmed via fork agent GitHub releases check._
+
+### Per-Check Summaries
+
+| Check | Source | Finding |
+|-------|--------|---------|
+| 1 Arena | Firestore REST (3 docs direct) | **Stojanovic sub1779297106805:** tg128 c1 = **80.27 tok/s** (UNCHANGED from Entry 242). updateTime 2026-11-05T02:05:27Z UNCHANGED, recipeCopyCount 233 UNCHANGED. FP8 trigger (>88.30) NOT FIRED. FP8 vLLM frontier static **29.3 weeks** (since 2026-05-26). **Poveda sub1782803609803 (NVFP4):** **118.91 tok/s** (UNCHANGED). updateTime **2026-11-16T06:26:46Z** (CHANGED from 2026-11-09T13:38:12Z — updated yesterday), recipeCopyCount **142** (CHANGED from 132, **+10 copies**). **Atlas sub1779495971526 (NVFP4/Atlas):** **218.85 tok/s** (UNCHANGED). updateTime **2026-11-15T11:56:43Z** (CHANGED from 2026-11-13T16:31:28Z), recipeCopyCount 179 (UNCHANGED — metadata-only update). |
+| 2 vLLM | GitHub releases page (WebFetch) | ⚠ **v0.34.0 is NOW LATEST STABLE** (released 2026-11-16 — NEW since Entry 242 v0.33.0). **DGX Spark-specific items in v0.34.0:** (1) `Extensible KV cache fixes address undersized caches on DGX Spark (#65413)` — up to 84% undersized; (2) Qwen3.8-Flash-Next PLE disk offload saves 27 GiB on DGX Spark (#59958); (3) GLM-5.3-Flash on 2× DGX Spark 15% lower TPOT (#62956, multi-node). FlashInfer 0.7.3 pinned. No SM121/SM120/GB10/sm_12/arch-guard explicit keyword; "DGX Spark" = GB10/SM121 scope — trigger CONDITIONAL. **muse-spark EXPLAINED:** v0.34.0 references "Muse Spark Open" for GB300 — that is the `muse-spark` Docker tag (14.42 GB, Nov 5); NOT SM121. |
+| 3 SVD | Fork agent (GitHub releases check) | **nightly-20261107 STILL LATEST** (vLLM 0.33.0rc1.dev1016+g06129ab02.d20261107 + FlashInfer 0.7.3-56bc1f85-d20261107). No new nightly after Nov 7 — **10-day CI gap** (Nov 7–17). Docker Hub v2 API still 404. SVD now **1 full major version behind upstream** (v0.33.0rc1 vs v0.34.0 stable). Trigger NOT FIRED. |
+| 4 Qwen | WebSearch (fork agent) | **No Qwen4 open weights** as of Nov 16–17. Qwen4-Max cloud-preview only (since Nov 11). Manifold ~59–62% by Nov 25 (conflicting sources). CTO "week of Nov 2" window **+15 days overdue**. Qwen4-27B architecture = 27B DENSE (NOT 35B-A3B MoE drop-in). No Qwen3.7/3.9 weights exist. Trigger NOT FIRED. |
+| 5 Forum | WebSearch (fork agent; EGRESS_BLOCKED day 38) | **EGRESS_BLOCKED day 38** (DNS ENOTFOUND; consistent cloud pattern). **2 NEW THREADS above prior ceiling t/388950:** **t/389370** "DeepSeek-V4.1-Flash on 4x GB10: stock vLLM cold prefill — 12-13K tok/s @ 512K, 9-11K @ 1M" (~Nov 17) — 4× GB10 multi-node cold prefill benchmarks; INFO only. **t/389371** "DeepSeek-V4.1-Flash on 4x DGX Spark GB10 (CX7 ring): full setup + cold prefill & decode up to 1M context" (~Nov 17) — 4× GB10 CX7 ring; INFO only. **New ceiling: t/389371.** |
+
+### Cross-Correlated Findings
+
+1. **⚠ vLLM v0.34.0 KV cache bug for DGX Spark [Check 2 — Investigate].** PR #65413 "fixes undersized caches up to 84% on DGX Spark" in v0.34.0. DGX Spark = GB10/SM121 scope. Applicability to production (v0.19.1rc1.dev219 on cu132+MTP) is UNKNOWN — "extensible KV cache" is a v0.34.0 feature not present in production's older vLLM. Must clarify: (a) does production's vLLM use extensible KV cache? (b) if yes, production KV cache may be severely undersized (reported 504,912 tokens @131K may be undercount). Assessment: potentially significant but requires investigation before action.
+2. **SVD is now 10 days old and 1 full major version behind upstream [Checks 2+3].** nightly-20261107 is v0.33.0rc1.dev1016; upstream is v0.34.0 stable. The v0.34.0 DGX Spark KV cache fix is not in the current SVD eval target. Next SVD nightly will likely include v0.34.0.
+3. **muse-spark Docker tag RESOLVED [Checks 2+3].** The `muse-spark` tag (14.42 GB, Nov 5) is now explained by v0.34.0 release notes: "Muse Spark Open decode 1.5× on GB300" — it is a GB300-targeted build, NOT SM121. CLOSED.
+4. **Qwen4 open-weights probability continuing to decline [Check 4].** Manifold ~59–62%, CTO window +15d overdue. Nov 25 deadline now 8 days away.
+5. **Forum 2 new threads, both multi-node INFO only [Check 5].** t/389370 and t/389371 are DeepSeek-V4.1-Flash on 4× GB10 cold prefill — multi-node only, not relevant to single-node production. Ceiling advances to t/389371.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Stojanovic UNCHANGED; Poveda 118.91 UNCHANGED; Atlas 218.85 UNCHANGED). Poveda recipeCopyCount 132→142 (+10), Atlas updateTime changed — both metadata only, perf static. |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | ⚠ CONDITIONAL FIRE — v0.34.0 released 2026-11-16 (NEW); contains DGX Spark-specific KV cache fix (#65413, up to 84% undersized). Explicit SM121/GB10/sm_12/arch-guard keyword NOT found. DGX Spark = GB10 scope; production-relevant. |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261107 still latest (10-day CI gap); 1 major version behind v0.34.0 |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible Qwen4 weights; no Qwen3.7/3.9 weights exist |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 38; 2 new threads both 4×GB10 multi-node INFO (t/389370, t/389371) |
+
+### Overall: WORTH WATCHING
+
+One significant new finding: **vLLM v0.34.0 released 2026-11-16 with DGX Spark-specific KV cache fix** (PR #65413 — caches up to 84% undersized on DGX Spark). The explicit SM121/arch-guard keyword did not fire, but DGX Spark = GB10 and this is production-relevant. Applicability to production's v0.19.1rc1 is unknown — requires investigation. The `muse-spark` Docker tag mystery is now resolved (GB300, not SM121). All performance baselines static (29.3-week FP8 streak at 80.27 tok/s). SVD 10-day CI gap and now 1 full major version behind upstream v0.34.0. Qwen4 open weights 8 days from Nov 25 deadline with declining Manifold market (~59–62%).
+
+### Recommendations
+
+1. **[NEW — vLLM v0.34.0 KV cache fix for DGX Spark — INVESTIGATE]** PR #65413 fixes undersized KV caches (up to 84%) on DGX Spark in v0.34.0. Must assess: (a) does production's vLLM v0.19.1rc1 use "extensible KV cache"? (b) check production startup logs for KV cache sizing messages — if extensible KV cache is active and undersized, production's 504,912-token capacity may be significantly lower than it should be. Medium priority until applicability is confirmed; high if confirmed.
+2. **[CARRY-FORWARD — muse-spark RESOLVED]** `muse-spark` tag (14.42 GB, Nov 5) explained — GB300 Muse Spark Open decode build. NOT SM121. No action.
+3. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610. Follow Entry 078 DKMS/MOK protocol.
+4. **[CARRY-FORWARD ACTION — SVD nightly eval]** Eval target: nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3), now 10 days old and 1 major version behind v0.34.0. Run NVFP4 benchmark suite on eval Spark; monitor for new SVD nightly with v0.34.0.
+5. **[ESCALATING WATCH — Qwen4 open weights, 8 days to Nov 25 deadline]** Market ~59–62% (declining). CTO window +15d overdue. When official weights appear: (a) architecture = 27B dense (NOT 35B-A3B MoE drop-in); (b) check SVD for `qwen4_exp` support; (c) full eval required.
+6. **[FORWARD WATCH — GTC session Nov 30]** t/388728 DGX Spark GTC session on Nov 30. 13 days away. Monitor for Qwen4 or SM121 roadmap news.
+7. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal report (Entry 239). No new corroboration. No action on production (580.159.03).
+8. **[CARRY-FORWARD — Driver 595.x on DGX Spark]** t/364688 carry-forward; anecdotal 595.71.05 user report (Entry 241). No official advisory.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 242) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-16 (Entry 242) | 2026-11-17 (Entry 243) |
+| `vllm_latest_observed` | v0.33.0 stable (2026-11-02, Entry 228) | **v0.34.0 stable (2026-11-16, Entry 243)** |
+| `arena_top_fp8_qwen35_tok_s` | Entry 241 ref (all UNCHANGED) | Entry 243 — Poveda recipeCopyCount 132→142, updateTime 2026-11-16; Atlas updateTime 2026-11-15; perf static |
+| `svd_last_checked_date` | 2026-11-16 (Entry 242) — nightly-20261107 STILL LATEST (9-day CI gap) | 2026-11-17 (Entry 243) — nightly-20261107 STILL LATEST (10-day CI gap; 1 major version behind v0.34.0) |
+| `forum_last_checked_date` | 2026-11-16 (Entry 242) EGRESS_BLOCKED day 37; ceiling t/388950 | 2026-11-17 (Entry 243) EGRESS_BLOCKED day 38; **NEW ceiling t/389371** |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

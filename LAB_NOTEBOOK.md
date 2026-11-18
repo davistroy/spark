@@ -19207,3 +19207,37 @@ One significant new finding: **vLLM v0.34.0 released 2026-11-16 with DGX Spark-s
 | `forum_last_checked_date` | 2026-11-16 (Entry 242) EGRESS_BLOCKED day 37; ceiling t/388950 | 2026-11-17 (Entry 243) EGRESS_BLOCKED day 38; **NEW ceiling t/389371** |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+### Entry 244 -- DGX Spark Recon (2026-11-18)
+**Date:** 2026-11-18 11:11 UTC
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON -- no changes made
+
+#### Arena Leaderboard: All 3 docs UNCHANGED — Stojanovic FP8 80.27, Poveda NVFP4 118.91, Atlas NVFP4 218.85; FP8 trigger NOT FIRED (80.27 vs 88.30 threshold); 29.4-week FP8 streak continues
+#### vLLM Releases: v0.34.0 STILL LATEST (released 2026-11-16, no v0.34.1); no new SM121/GB10 content beyond KV cache fix (#65413) already noted in Entry 243; v0.34.0 adds suffix decoding on Model Runner V2, GPU speculator plugin API, CUDA graphs for draft-model speculators, XPress adaptive verification
+#### spark-vllm-docker: nightly-20261107 STILL LATEST; CI gap 11 days (Nov 7–18); wheels UNCHANGED (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3); 1 full major version behind v0.34.0
+#### Qwen Models: No Qwen4 open weights; Qwen4-Max API-only; Qwen4-27B announced Sep 22 no weights; CTO "week of Nov 2" window +16d overdue; 7 days to Nov 25 Manifold deadline; architecture = 27B dense (NOT 35B-A3B MoE drop-in)
+#### NVIDIA Forum: EGRESS_BLOCKED day 39 (cloud DNS ENOTFOUND); ceiling t/389371 UNCHANGED; no new threads above ceiling via WebSearch; GTC session t/388728 Nov 30 (12 days away)
+#### Cross-Correlated Findings: v0.34.0 KV cache fix (Check 2) × SVD CI gap (Check 3) — no new SVD build yet incorporating v0.34.0; Qwen4 Nov 25 deadline 7 days out (Check 4) heightens watch
+#### Triggered Alerts: No trigger matches — Arena FP8 NOT FIRED (80.27 vs 88.30); svd/huggingface/forum triggers not fired
+#### Overall: WORTH WATCHING
+#### Recommendations:
+1. **[CARRY-FORWARD — vLLM v0.34.0 KV cache fix for DGX Spark — INVESTIGATE]** PR #65413 fixes undersized KV caches (up to 84%) on DGX Spark in v0.34.0. Must assess: does production's vLLM v0.19.1rc1 use "extensible KV cache"? Check production startup logs for KV cache sizing messages. Medium priority until applicability confirmed; high if confirmed.
+2. **[ESCALATING WATCH — Qwen4 open weights, 7 days to Nov 25 deadline]** CTO +16d overdue. When official weights appear: (a) architecture = 27B dense (NOT 35B-A3B MoE drop-in); (b) check SVD for `qwen4_exp` support; (c) full eval required.
+3. **[FORWARD WATCH — GTC session Nov 30]** t/388728 DGX Spark GTC session 12 days away. Monitor for Qwen4 or SM121 roadmap news.
+4. **[CARRY-FORWARD ACTION — SVD nightly eval]** nightly-20261107 (vLLM 0.33.0rc1.dev1016 + FlashInfer 0.7.3) now 11 days old, 1 major version behind v0.34.0. Run NVFP4 benchmark suite on eval Spark; monitor for new SVD nightly with v0.34.0.
+5. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610. Follow Entry 078 DKMS/MOK protocol.
+6. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal report (Entry 239). No new corroboration. No action on production (580.159.03).
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 243) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-17 (Entry 243) | 2026-11-18 (Entry 244) |
+| `vllm_latest_observed` | v0.34.0 stable (2026-11-16, Entry 243) | Update ref to Entry 244 (confirmed still latest, no v0.34.1) |
+| `svd_last_checked_date` | 2026-11-17 (Entry 243) — nightly-20261107 STILL LATEST (10-day CI gap) | 2026-11-18 (Entry 244) — nightly-20261107 STILL LATEST (11-day CI gap) |
+| `forum_last_checked_date` | 2026-11-17 (Entry 243) EGRESS_BLOCKED day 38; ceiling t/389371 | 2026-11-18 (Entry 244) EGRESS_BLOCKED day 39; ceiling t/389371 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

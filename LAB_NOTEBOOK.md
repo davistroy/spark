@@ -19241,3 +19241,62 @@ _No changes were made to the running Spark system. This entry is report-and-reco
 | `forum_last_checked_date` | 2026-11-17 (Entry 243) EGRESS_BLOCKED day 38; ceiling t/389371 | 2026-11-18 (Entry 244) EGRESS_BLOCKED day 39; ceiling t/389371 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 245 — DGX Spark Recon (2026-11-19)
+**Date:** 2026-11-19
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### ⚠ WORTH WATCHING — New SVD nightly-20261119 (vLLM 0.34.0rc1 + FI 0.7.5); Qwen4 open weights 6 days from Nov 25 deadline; Manifold up to ~78%
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (3 docs direct) | **ALL 3 DOCS UNCHANGED** — Stojanovic FP8 80.27/Poveda NVFP4 118.91/Atlas NVFP4 218.85; FP8 trigger NOT FIRED (80.27 vs 88.30); 29.5-week FP8 streak continues |
+| 2 vLLM | GitHub releases API + PRs | **v0.34.0 STILL LATEST** (no v0.34.1); DGX Spark in release notes ×3 (KV cache fix already captured Entry 243; Qwen3.8-Flash-Next disk offload + GLM-5.3-Flash on 2×DGX Spark — NEW); PR #40099 (Gemma4 repetition-detection) STILL OPEN but **marked stale 2026-10-29 — auto-close risk ~10 days**; Issue #41063 STILL OPEN (last activity 2026-09-24) |
+| 3 SVD | GitHub tags + Docker Hub | **⚠ NEW BUILD: nightly-20261119** (pushed 2026-11-19T05:51Z, 11.00 GB): vLLM **0.34.0rc1.dev892** (first SVD nightly incorporating v0.34.0 + DGX Spark KV cache fix PR #65413) + FlashInfer **0.7.5** (up from 0.7.3); 12-day CI gap closed. Also: "Initial support for recipes from NVIDIA github repo" (Nov 18) + InstantTensor 0.2.3 narrow CUDA-on-WSL memory fix |
+| 4 Qwen | WebSearch + HF API | **No Qwen4 open weights** (HF unreachable from cloud; confirmed via search). Qwen4-Max API **launched 2026-11-16** (MoE, 2.4T params, 71B active, 1M ctx, vision+video — too large for single Spark, NOT open-weight). "Smaller Qwen4 open weights — stay tuned" (no date). **Nov 25 deadline 6 days away; Manifold ~78% YES** (up from 59–62%, likely moved on Nov 16 API launch). No new 35B-A3B class models from any lab |
+| 5 Forum | WebSearch (EGRESS_BLOCKED day 40) | **EGRESS_BLOCKED day 40** (DNS ENOTFOUND). **1 NEW THREAD above ceiling t/389371: t/389379** "DGX Spark HPC Developer Kit" (~Nov 16–17, SC26 Chicago) — NVIDIA announced 4× DGX Spark CX-7 ring cluster (512 GB combined, 20 TB NVMe), INFO only for single-node. GTC session t/388728 Nov 30 (11 days). **New ceiling: t/389379** |
+
+### Cross-Correlated Findings
+
+1. **⚠ New SVD nightly-20261119 incorporates vLLM 0.34.0 KV cache fix [Checks 2+3 — HIGH CONFIDENCE].** The DGX Spark KV cache fix (PR #65413, up to 84% undersized) first appeared in vLLM v0.34.0 (Entries 243–244) and is now present in SVD nightly-20261119 (vLLM 0.34.0rc1.dev892). This is the new Arm C/D eval target. The key open question from Entry 243 — does production's v0.19.1rc1 use "extensible KV cache"? — is now also the gate for whether the fix is backport-needed. The new nightly is available for sandbox evaluation.
+2. **Qwen4 open weights escalating — 6 days to Nov 25 [Check 4].** Qwen4-Max API launched Nov 16 (2.4T/71B active MoE, cloud-only), which likely drove Manifold from ~59–62% to ~78%. Architecture clarification: the API Qwen4-Max is a large 71B-active MoE (too large for single Spark); announced open-weight "smaller models" are still unconfirmed but expected to be ~27B dense (not 35B-A3B MoE drop-in). When weights drop: check SVD `qwen4_exp` support and vLLM arch compatibility before any eval.
+3. **PR #40099 (Gemma4 repetition-detection) approaching auto-close [Check 2].** Marked stale 2026-10-29; GitHub auto-closes stale PRs after ~30 days = auto-close risk around 2026-11-28. If closed without merge, the Gemma4 structured output experiment gate is effectively lost (the `enable_thinking=false` gate cleared via Entry 113 #45553; repetition auto-enable is the remaining gate). Low urgency for Spark production but flag for Gemma4 eval planning.
+4. **SC26 DGX Spark HPC Developer Kit [Check 5].** NVIDIA announced 4-unit CX-7 ring kit at Supercomputing 2026 (Chicago, Nov 16). Multi-node hardware only — no single-node SM121 inference implication. OEM partners shipping now. INFO.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 docs UNCHANGED from Entry 244). 29.5-week FP8 streak. |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest; DGX Spark mentioned in release notes but SM121/GB10/sm_12/arch-guard exact terms not found |
+| `svd \| new prebuilt vllm version / new tag pattern` | ⚠ **FIRED** — nightly-20261119 NEW (vLLM 0.34.0rc1.dev892 + FlashInfer 0.7.5); new eval target available |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible Qwen4 open weights; Manifold ~78% (up), 6 days to Nov 25 |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 40; t/389379 (SC26 HPC Developer Kit, multi-node INFO) |
+
+### Overall: WORTH WATCHING
+
+One significant new finding: **SVD nightly-20261119 available** — first nightly incorporating vLLM 0.34.0rc1.dev892 (which includes the DGX Spark KV cache fix PR #65413 and FlashInfer 0.7.5). This is the new Arm C/D eval target. The DGX Spark KV cache fix is production-relevant (up to 84% undersized on production-class hardware) but applicability to production's v0.19.1rc1 remains unknown. Qwen4 open weights escalating — 6 days to Nov 25 deadline, Manifold moved to ~78% after Qwen4-Max API launch on Nov 16. All Arena performance baselines static (29.5-week FP8 streak at 80.27 tok/s). PR #40099 (Gemma4 gate) approaching auto-close in ~9 days.
+
+### Recommendations
+
+1. **[ELEVATED — New SVD eval target available]** nightly-20261119 (vLLM 0.34.0rc1.dev892 + FI 0.7.5) is available. Run NVFP4 benchmark suite on eval Spark with this build; also assess whether production's v0.19.1rc1 uses "extensible KV cache" (check startup logs). If extensible KV cache is active in production, the DGX Spark KV cache fix (PR #65413) is high priority.
+2. **[ESCALATING — Qwen4 open weights, 6 days to Nov 25]** Manifold ~78% (up from 59–62%). When official weights appear: (a) architecture = likely 27B dense (NOT 35B-A3B MoE drop-in); open-weight profile vs Qwen4-Max (2.4T/71B active MoE) is unconfirmed; (b) check SVD `qwen4_exp` support; (c) full eval required. Monitor Qwen org HF + @QwenLM.
+3. **[NEW WATCH — PR #40099 Gemma4 auto-close ~Nov 28]** Gemma4 structured output experiment last gate. If auto-closed, that experiment path effectively closes unless manually championed. Low production urgency; flag for Gemma4 eval planning only.
+4. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610. Follow Entry 078 DKMS/MOK protocol.
+5. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal report (Entry 239). No new corroboration. No action on production (580.159.03).
+6. **[CARRY-FORWARD — Driver 595.x on DGX Spark]** t/364688 carry-forward; anecdotal 595.71.05 user report (Entry 241). No official advisory.
+7. **[INFO — SC26 DGX Spark HPC Developer Kit]** 4× DGX Spark CX-7 ring announced (SC26, Nov 16). Multi-node hardware. No single-node action.
+8. **[FORWARD WATCH — GTC session Nov 30]** t/388728 DGX Spark GTC session 11 days away. Monitor for Qwen4 or SM121 roadmap news.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 244) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-18 (Entry 244) | 2026-11-19 (Entry 245) |
+| `svd_last_checked_date` | 2026-11-18 (Entry 244) — nightly-20261107 STILL LATEST (11-day CI gap) | 2026-11-19 (Entry 245) — **nightly-20261119 NEW** (vLLM 0.34.0rc1.dev892 + FI 0.7.5) |
+| `forum_last_checked_date` | 2026-11-18 (Entry 244) EGRESS_BLOCKED day 39; ceiling t/389371 | 2026-11-19 (Entry 245) EGRESS_BLOCKED day 40; **NEW ceiling t/389379** (SC26 HPC Dev Kit) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

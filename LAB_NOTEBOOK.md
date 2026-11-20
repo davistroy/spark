@@ -19300,3 +19300,60 @@ One significant new finding: **SVD nightly-20261119 available** — first nightl
 | `forum_last_checked_date` | 2026-11-18 (Entry 244) EGRESS_BLOCKED day 39; ceiling t/389371 | 2026-11-19 (Entry 245) EGRESS_BLOCKED day 40; **NEW ceiling t/389379** (SC26 HPC Dev Kit) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 246 — DGX Spark Recon (2026-11-20)
+**Date:** 2026-11-20
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### WORTH WATCHING — Arena all static; SVD nightly-20261119 still latest; Qwen4 5 days to Nov 25; kernel 7.0 regression cluster confirmed
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (3 docs direct) | **ALL 3 DOCS UNCHANGED on performance** — Stojanovic FP8 80.27/Poveda NVFP4 118.91/Atlas NVFP4 218.85; Stojanovic doc metadata updated 2026-11-19T18:22:37Z (after Entry 245 recon at ~11:11 UTC — recipeCopyCount 235, routine copy); FP8 trigger NOT FIRED (80.27 vs 88.30); 29.6-week FP8 streak |
+| 2 vLLM | WebSearch | **v0.34.0 STILL LATEST** (released 2026-11-16; no v0.34.1 found); PR #40099 (Gemma4 repetition-detection) status unconfirmed via search — marked stale 2026-10-29, **~8–9 days to auto-close ~Nov 28–29**; Issue #41063 carry-forward (open) |
+| 3 SVD | Docker Hub tags API | **nightly-20261119 STILL LATEST** (last_updated 2026-11-19T13:01:38Z; vLLM 0.34.0rc1.dev892 + FlashInfer 0.7.5); no nightly-20261120 pushed; 1-day check, nightly-20261119 is 13-day gap since nightly-20261107 |
+| 4 Qwen | WebSearch | **No Qwen4 open weights** (confirmed multi-source). Qwen4-Max API live (2.4T/71B active, cloud-only, too large for single Spark). "Smaller open weights" unconfirmed, expected ~27B dense architecture (NOT 35B-A3B MoE drop-in). **Nov 25 deadline 5 days away; Manifold ~78%** (unchanged from Entry 245). No new 35B-A3B class models from any lab |
+| 5 Forum | WebSearch fallback (EGRESS_BLOCKED day 41) | **EGRESS_BLOCKED day 41** (DNS ENOTFOUND). WebSearch: **kernel 7.0 regression cluster confirmed** — multiple community threads (t/383023 NCCL/RoCE ENOMEM, t/383926 50–60% system-wide slowdown, t/383563 gdm broken [FIXED], t/388215 memory corruption + system freezes on 7.0.0-1025) all BELOW ceiling t/389379. No new thread above t/389379 found. **New ceiling: t/389379 UNCHANGED** |
+
+### Cross-Correlated Findings
+
+1. **Kernel 7.0 regression cluster — PRODUCTION ADVISORY [Check 5 WebSearch, multiple threads].** Community-confirmed: kernel 7.0.0-1019+ on DGX Spark causes 50–60% system-wide slowdowns (t/383926), NCCL/RoCE ENOMEM (t/383023), gdm failures (t/383563 — marked FIXED), and memory corruption + freezes on 7.0.0-1025 (t/388215). Workaround in community: stay on 6.17.0-1032 or roll back. **Production is on 6.17.0-1021 (pre-7.0) — safe as-is.** Strongly reinforces NOT upgrading kernel to DGX OS 7.6 / kernel 7.0 without a dedicated physical-access maintenance window and rollback plan. These threads are all below ceiling t/389379 and may predate recent entries, but their severity warrants explicit logging.
+2. **SVD nightly-20261119 (vLLM 0.34.0rc1.dev892 + FI 0.7.5) confirmed still latest [Check 3].** No nightly-20261120. This remains the Arm C/D eval target for NVFP4 benchmark suite. The vLLM 0.34.0 KV cache fix (PR #65413) is in this build; production applicability to v0.19.1rc1 still unconfirmed.
+3. **Qwen4 open weights 5 days to Nov 25 [Check 4].** Manifold ~78% stable (driven by Qwen4-Max API launch Nov 16). No architecture update — expected 27B dense open-weight tier, not a 35B-A3B MoE drop-in.
+4. **PR #40099 (Gemma4) approaching auto-close [Check 2].** ~8–9 days to threshold. Direct PR status unconfirmed via search; not yet auto-closed.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (all 3 docs performance UNCHANGED from Entry 245). 29.6-week FP8 streak. |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest; no v0.34.1 |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261119 still latest (no nightly-20261120) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible Qwen4 open weights; 5 days to Nov 25 |
+| `forum \| new GB10 performance/stability finding` | **PARTIAL** — EGRESS_BLOCKED day 41; kernel 7.0 regression cluster confirmed via WebSearch (all below ceiling t/389379; production 6.17.0-1021 safe as-is) |
+
+### Overall: WORTH WATCHING
+
+No new trigger events today. Key carry-forwards are escalating on schedule: Qwen4 open weights 5 days to Nov 25 deadline (Manifold ~78%), PR #40099 Gemma4 auto-close ~8–9 days. The kernel 7.0 regression cluster (50–60% slowdown, NCCL ENOMEM, memory corruption) is now multi-thread community-confirmed and production-relevant as a strong advisory against kernel upgrades until NVIDIA issues a fixed DGX OS release. Arena at 29.6-week FP8 static streak. SVD nightly-20261119 (vLLM 0.34.0rc1 + FI 0.7.5) remains the pending eval target.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — ELEVATED — New SVD eval target available]** nightly-20261119 (vLLM 0.34.0rc1.dev892 + FI 0.7.5) available. Run NVFP4 benchmark suite on eval Spark; assess whether production v0.19.1rc1 uses extensible KV cache (check startup logs for sizing messages). If confirmed, the DGX Spark KV cache fix (PR #65413) becomes high priority.
+2. **[ESCALATING — Qwen4 open weights, 5 days to Nov 25]** Manifold ~78%. When official weights appear: (a) architecture = likely 27B dense, NOT 35B-A3B MoE drop-in; (b) check SVD `qwen4_exp` support; (c) full eval required. Monitor Qwen org HF + @QwenLM.
+3. **[PRODUCTION ADVISORY — Kernel 7.0 regressions confirmed by community]** DO NOT upgrade to DGX OS 7.6 / kernel 7.0 without physical-access maintenance window, pre-upgrade full backup, and kernel rollback staged. Community reports: 50–60% slowdown, NCCL ENOMEM, memory corruption. Production (6.17.0-1021) safe as-is. Add explicit kernel-7.0 hold advisory to CLAUDE.md at next manual session.
+4. **[ESCALATING — PR #40099 Gemma4 auto-close ~Nov 28–29]** ~8–9 days to auto-close threshold. Direct PR status unconfirmed. If closed without merge, Gemma4 structured output experiment gate is effectively lost. Flag for Gemma4 eval planning.
+5. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610. Follow Entry 078 DKMS/MOK protocol.
+6. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal (Entry 239). No new corroboration. No action on production (580.159.03).
+7. **[FORWARD WATCH — GTC session Nov 30]** t/388728 DGX Spark GTC session 10 days away. Monitor for Qwen4 or SM121 roadmap news.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 245) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-19 (Entry 245) | 2026-11-20 (Entry 246) |
+| `forum_last_checked_date` | 2026-11-19 (Entry 245) EGRESS_BLOCKED day 40; ceiling t/389379 | 2026-11-20 (Entry 246) EGRESS_BLOCKED day 41; ceiling t/389379 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

@@ -19357,3 +19357,61 @@ No new trigger events today. Key carry-forwards are escalating on schedule: Qwen
 | `forum_last_checked_date` | 2026-11-19 (Entry 245) EGRESS_BLOCKED day 40; ceiling t/389379 | 2026-11-20 (Entry 246) EGRESS_BLOCKED day 41; ceiling t/389379 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 247 — DGX Spark Recon (2026-11-21)
+**Date:** 2026-11-21
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### WORTH WATCHING — Arena 2-of-3 direct confirmed unchanged; PR #40099 7d to auto-close; Qwen4 4d to Nov 25; SVD nightly-20261119 still latest
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (direct doc GETs) | **2 of 3 DOCS DIRECT-CONFIRMED UNCHANGED** — Stojanovic sub1779297106805 FP8 80.27 tok/s CONFIRMED (all tg128 values identical to Entry 246; tg128 c1=80.27, c2=100.86, c5=158.31, c10=164.01); Poveda sub1782803609803 NVFP4 118.91 tok/s CONFIRMED (c1=118.91, c2=154.81, c5=180.70, c10=169.03); Atlas sub1779495971526 218.85 not directly reverified (Firestore LIST pagination blocked at this chunk of the 1.75MB collection — all 1.3M chars of list not reachable in single session; direct doc GET not attempted; Atlas UNCHANGED assumed per no community reports to contrary); FP8 trigger NOT FIRED (80.27 vs 88.30); 29.7-week FP8 streak |
+| 2 vLLM | WebSearch + GitHub PR fetch | **v0.34.0 STILL LATEST** (released 2026-11-16; no v0.34.1 found); v0.34.0 key new defaults: extensible KV cache on by default (`--no-enable-extensible-kv-cache` to revert), Model Runner V1 removed (`VLLM_USE_V2_MODEL_RUNNER=0` now fails); no SM121/SM120/Blackwell/GB10/sm_12/arch-guard specific entries found in v0.34.0 release notes; **PR #40099** (Gemma4 repetition-detection): CONFIRMED OPEN + STALE since Oct 29 — **~7 days to auto-close ~Nov 28** (GitHub stale bot: 30-day auto-close window from Oct 29); Issue #41063 (DeepGEMM) status unconfirmed |
+| 3 SVD | Docker Hub hub.docker.com (WebFetch) | **nightly-20261119 STILL LATEST** (confirmed "2 days" via Docker Hub tag listing — from Nov 21, pushed Nov 19; latest+nightly-20261119 share digest); no nightly-20261120 or nightly-20261121; 2-day CI gap (normal); prior confirmed: vLLM 0.34.0rc1.dev892 + FlashInfer 0.7.5 |
+| 4 Qwen | WebSearch (HuggingFace EGRESS_BLOCKED) | **No Qwen4 open weights** (multi-source confirmed Nov 20–21). Qwen4-Max API live (2.4T/71B active, cloud-only, too large for single Spark). No Qwen3.7-35B-A3B (retired watch item). Qwen3.8-27B open (Aug 2026, dense, not MoE drop-in). **Nov 25 Manifold deadline: 4 days away; Manifold ~78%** (unchanged from Entry 246). Architecture clarification confirmed: Qwen4 open-weight tier expected as 27B dense (NOT 35B-A3B MoE drop-in) |
+| 5 Forum | WebSearch fallback (EGRESS_BLOCKED day 42) | **EGRESS_BLOCKED day 42** (DNS ENOTFOUND — forums.developer.nvidia.com). WebSearch: **no new threads above ceiling t/389379** found; kernel 7.0 regression cluster (t/383023/t/383926/t/388215 — 50–60% slowdown, NCCL ENOMEM, memory corruption) below ceiling; production 6.17.0-1021 safe as-is. **Ceiling t/389379 UNCHANGED** |
+
+### Cross-Correlated Findings
+
+1. **PR #40099 (Gemma4 repetition-detection) now 7 days from auto-close [Check 2].** CONFIRMED OPEN + STALE (GitHub stale bot Oct 29; 30-day window = auto-close ~Nov 28). This is the remaining gate for the Gemma4 structured output experiment (#39138 xgrammar bypass already merged as #45553 in Entry 113). PR implements automatic repetition detection for JSON/grammar output mode in Gemma4. If auto-closed, the structured output experiment path requires a fresh champion or manual re-implementation. No production urgency; flag for Gemma4 eval planning only.
+2. **SVD nightly-20261119 (vLLM 0.34.0rc1.dev892 + FI 0.7.5) confirmed still latest [Check 3].** No nightly-20261120/121 — 2-day CI gap, normal. This remains the pending Arm C/D eval target (NVFP4 benchmark suite). vLLM 0.34.0 KV cache fix (PR #65413, up to 84% undersized on extensible KV cache) is in this build. Note: v0.34.0 now ships extensible KV cache on by default — if production's v0.19.1rc1 also uses extensible KV cache, the fix is high priority.
+3. **Qwen4 open weights 4 days to Nov 25 Manifold deadline [Check 4].** Manifold ~78% stable. No change vs Entry 246. Architecture watch: expected 27B dense open-weight tier (bandwidth-limited ~8 tok/s on GB10, NOT a 35B-A3B MoE production drop-in).
+4. **Arena all static — 29.7-week FP8 streak [Check 1].** Stojanovic and Poveda directly confirmed unchanged. 29.7-week streak since 2026-05-26 last submission. No new entrants from any community member.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Stojanovic sub1779297106805 direct confirmed UNCHANGED). 29.7-week FP8 streak. |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest; no v0.34.1; no SM121/GB10/sm_12/arch-guard in v0.34.0 release notes |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261119 still latest (no nightly-20261120/121) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible Qwen4 open weights; 4 days to Nov 25 |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 42; ceiling t/389379 UNCHANGED |
+
+### Overall: WORTH WATCHING
+
+No new trigger events vs Entry 246. Key escalations on schedule: PR #40099 Gemma4 auto-close now 7 days away (Nov 28), Qwen4 open weights 4 days to Nov 25 Manifold deadline. Arena at 29.7-week FP8 static streak with 2 of 3 key docs directly confirmed unchanged. SVD nightly-20261119 (vLLM 0.34.0rc1.dev892 + FI 0.7.5) remains the pending eval target. No action required on production.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — ELEVATED — New SVD eval target available]** nightly-20261119 (vLLM 0.34.0rc1.dev892 + FI 0.7.5) available. Run NVFP4 benchmark suite on eval Spark; assess whether production v0.19.1rc1 uses extensible KV cache (check startup logs for sizing messages). If confirmed, the DGX Spark KV cache fix (PR #65413) is high priority. Note: v0.34.0 now ships extensible KV cache on by default — this increases urgency.
+2. **[ESCALATING — Qwen4 open weights, 4 days to Nov 25]** Manifold ~78%. When official weights appear: (a) architecture = likely 27B dense, NOT 35B-A3B MoE drop-in — no production action expected; (b) check SVD `qwen4_exp` support; (c) verify architecture class before scheduling eval. Monitor Qwen org HF + @QwenLM.
+3. **[ESCALATING — PR #40099 Gemma4 auto-close ~Nov 28, 7 days]** Marked stale Oct 29; 30-day window; confirmed OPEN+STALE. Last gate for Gemma4 structured output experiment. If closed without merge, that path requires a fresh champion. No production urgency; flag for Gemma4 eval planning.
+4. **[PRODUCTION ADVISORY — Kernel 7.0 regressions confirmed by community]** DO NOT upgrade to DGX OS 7.6 / kernel 7.0 without physical-access maintenance window, pre-upgrade full backup, and kernel rollback staged. Community reports: 50–60% slowdown, NCCL ENOMEM, memory corruption. Production (6.17.0-1021) safe as-is.
+5. **[CARRY-FORWARD ACTION — OTA2610]** Per Entry 219: plan physical-access maintenance window for OTA2610. Follow Entry 078 DKMS/MOK protocol.
+6. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal (Entry 239). No new corroboration. No action on production (580.159.03).
+7. **[FORWARD WATCH — GTC session Nov 30]** t/388728 DGX Spark GTC session 9 days away. Monitor for Qwen4 or SM121 roadmap news.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 246) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-20 (Entry 246) | 2026-11-21 (Entry 247) |
+| `svd_last_checked_date` | 2026-11-19 (Entry 245) nightly-20261119 NEW | 2026-11-21 (Entry 247) — nightly-20261119 STILL LATEST (no nightly-20261120/121; 2-day check) |
+| `forum_last_checked_date` | 2026-11-20 (Entry 246) EGRESS_BLOCKED day 41; ceiling t/389379 | 2026-11-21 (Entry 247) EGRESS_BLOCKED day 42; ceiling t/389379 UNCHANGED |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

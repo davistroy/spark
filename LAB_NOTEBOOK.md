@@ -19415,3 +19415,62 @@ No new trigger events vs Entry 246. Key escalations on schedule: PR #40099 Gemma
 | `forum_last_checked_date` | 2026-11-20 (Entry 246) EGRESS_BLOCKED day 41; ceiling t/389379 | 2026-11-21 (Entry 247) EGRESS_BLOCKED day 42; ceiling t/389379 UNCHANGED |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 248 — DGX Spark Recon (2026-11-22)
+**Date:** 2026-11-22
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### WORTH WATCHING — Arena Stojanovic metadata bump Nov 19 (+2 copies); PR #40099 6d to auto-close; Qwen4 3d to Nov 25; Forum 4 new threads (SC26 HPC Dev Kit); SVD nightly-20261119 still latest (3-day CI gap)
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (direct doc GETs) | **ALL 3 DOCS DIRECT-CONFIRMED** — Stojanovic sub1779297106805 FP8 80.27 tok/s UNCHANGED; updateTime bumped **2026-11-19T18:22:37Z** (was 2026-11-05T02:05:27Z — metadata only, automated activity post-Entry-247); recipeCopyCount **235** (was 233, +2); FP8 trigger NOT FIRED (80.27 vs 88.30); 30.0-week FP8 streak. Poveda sub1782803609803 NVFP4 118.91 tok/s UNCHANGED, updateTime 2026-11-16T06:26:46Z UNCHANGED, recipeCopyCount 142 UNCHANGED. Atlas sub1779495971526 218.85 tok/s UNCHANGED, updateTime 2026-11-15T11:56:43Z UNCHANGED, recipeCopyCount 179 UNCHANGED. LIST returned `{}` (blocked) |
+| 2 vLLM | GitHub releases API | **v0.34.0 STILL LATEST** (no v0.34.1); arch-guard NOT FIRED (no SM121/SM120/Blackwell/GB10/sm_12/arch-guard in v0.34.0); **PR #40099** (Gemma4 repetition-detection) OPEN+STALE — stale label Oct 29, **6 days to auto-close ~Nov 28**; Issue #41063 (DeepGEMM) status unconfirmed (GitHub API blocked) |
+| 3 SVD | Docker Hub tags | **nightly-20261119 STILL LATEST** (no nightly-20261120/121/122; 3-day CI gap, normal); **VERSION CORRECTION: vLLM dev935** (was estimated dev892 in Entry 245; confirmed `0.34.0rc1.dev935+g885cce754.d20261119.cu130`) + FlashInfer `0.7.5-a7d4ffdd-d20261119`; no new recipes or SM121 changes |
+| 4 Qwen | WebSearch | **No Qwen4 open weights** (Nov 25 Manifold deadline: 3 days; Manifold ~78%; Qwen4-Max API-only since Nov 16); open-weight tier = 27B DENSE (NOT 35B-A3B MoE drop-in; not a production upgrade). No Qwen3.8-35B-A3B (community requests only; not official). No new 30-40B MoE drop-ins from other labs |
+| 5 Forum | WebSearch fallback (EGRESS_BLOCKED day 43) | **EGRESS_BLOCKED day 43** (DNS ENOTFOUND). **4 new threads above prior ceiling t/389379:** t/389413 "New at #SC26: NVIDIA DGX Spark HPC Developer Kit" (Nov 17, 4-Spark ConnectX-7 switchless ring cluster); t/389663 "DGX Spark Power Adapter Failure?" (Nov 20, single hardware report); t/389745 "Inkling 2 Mini" (Nov 21, Docker setup guide); t/389781 "Windows 11 & DGX Spark Game Ready Driver" (Nov 21, user question). **New ceiling: t/389781.** Below-ceiling note: t/383988 "Is NVIDIA Abandoning DGX Spark?" last activity Nov 15 (production-stop rumors, no Ubuntu 26.04 roadmap — unverified FUD; below prior ceiling, informational). Kernel 7.0 regression cluster (t/383023/383926/388215): no new activity, 6.17.0-1021 safe as-is |
+
+### Cross-Correlated Findings
+
+1. **PR #40099 (Gemma4 repetition-detection) now 6 days from auto-close [Check 2].** OPEN+STALE since Oct 29; 30-day window = ~Nov 28 auto-close. Down from 7 days (Entry 247). No maintainer engagement. If closed without merge, Gemma4 structured output experiment gate requires a fresh champion. No production urgency.
+2. **SVD vLLM version corrected: dev935 (was estimated dev892) [Check 3].** Same nightly-20261119 date — this corrects the Entry 245 estimated figure. +43 commits over dev892 on the same Nov 19 build. Still no new nightly (3-day gap, normal).
+3. **Forum SC26 HPC Dev Kit announcement (t/389413) [Check 5].** NVIDIA official; announces a 4-Spark ConnectX-7 switchless ring cluster kit unveiled at SC26. No single-node SM121 production changes. Informational; relevant to multi-node future planning.
+4. **Stojanovic metadata bump Nov 19 [Check 1].** recipeCopyCount 233→235 (+2), updateTime bumped to Nov 19 — after Entry 247's check window. Automated batch activity, no new submission, performance static.
+5. **Qwen4 3 days to Nov 25 deadline [Check 4].** Manifold ~78% stable. Architecture watch: 27B DENSE, NOT a 35B-A3B MoE drop-in. No production action expected when weights drop.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Stojanovic sub1779297106805 direct confirmed UNCHANGED). 30.0-week FP8 streak |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest; no v0.34.1; no arch-guard content |
+| `svd \| new prebuilt vllm version / new tag pattern` | NOT FIRED — nightly-20261119 still latest (3-day CI gap) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible Qwen4 open weights; 3 days to Nov 25 |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 43; 4 new threads above ceiling, none with perf/driver/firmware findings; ceiling t/389381→t/389781 |
+
+### Overall: WORTH WATCHING
+
+No new trigger events vs Entry 247. SVD version corrected (dev935 vs estimated dev892). Forum has 4 new threads above prior ceiling, all informational (SC26 announcement, one hardware failure report, two user questions). Key escalations: PR #40099 Gemma4 now 6 days to auto-close (Nov 28), Qwen4 open weights 3 days to Nov 25 Manifold deadline. Arena at 30.0-week FP8 static streak with all 3 docs directly confirmed. No production action required.
+
+### Recommendations
+
+1. **[CARRY-FORWARD — ELEVATED — New SVD eval target available]** nightly-20261119 (vLLM 0.34.0rc1.dev935 + FI 0.7.5) confirmed — version now corrected from estimated dev892. Run NVFP4 benchmark suite on eval Spark; assess whether production v0.19.1rc1 uses extensible KV cache (check startup logs). v0.34.0 ships extensible KV cache on by default; if production uses it, KV cache fix PR #65413 may be high priority.
+2. **[ESCALATING — Qwen4 open weights, 3 days to Nov 25]** When official weights appear: (a) architecture = 27B dense, NOT 35B-A3B MoE drop-in — no production action expected; (b) check SVD `qwen4_exp` support; (c) verify architecture before scheduling eval. Monitor @QwenLM.
+3. **[ESCALATING — PR #40099 Gemma4 auto-close ~Nov 28, 6 days]** Last gate for Gemma4 structured output experiment. If closed without merge, that path requires a fresh champion. No production urgency.
+4. **[PRODUCTION ADVISORY — Kernel 7.0 regressions]** DO NOT upgrade to DGX OS 7.6 / kernel 7.0. Production 6.17.0-1021 safe as-is.
+5. **[CARRY-FORWARD ACTION — OTA2610]** Plan physical-access maintenance window per Entry 219.
+6. **[INFORMATIONAL — SC26 HPC Dev Kit (t/389413)]** NVIDIA announced 4-Spark ConnectX-7 switchless ring cluster kit at SC26. No single-node impact; relevant for multi-node future planning.
+7. **[INFORMATIONAL — t/383988 "Is NVIDIA Abandoning DGX Spark?"]** Community FUD thread (Nov 15 activity) — cites production-stop rumors and no Ubuntu 26.04 roadmap. Unverified; track for confirmation from official sources.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 247) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-21 (Entry 247) | 2026-11-22 (Entry 248) |
+| `svd_last_checked_date` | 2026-11-21 (Entry 247) — nightly-20261119 STILL LATEST (dev892 estimated) | 2026-11-22 (Entry 248) — nightly-20261119 STILL LATEST; **dev935 confirmed** (corrects Entry 245 estimate); 3-day CI gap |
+| `forum_last_checked_date` | 2026-11-21 (Entry 247) EGRESS_BLOCKED day 42; ceiling t/389379 | 2026-11-22 (Entry 248) EGRESS_BLOCKED day 43; **new ceiling t/389781** (4 new threads: t/389413 SC26 HPC Dev Kit, t/389663 power adapter, t/389745 Inkling 2 Mini, t/389781 Windows 11 driver) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

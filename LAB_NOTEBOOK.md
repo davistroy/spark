@@ -19474,3 +19474,63 @@ No new trigger events vs Entry 247. SVD version corrected (dev935 vs estimated d
 | `forum_last_checked_date` | 2026-11-21 (Entry 247) EGRESS_BLOCKED day 42; ceiling t/389379 | 2026-11-22 (Entry 248) EGRESS_BLOCKED day 43; **new ceiling t/389781** (4 new threads: t/389413 SC26 HPC Dev Kit, t/389663 power adapter, t/389745 Inkling 2 Mini, t/389781 Windows 11 driver) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+---
+
+## Entry 249 — DGX Spark Recon (2026-11-23)
+**Date:** 2026-11-23
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### WORTH WATCHING — ⚠ SVD nightly-20261122 NEW (vLLM dev1160 +225 commits, +750 MB); Poveda metadata bump Nov 22 (+1 copy, perf static); PR #40099 5d to auto-close; Qwen4 2d to Nov 25; Forum EGRESS_BLOCKED day 44
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (direct doc GETs) | **ALL 3 DOCS DIRECT-CONFIRMED** — Stojanovic sub1779297106805 FP8 80.27 tok/s UNCHANGED; updateTime **2026-11-19T18:22:37.022895Z** UNCHANGED; recipeCopyCount **235** UNCHANGED; FP8 trigger NOT FIRED (80.27 vs 88.30); 30.1-week FP8 streak. Poveda sub1782803609803 NVFP4 118.91 tok/s UNCHANGED; updateTime **2026-11-22T15:30:13.647503Z** (CHANGED from 2026-11-16T06:26:46Z — Nov 22 metadata bump post-Entry-248 window); recipeCopyCount **143** (CHANGED from 142, +1 — routine automated activity). Atlas sub1779495971526 218.85 tok/s UNCHANGED; updateTime **2026-11-15T11:56:43.992591Z** UNCHANGED; recipeCopyCount **179** UNCHANGED. FP8 trigger NOT FIRED. spark-arena.com EGRESS_BLOCKED (cloud) — Firestore REST API used directly |
+| 2 vLLM | GitHub releases API (403); WebSearch fallback | **v0.34.0 STILL LATEST** (no v0.34.1 found; WebSearch confirms v0.34.0 released Nov 16); arch-guard NOT FIRED (no SM121/SM120/Blackwell/GB10/sm_12/arch-guard in v0.34.0); **PR #40099** (Gemma4 repetition-detection) OPEN+STALE — stale label Oct 29, **5 days to auto-close ~Nov 28**; Issue #41063 (DeepGEMM) status unconfirmed (GitHub API blocked) |
+| 3 SVD | Docker Hub tags (direct WebFetch) + GitHub releases | **⚠ TRIGGER FIRED: nightly-20261122 NEW** (pushed ~8h ago; digest 2d52dbf7603b; size **11.7 GB** vs nightly-20261119 10.95 GB — **+750 MB**); `latest` tag updated. **vLLM version: 0.34.0rc1.dev1160+g16871fa8f.d20261123.cu130** (confirmed GitHub releases; +225 commits vs nightly-20261119 dev935) + FlashInfer **0.7.5-238198dc-d20261123** (new daily hash; same 0.7.5 semver). Note: Docker tag = nightly-20261122, wheel date stamp = d20261123 (overnight build). No SM121-specific changes noted in release. **New Arm C/D eval target: nightly-20261122** |
+| 4 Qwen | WebSearch (HuggingFace org inaccessible) | **No Qwen4 open weights** — Nov 25 Manifold deadline **2 days away**; Manifold ~78% (stale, as of Nov 16); Qwen4-Max API-only since Nov 16 (no weights); 51+ HF placeholder repos named "Qwen4-27B" but all empty (no weights); official Qwen org has no Qwen4 repository; open-weight tier = expected 27B DENSE (NOT 35B-A3B MoE drop-in; not a production upgrade). No new 30-40B MoE drop-ins from other labs |
+| 5 Forum | EGRESS_BLOCKED; WebSearch fallback | **EGRESS_BLOCKED day 44** (cloud; DNS ENOTFOUND; category 719.json unreachable). WebSearch returned older performance/driver threads; no confirmed new threads above ceiling t/389781 (Nov 21) via WebSearch. **Ceiling t/389781 UNCHANGED.** Kernel 7.0 regression cluster (t/383023/383926/388215): no new activity; production 6.17.0-1021 safe as-is |
+
+### Cross-Correlated Findings
+
+1. **⚠ SVD nightly-20261122 NEW — TRIGGER FIRED [Check 3].** nightly-20261122 pushed today (Nov 23), 11.7 GB (+750 MB vs nightly-20261119). vLLM 0.34.0rc1.dev1160 = **+225 commits** over dev935 (prior latest, Nov 19). FlashInfer 0.7.5 new daily hash. This is the new Arm C/D eval target for NVFP4 benchmark suite. The +750 MB size increase is notable — may indicate new bundled content, additional recipes, or tooling. No SM121-specific changes visible in the release notes, but +225 commits warrants changelog review before eval.
+2. **PR #40099 (Gemma4 repetition-detection) now 5 days from auto-close [Check 2].** Down from 6 days (Entry 248). Stale since Oct 29, 30-day window = ~Nov 28. Last gate for Gemma4 structured output experiment. No new maintainer engagement found.
+3. **Qwen4 2 days to Nov 25 Manifold deadline [Check 4].** 51+ empty HF placeholder repos from third parties. Official Qwen org has no Qwen4 repo. Architecture watch: 27B DENSE, NOT 35B-A3B MoE drop-in. No production action expected when weights drop.
+4. **Arena 30.1-week FP8 streak — all 3 docs confirmed [Check 1].** Stojanovic and Atlas directly confirmed unchanged. Poveda +1 copy metadata bump on Nov 22 post-Entry-248 window (automated activity; performance 118.91 static).
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Stojanovic sub1779297106805 direct confirmed UNCHANGED). 30.1-week FP8 streak |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest; no v0.34.1; no arch-guard content in v0.34.0 |
+| `svd \| new prebuilt vllm version / new tag pattern` | **FIRED** — nightly-20261122 NEW (11.7 GB, vLLM dev1160 +225 commits, FI 0.7.5 new hash). Prior latest was nightly-20261119 (dev935) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no Spark-compatible Qwen4 open weights; 2 days to Nov 25 |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 44; ceiling t/389781 UNCHANGED |
+
+### Overall: WORTH WATCHING
+
+SVD trigger fired today — nightly-20261122 is a meaningful new build (+225 vLLM commits, +750 MB, new FI hash). This supersedes nightly-20261119 as the Arm C/D eval target for NVFP4 benchmark suite. No production impact on current v0.19.1rc1 config. All other watches on schedule: PR #40099 Gemma4 auto-close ~Nov 28 (5 days), Qwen4 open weights 2 days to Nov 25 Manifold deadline. Arena at 30.1-week FP8 static streak with all 3 docs directly confirmed.
+
+### Recommendations
+
+1. **[ELEVATED — New SVD eval target: nightly-20261122]** vLLM 0.34.0rc1.dev1160 + FI 0.7.5 (new hash). **+225 commits and +750 MB vs prior nightly-20261119.** Run NVFP4 benchmark suite on eval Spark with this new target. Before scheduling, review SVD changelog for commits between dev935 and dev1160 — the +750 MB size increase warrants inspection. Also assess whether production v0.19.1rc1 uses extensible KV cache (startup log check; v0.34.0 ships it on by default via PR #65413).
+2. **[ESCALATING — Qwen4 open weights, 2 days to Nov 25]** At the wire. When weights appear: (a) 27B DENSE expected, NOT 35B-A3B MoE drop-in — no production action; (b) check SVD `qwen4_exp` branch support; (c) verify architecture class. Monitor @QwenLM.
+3. **[ESCALATING — PR #40099 Gemma4 auto-close ~Nov 28, 5 days]** Last gate for Gemma4 structured output experiment. If closed without merge, that path requires a fresh champion or manual re-implementation. No production urgency.
+4. **[PRODUCTION ADVISORY — Kernel 7.0 regressions]** DO NOT upgrade to DGX OS 7.6 / kernel 7.0. Production 6.17.0-1021 safe as-is.
+5. **[CARRY-FORWARD ACTION — OTA2610]** Plan physical-access maintenance window per Entry 219.
+6. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal (Entry 239). No new corroboration.
+7. **[INFORMATIONAL — SC26 HPC Dev Kit (t/389413)]** NVIDIA 4-Spark ConnectX-7 switchless ring cluster kit. No single-node impact.
+8. **[INFORMATIONAL — t/383988 "Is NVIDIA Abandoning DGX Spark?"]** Community FUD thread (Nov 15 activity). Unverified; track for confirmation from official sources.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 248) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-22 (Entry 248) | 2026-11-23 (Entry 249) |
+| `arena_top_fp8_qwen35_tok_s` | Poveda recipeCopyCount 142, updateTime 2026-11-16T06:26:46Z | Poveda recipeCopyCount **143** (+1), updateTime **2026-11-22T15:30:13.647503Z** (Nov 22 15:30Z post-Entry-248 window; automated metadata; perf 118.91 UNCHANGED) |
+| `svd_last_checked_date` | 2026-11-22 (Entry 248) — nightly-20261119 STILL LATEST; dev935 confirmed | 2026-11-23 (Entry 249) — **⚠ TRIGGER FIRED: nightly-20261122 NEW** (11.7 GB, +750 MB; vLLM **0.34.0rc1.dev1160+g16871fa8f.d20261123.cu130** +225 commits vs dev935; FlashInfer **0.7.5-238198dc-d20261123** new hash; no SM121-specific changes noted; new Arm C/D eval target) |
+| `forum_last_checked_date` | 2026-11-22 (Entry 248) EGRESS_BLOCKED day 43; ceiling t/389781 | 2026-11-23 (Entry 249) EGRESS_BLOCKED day **44**; ceiling **t/389781 UNCHANGED** (no new threads confirmed above ceiling via WebSearch) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

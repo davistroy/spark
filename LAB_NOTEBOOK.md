@@ -19534,3 +19534,62 @@ SVD trigger fired today — nightly-20261122 is a meaningful new build (+225 vLL
 | `forum_last_checked_date` | 2026-11-22 (Entry 248) EGRESS_BLOCKED day 43; ceiling t/389781 | 2026-11-23 (Entry 249) EGRESS_BLOCKED day **44**; ceiling **t/389781 UNCHANGED** (no new threads confirmed above ceiling via WebSearch) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 250 — DGX Spark Recon (2026-11-24)
+**Date:** 2026-11-24
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### WORTH WATCHING — ⚠ SVD nightly-20261123 NEW (dev1187 +27 commits, MLA context-parallel PRs 66906/66909 in Nov 24 commits); Qwen4 1 day to Nov 25 deadline; PR #40099 4 days to auto-close; Arena all 3 docs confirmed unchanged; Forum EGRESS_BLOCKED day 45
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (direct doc GETs) | **ALL 3 DOCS DIRECT-CONFIRMED UNCHANGED** — Stojanovic sub1779297106805 FP8 80.27 tok/s UNCHANGED; updateTime **2026-11-19T18:22:37.022895Z** UNCHANGED; recipeCopyCount **235** UNCHANGED; FP8 trigger NOT FIRED (80.27 vs 88.30); 30.2-week FP8 streak. Poveda sub1782803609803 NVFP4 118.91 tok/s UNCHANGED; updateTime **2026-11-22T15:30:13.647503Z** UNCHANGED; recipeCopyCount **143** UNCHANGED. Atlas sub1779495971526 218.85 tok/s UNCHANGED; updateTime **2026-11-15T11:56:43.992591Z** UNCHANGED; recipeCopyCount **179** UNCHANGED. FP8 trigger NOT FIRED. spark-arena.com EGRESS_BLOCKED (cloud) — Firestore REST API used directly |
+| 2 vLLM | GitHub releases API + WebSearch | **v0.34.0 STILL LATEST** (no v0.34.1 found; v0.34.0 released Nov 16); arch-guard NOT FIRED (no SM121/SM120/Blackwell/GB10/sm_12/arch-guard in v0.34.0); **PR #40099** (Gemma4 repetition-detection) OPEN+STALE — stale label Oct 29, **4 days to auto-close ~Nov 28** (down from 5 days Entry 249); Issue #41063 (DeepGEMM) OPEN (label DSv4, last activity Sep 24); PR #39138 status not retrieved (GitHub API blocked) |
+| 3 SVD | Docker Hub tags (direct WebFetch) + GitHub releases | **⚠ TRIGGER FIRED: nightly-20261123 NEW** (pushed 2026-11-23T14:33:28Z — after Entry 249's check window; digest sha256:e6593389ae49562d167afb5a9b6f899d5620ae18aa6f3e5bb9ab4f9bba8622aa; size **~11.70 GB** ≈ nightly-20261122 ~same, minor delta); `latest` tag updated. **vLLM version: 0.34.0rc1.dev1187+g4e5de70a6.d20261123.cu130** (+27 commits vs dev1160 in nightly-20261122) + FlashInfer **0.7.5-de388f09-d20261123** (new daily hash; same 0.7.5 semver). **Nov 24 GitHub commits include MLA context-parallel PRs 66906/66909** — these will appear in nightly-20261124 if built. nightly-20261122 had a different digest; two distinct consecutive daily builds confirmed. **New Arm C/D eval target: nightly-20261123** |
+| 4 Qwen | WebSearch (HuggingFace inaccessible) | **No Qwen4 open weights** — Nov 25 Manifold deadline **1 day away**; Qwen4-Max API-only since Nov 16 (no weights); official Alibaba post: "open-weight smaller-scale models from the Qwen4 series will soon be released" (no date); 27B DENSE expected, NOT 35B-A3B MoE drop-in; no production action when weights drop. No new Qwen3.7/3.9 models. No new 30-40B MoE drop-ins from other labs |
+| 5 Forum | EGRESS_BLOCKED; WebSearch fallback | **EGRESS_BLOCKED day 45** (cloud; DNS ENOTFOUND; category 719.json unreachable). No new threads confirmed above ceiling t/389781 (Nov 21) via WebSearch. **Ceiling t/389781 UNCHANGED.** OTA2610: unverified search snippet ("available since Sept 28 for Founders Edition") — no official thread ID found; carry-forward UNCONFIRMED. t/383988 "Is NVIDIA Abandoning DGX Spark?" no new activity |
+
+### Cross-Correlated Findings
+
+1. **⚠ SVD nightly-20261123 NEW — TRIGGER FIRED [Check 3].** Pushed Nov 23 14:33Z (after Entry 249's morning window). vLLM 0.34.0rc1.dev1187 = +27 commits over dev1160 (Entry 249's new nightly). Two consecutive daily SVD builds in 24 hours signals an active development cycle. Nov 24 GitHub commits add MLA context-parallel PRs 66906/66909 — these will appear in the next build (nightly-20261124 if CI runs today). Size virtually identical to nightly-20261122 (~same GB), suggesting a routine daily rebuild rather than a large feature addition.
+2. **PR #40099 (Gemma4 repetition-detection) now 4 days from auto-close [Check 2].** Down from 5 days (Entry 249). Stale since Oct 29, 30-day window = ~Nov 28. If closed without merge, the Gemma4 structured output experiment gate requires a fresh champion or manual re-implementation. No maintainer engagement found.
+3. **Qwen4 1 day to Nov 25 Manifold deadline [Check 4].** Official Alibaba post confirms open-weight tier is coming ("will soon") but gives no date. Architecture = 27B DENSE (not a 35B-A3B MoE production drop-in). When weights drop: check SVD `qwen4_exp` branch support, verify architecture class — no production action expected.
+4. **Arena 30.2-week FP8 static streak — all 3 docs confirmed [Check 1].** All three docs directly confirmed with no changes from Entry 249 (no recipeCopyCount bumps, no updateTime changes). Firestore direct-read method continues to be reliable.
+5. **Forum EGRESS_BLOCKED day 45 [Check 5].** Ceiling unchanged. OTA2610 search snippet is unverified/anecdotal — no official thread confirmed.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Stojanovic sub1779297106805 direct confirmed UNCHANGED). 30.2-week FP8 streak |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest; no v0.34.1; no arch-guard content |
+| `svd \| new prebuilt vllm version / new tag pattern` | **FIRED** — nightly-20261123 NEW (dev1187 +27 commits vs dev1160; FI 0.7.5-de388f09-d20261123). Two consecutive daily builds in 24h |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no open weights; 1 day to Nov 25 deadline |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 45; ceiling t/389781 UNCHANGED |
+
+### Overall: WORTH WATCHING
+
+SVD trigger fired again today — nightly-20261123 is a second consecutive daily build (+27 more commits, now dev1187 total). Active SVD development cycle with MLA context-parallel PRs (66906/66909) queued for the next nightly. No production impact on current v0.19.1rc1 config. Qwen4 open-weight deadline arrives tomorrow (Nov 25) — the most consequential near-term watch item. Arena remains at 30.2-week FP8 static streak with all 3 docs confirmed unchanged.
+
+### Recommendations
+
+1. **[ELEVATED — SVD daily build streak: nightly-20261123 latest]** Two consecutive daily builds (nightly-20261122 dev1160, nightly-20261123 dev1187). Arm C/D eval target is now nightly-20261123. MLA context-parallel PRs 66906/66909 land in Nov 24 GitHub commits — watch for nightly-20261124 to include these. Plan NVFP4 benchmark suite on nightly-20261123 eval target.
+2. **[CRITICAL WATCH TOMORROW — Qwen4 open weights, 1 day to Nov 25]** At the wire. When weights appear: (a) 27B DENSE expected, NOT 35B-A3B MoE drop-in — no production action; (b) check SVD `qwen4_exp` branch support; (c) verify architecture class. Monitor @QwenLM. Tomorrow's recon is a must-run.
+3. **[ESCALATING — PR #40099 Gemma4 auto-close ~Nov 28, 4 days]** Last gate for Gemma4 structured output experiment. No new maintainer engagement found. If auto-closed, requires fresh champion or manual re-implementation. No production urgency.
+4. **[PRODUCTION ADVISORY — Kernel 7.0 regressions]** DO NOT upgrade to DGX OS 7.6 / kernel 7.0. Production 6.17.0-1021 safe as-is.
+5. **[CARRY-FORWARD ACTION — OTA2610]** Unverified snippet "available since Sept 28 for Founders Edition" — not official. Plan physical-access maintenance window per Entry 219.
+6. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal (Entry 239). No new corroboration.
+7. **[INFORMATIONAL — SC26 HPC Dev Kit (t/389413)]** NVIDIA 4-Spark ConnectX-7 switchless ring cluster kit. No single-node impact.
+8. **[INFORMATIONAL — t/383988 "Is NVIDIA Abandoning DGX Spark?"]** No new activity confirmed.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 249) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-23 (Entry 249) | 2026-11-24 (Entry 250) |
+| `arena_top_fp8_qwen35_tok_s` | Entry 249 date, all 3 docs confirmed | Entry 250 — all 3 docs confirmed UNCHANGED (Stojanovic 80.27/updateTime Nov 19/count 235; Poveda 118.91/updateTime Nov 22/count 143; Atlas 218.85/updateTime Nov 15/count 179 — all UNCHANGED). 30.2-week FP8 streak |
+| `svd_last_checked_date` | 2026-11-23 (Entry 249) — nightly-20261122 NEW (dev1160) | 2026-11-24 (Entry 250) — **⚠ TRIGGER FIRED: nightly-20261123 NEW** (pushed Nov 23 14:33Z; vLLM **0.34.0rc1.dev1187+g4e5de70a6.d20261123.cu130** +27 commits vs dev1160; FlashInfer **0.7.5-de388f09-d20261123** new hash; MLA context-parallel PRs 66906/66909 in Nov 24 commits; new Arm C/D eval target) |
+| `forum_last_checked_date` | 2026-11-23 (Entry 249) EGRESS_BLOCKED day 44; ceiling t/389781 | 2026-11-24 (Entry 250) EGRESS_BLOCKED day **45**; ceiling **t/389781 UNCHANGED** |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

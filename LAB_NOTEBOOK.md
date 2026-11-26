@@ -19651,3 +19651,63 @@ SVD trigger fired for the third consecutive day — nightly-20261124 brings a ve
 | `forum_last_checked_date` | 2026-11-24 (Entry 250) EGRESS_BLOCKED day 45; ceiling t/389781 | 2026-11-25 (Entry 251) EGRESS_BLOCKED day **46**; ceiling **t/389781 UNCHANGED** |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 252 — DGX Spark Recon (2026-11-26)
+**Date:** 2026-11-26
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### WORTH WATCHING — ⚠ SVD nightly-20261125 NEW (4th consecutive daily build, FlashInfer 0.7.5→0.7.6 minor version bump, dev37→dev141 +104 commits); DGPP 0.2.0 announced t/390064 above prior ceiling; PR #40099 Gemma4 ~1-2 days to auto-close ~Nov 28; Arena all 3 docs confirmed unchanged (30.4-week FP8 streak); Qwen4 no open weights
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (direct doc GETs) | **ALL 3 DOCS DIRECT-CONFIRMED UNCHANGED** — Stojanovic sub1779297106805 FP8 80.27 tok/s UNCHANGED; updateTime **2026-11-19T18:22:37.022895Z** UNCHANGED; recipeCopyCount **235** UNCHANGED; FP8 trigger NOT FIRED (80.27 vs 88.30 threshold); 30.4-week FP8 streak. Poveda sub1782803609803 NVFP4 118.91 tok/s UNCHANGED; updateTime **2026-11-25T07:41:45.778751Z** UNCHANGED; recipeCopyCount **144** UNCHANGED (no new activity since Entry 251 Nov 25 automated sweep). Atlas sub1779495971526 218.85 tok/s UNCHANGED; updateTime **2026-11-15T11:56:43.992591Z** UNCHANGED; recipeCopyCount **179** UNCHANGED. |
+| 2 vLLM | GitHub API (direct) | **v0.34.0 STILL LATEST STABLE** (released 2026-11-16; no v0.34.1 stable); arch-guard NOT FIRED (no SM121/SM120/GB10/sm_12/arch-guard in v0.34.0 or v0.33.0 stable notes; "Blackwell" only in GB200/GB300/SM100/SM110 context). **PR #40099** (Gemma4 repetition-detection) OPEN+STALE — `stale` label confirmed (90+ days inactivity); last updated **2026-10-29T01:34:29Z** (~28 days ago); has NOT auto-closed yet as of today; **~1–2 days remain to expected auto-close ~Nov 28**. Issue #41063 (DeepGEMM SM12x): OPEN, last activity 2026-09-24. |
+| 3 SVD | Docker Hub / GitHub releases | **⚠ TRIGGER FIRED: nightly-20261125 NEW** (pushed ~2026-11-25T14:36Z — after Entry 251's check window; `latest` tag updated). **vLLM: 0.34.1rc1.dev141+gb3fc38ca7.d20261125.cu130** (+104 commits vs dev37 in nightly-20261124; active RC development). **FlashInfer: 0.7.6-e3d64ff8-d20261125 — MINOR VERSION BUMP** (0.7.5 → 0.7.6; new semver, not just a daily hash). 4th consecutive daily build (nightly-20261122/123/124/**125**). No nightly-20261126 at check time. **New Arm C/D eval target: nightly-20261125.** |
+| 4 Qwen | WebSearch (HF/Alibaba) | **Qwen4 open weights: STILL NOT RELEASED** (Nov 25 Manifold deadline MISSED). Qwen4-Max API-only since Nov 16 (architecture 2.4T/71B active — NOT a 35B-A3B MoE drop-in). One low-quality single uncorroborated source claims "by Dec 20" — treat as noise. Official Alibaba statement unchanged: "smaller open-weight models soon (undated)." No new Qwen3.7/3.9/Qwen4 open weights. No new 30-40B MoE from other labs. `nvidia/Qwen3.6-35B-A3B-NVFP4` unchanged. Trigger NOT FIRED. |
+| 5 Forum | EGRESS_BLOCKED; WebSearch fallback | **EGRESS_BLOCKED day 47** (DNS ENOTFOUND; cloud; day 46→47). WebSearch fallback. **NEW THREAD ABOVE CEILING: t/390064** — "DGPP 0.2.0 is out! Custom C++ inference for Spark & Spark clusters" — first thread above prior ceiling t/389781. New ceiling: **t/390064**. No new SM121 performance, driver, or kernel 7.0 regression findings. OTA2610: carry-forward UNCONFIRMED. |
+
+### Cross-Correlated Findings
+
+1. **⚠ SVD nightly-20261125 NEW with FlashInfer 0.7.6 upgrade — TRIGGER FIRED [Check 3].** Pushed Nov 25 ~14:36Z (after Entry 251's check window). vLLM advances to `0.34.1rc1.dev141` (+104 commits over dev37 in 1 day — active RC development pace). FlashInfer bumps from 0.7.5 to **0.7.6** — a minor semver increment implying a meaningful change set beyond a daily build hash. 4th consecutive daily build streak. New Arm C/D eval target: nightly-20261125.
+2. **vLLM v0.34.1 RC development continues at high pace [Checks 2+3].** No v0.34.1 stable yet, but dev37→dev141 (+104 commits in 1 calendar day) confirms active upstream RC work. SVD is tracking this as `0.34.1rc1.devNNN`. When v0.34.1 stable drops it will be the next version to track vs v0.34.0.
+3. **Arena 30.4-week FP8 static streak — all 3 docs directly confirmed UNCHANGED [Check 1].** No new submissions since 2026-05-26. FP8 vLLM frontier static at 80.27 tok/s. Trigger (>88.30) unbreached.
+4. **PR #40099 Gemma4 entering final ~1–2 days before expected auto-close ~Nov 28 [Check 2].** OPEN+STALE, `stale` label confirmed, 28 days since last activity. No maintainer engagement found. If auto-closed on ~Nov 28, the Gemma4 structured output experiment gate requires a fresh champion or manual re-implementation. No production urgency.
+5. **DGPP 0.2.0 — new custom C++ inference tool for DGX Spark [Check 5].** t/390064 (above prior ceiling t/389781): "DGPP 0.2.0 is out! Custom C++ inference for Spark & Spark clusters." First mention of DGPP in any recon. Community-developed tool, not a vLLM upstream feature. Relevance to production vLLM setup TBD — worth investigating at next manual check.
+6. **Qwen4 open-weight deadline passed without weights; watch item now low-urgency [Check 4].** Nov 25 Manifold market closed expired. Official position: "smaller open-weight models soon (undated)." Architecture (2.4T/71B active) confirms: not a 35B-A3B MoE production drop-in regardless.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Stojanovic sub1779297106805 direct confirmed UNCHANGED). 30.4-week FP8 streak |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest stable; no v0.34.1 stable; no arch-guard content found |
+| `svd \| new prebuilt vllm version / new tag pattern` | **FIRED** — nightly-20261125 NEW (0.34.1rc1.dev141 + FlashInfer **0.7.6**-e3d64ff8-d20261125; 4th consecutive daily build) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no open weights; Nov 25 deadline MISSED |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 47; new ceiling t/390064 (DGPP 0.2.0 — informational only) |
+
+### Overall: WORTH WATCHING
+
+SVD trigger fired for the fourth consecutive day — nightly-20261125 brings FlashInfer 0.7.6 (minor version bump from 0.7.5) and +104 commits to dev141, confirming active 0.34.1rc1 upstream development. DGPP 0.2.0 is a new informational finding (custom C++ inference for Spark). PR #40099 Gemma4 is in its final ~1–2 days before expected auto-close ~Nov 28. Arena remains static at 30.4-week FP8 streak with all docs directly confirmed. Qwen4 deadline passed without weights.
+
+### Recommendations
+
+1. **[ELEVATED — SVD daily build streak day 4: nightly-20261125 latest, FlashInfer 0.7.6]** FlashInfer 0.7.6 is a minor semver bump from 0.7.5 — meaningful change set likely. `0.34.1rc1.dev141` +104 commits in one day confirms active RC development. Plan NVFP4 benchmark suite on nightly-20261125 eval target. Watch for nightly-20261126 to confirm 5th consecutive daily build.
+2. **[FINAL DAYS — PR #40099 Gemma4 auto-close ~Nov 28, ~1–2 days]** Last call. If auto-closed without merge, Gemma4 structured output experiment gate is dead (requires fresh champion or manual re-implementation). No production urgency — structured outputs work via current vLLM.
+3. **[NEW — DGPP 0.2.0, t/390064]** Custom C++ inference for DGX Spark & clusters just announced. Investigate scope: does it complement or compete with vLLM use case? No action until scope is understood. Worth reading at next manual check.
+4. **[PRODUCTION ADVISORY — Kernel 7.0 regressions]** DO NOT upgrade to DGX OS 7.6 / kernel 7.0. Production 6.17.0-1021 safe as-is.
+5. **[CARRY-FORWARD ACTION — OTA2610]** Unverified snippet "available since Sept 28 for Founders Edition" — no official thread confirmed. Plan physical-access maintenance window per Entry 219.
+6. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal (Entry 239). No new corroboration.
+7. **[INFORMATIONAL — SC26 HPC Dev Kit (t/389413)]** NVIDIA 4-Spark ConnectX-7 switchless ring cluster kit. No single-node impact.
+8. **[RESOLVED DEADLINE — Qwen4 open weights]** Nov 25 deadline passed without release. Downgrade urgency framing to low; keep watch item open. When 27B DENSE appears: NOT a 35B-A3B MoE production drop-in.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 251) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-25 (Entry 251) | 2026-11-26 (Entry 252) |
+| `arena_top_fp8_qwen35_tok_s` | Stojanovic count 235/updateTime Nov 19/perf 80.27; Poveda count 144/updateTime Nov 25/perf 118.91; Atlas count 179/updateTime Nov 15/perf 218.85 — 30.3-week streak | Entry 252 — all 3 docs direct-confirmed UNCHANGED (Stojanovic 80.27/count 235/Nov 19; Poveda 118.91/count 144/Nov 25 UNCHANGED; Atlas 218.85/count 179/Nov 15 UNCHANGED). **30.4-week FP8 streak** |
+| `svd_last_checked_date` | 2026-11-25 (Entry 251) — nightly-20261124 (dev37/0.34.1rc1, FI 0.7.5) | 2026-11-26 (Entry 252) — **⚠ TRIGGER FIRED: nightly-20261125 NEW** (pushed ~2026-11-25T14:36Z; vLLM **0.34.1rc1.dev141+gb3fc38ca7.d20261125.cu130** +104 commits; FlashInfer **0.7.6-e3d64ff8-d20261125** — MINOR VERSION BUMP; 4th consecutive daily build; new Arm C/D eval target: nightly-20261125) |
+| `forum_last_checked_date` | 2026-11-25 (Entry 251) EGRESS_BLOCKED day 46; ceiling t/389781 | 2026-11-26 (Entry 252) EGRESS_BLOCKED day **47**; ceiling **t/390064** (NEW — DGPP 0.2.0 DGX Spark custom C++ inference tool) |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._

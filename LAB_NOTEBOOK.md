@@ -19711,3 +19711,63 @@ SVD trigger fired for the fourth consecutive day — nightly-20261125 brings Fla
 | `forum_last_checked_date` | 2026-11-25 (Entry 251) EGRESS_BLOCKED day 46; ceiling t/389781 | 2026-11-26 (Entry 252) EGRESS_BLOCKED day **47**; ceiling **t/390064** (NEW — DGPP 0.2.0 DGX Spark custom C++ inference tool) |
 
 _No changes were made to the running Spark system. This entry is report-and-recommend only._
+
+## Entry 253 — DGX Spark Recon (2026-11-27)
+**Date:** 2026-11-27
+**Operator:** Claude Code (spark-recon skill)
+**Status:** RECON — no changes made
+
+### WORTH WATCHING — ⚠ SVD nightly-20261126 expected (5th consecutive daily, dev141→dev208 +67 commits, NEW: Dory-1.5 in regular builds PR 69214); PR #40099 Gemma4 ~1 day to auto-close ~Nov 28; Arena all 3 docs confirmed unchanged (30.5-week FP8 streak); Qwen4 no open weights; Forum EGRESS_BLOCKED day 48
+
+| Check | Source | Result |
+|-------|--------|--------|
+| 1 Arena | Firestore REST (direct doc GETs) | **ALL 3 DOCS DIRECT-CONFIRMED UNCHANGED** — Stojanovic sub1779297106805 FP8 80.27 tok/s UNCHANGED; updateTime **2026-11-19T18:22:37.022895Z** UNCHANGED; recipeCopyCount **235** UNCHANGED; FP8 trigger NOT FIRED (80.27 vs 88.30 threshold); 30.5-week FP8 streak. Poveda sub1782803609803 NVFP4 118.91 tok/s UNCHANGED; updateTime **2026-11-25T07:41:45.778751Z** UNCHANGED; recipeCopyCount **144** UNCHANGED. Atlas sub1779495971526 218.85 tok/s UNCHANGED; updateTime **2026-11-15T11:56:43.992591Z** UNCHANGED; recipeCopyCount **179** UNCHANGED. |
+| 2 vLLM | GitHub API (direct) | **v0.34.0 STILL LATEST STABLE** (released 2026-11-16; no v0.34.1 stable); v0.34.0 release notes mention "GLM-5.3-Flash on 2× DGX Spark" and "Qwen3.8 PLE offload on DGX Spark" — DGX Spark mentions but NOT SM121/arch-guard language; Blackwell content references GB200/GB300 only. **PR #40099** (Gemma4 repetition-detection) OPEN+STALE — `stale` label confirmed; last updated **2026-10-29T01:34:29Z** (~29 days ago); has NOT auto-closed yet as of today; **~1 day remains to expected auto-close ~Nov 28**. Issue #41063 (DeepGEMM SM12x): GitHub API blocked (403); carry forward OPEN, last known activity 2026-09-24. |
+| 3 SVD | GitHub releases API (Docker Hub 404) | **⚠ TRIGGER FIRED: nightly-20261126 expected.** GitHub `prebuilt-vllm-current` release published **2026-11-26T14:31:55Z** — **vLLM: 0.34.1rc1.dev208+ge81eed245.d20261126.cu130** (+67 commits vs dev141 in nightly-20261125; active RC development). **FlashInfer: 0.7.6** (same minor version; daily hash updated). 5th consecutive daily build (nightly-20261122/123/124/125/**126**). **NEW COMMIT (2026-11-25): `78d9857` "Include vLLM PR 69214 for Dory-1.5 in regular builds"** — first appearance of "Dory-1.5" in SVD commits; purpose unknown (likely a speculative decoding draft model variant for DGX Spark); worth tracking. Also: `65b5dae` (Nov 26) "Refresh build-time patchsets"; `caec66c` (Nov 24) "Updated Nemotron 3.5 Super VL to support dual Sparks". New Arm C/D eval target: nightly-20261126. |
+| 4 Qwen | WebSearch (HF/Alibaba) | **Qwen4 open weights: STILL NOT RELEASED** (Nov 25 Manifold deadline MISSED; market resolved NO). Qwen4-Max API-only since Nov 16 (architecture 2.4T/71B active — NOT a 35B-A3B MoE drop-in). Qwen3.7-Max API-only, no open weights. No new Qwen3.6-35B-A3B variants. No new 30-40B MoE open weights from other labs confirmed. Trigger NOT FIRED. |
+| 5 Forum | EGRESS_BLOCKED; WebSearch fallback | **EGRESS_BLOCKED day 48** (DNS ENOTFOUND; cloud; day 47→48). Both category 719 and 721 blocked. WebSearch fallback. **Ceiling t/390064 UNCHANGED** — no new threads above ceiling confirmed. Highest indexed by WebSearch: t/387929 (optimization), t/386805 (fan control), t/386341 (Oct 2026 SW release), t/385262 (power-off under load). Kernel 7.0 regression cluster still below ceiling (1.5–2.4× Apache Spark RAPIDS slowdown on kernel 7.0.0-1019 — not new finding; production 6.17.0-1021 safe). No new SM121 performance, driver, or firmware findings. |
+
+### Cross-Correlated Findings
+
+1. **⚠ SVD nightly-20261126 EXPECTED (5th consecutive daily) — TRIGGER FIRED [Check 3].** GitHub prebuilt-vllm-current published 2026-11-26T14:31Z with vLLM `0.34.1rc1.dev208` (+67 commits over dev141 in 1 day — active 0.34.1 RC development continues). FlashInfer remains at 0.7.6 (new daily hash). 5th consecutive daily build: nightly-20261122/123/124/125/126. New Arm C/D eval target: nightly-20261126.
+2. **NEW: "Dory-1.5" included in SVD regular builds [Check 3].** Commit `78d9857` (2026-11-25) adds vLLM PR 69214 for "Dory-1.5" into regular (non-b12x) SVD builds. This is the first appearance of this term in any recon. Likely a speculative decoding draft model variant targeting DGX Spark. No production impact until scope is understood. Worth investigating.
+3. **vLLM v0.34.1 RC development at high pace [Checks 2+3].** dev141→dev208 (+67 commits in 1 calendar day) confirms active upstream RC work. No v0.34.1 stable yet. SVD is tracking as `0.34.1rc1.devNNN`.
+4. **Arena 30.5-week FP8 static streak — all 3 docs directly confirmed UNCHANGED [Check 1].** No new submissions since 2026-05-26. FP8 vLLM frontier static at 80.27 tok/s. Trigger (>88.30) unbreached. v0.34.0 release notes mention DGX Spark (GLM-5.3 / Qwen3.8 PLE offload) but no new Arena FP8 submissions detected.
+5. **PR #40099 Gemma4 entering final ~1 day before expected auto-close ~Nov 28 [Check 2].** OPEN+STALE, `stale` label confirmed, 29 days since last activity. If auto-closed on ~Nov 28, the Gemma4 structured output experiment gate requires a fresh champion or manual re-implementation. No production urgency.
+6. **Forum EGRESS_BLOCKED day 48; ceiling unchanged [Check 5].** No new threads above t/390064 (DGPP 0.2.0, Entry 252). Kernel 7.0 regression findings remain below ceiling; production 6.17.0-1021 safe.
+
+### Triggered Alerts
+
+| Trigger | Result |
+|---------|--------|
+| `arena \| fp8 Qwen3.6 single-node > 88.30` | NOT FIRED — 80.27 (Stojanovic sub1779297106805 direct confirmed UNCHANGED). 30.5-week FP8 streak |
+| `vllm_release \| SM121/SM120/Blackwell/GB10/sm_12/arch-guard` | NOT FIRED — v0.34.0 still latest stable; no v0.34.1 stable; v0.34.0 has DGX Spark content (GLM-5.3-Flash, Qwen3.8 PLE offload) but no SM121/arch-guard keyword |
+| `svd \| new prebuilt vllm version / new tag pattern` | **FIRED** — nightly-20261126 expected (prebuilt-vllm-current 0.34.1rc1.dev208+ge81eed245.d20261126; FlashInfer 0.7.6; 5th consecutive daily; NEW: Dory-1.5 PR 69214 in regular builds) |
+| `huggingface \| Qwen3.8-35B-A3B OR Qwen4 (35B OR 27B) weights` | NOT FIRED — no open weights; Nov 25 deadline MISSED; Qwen4 API-only |
+| `forum \| new GB10 performance/stability finding` | NOT FIRED — EGRESS_BLOCKED day 48; ceiling t/390064 UNCHANGED |
+
+### Overall: WORTH WATCHING
+
+SVD trigger fired for the fifth consecutive day — nightly-20261126 brings +67 commits to dev208, confirming sustained 0.34.1rc1 upstream development pace. The notable new finding is "Dory-1.5" being included in SVD regular builds (PR 69214, commit 2026-11-25) — first appearance of this term, likely a speculative decoding model variant for DGX Spark, purpose unknown. PR #40099 Gemma4 is in its final ~1 day before expected auto-close ~Nov 28. Arena remains static at 30.5-week FP8 streak with all docs directly confirmed. Qwen4 deadline passed without weights. Forum blocked day 48.
+
+### Recommendations
+
+1. **[ELEVATED — SVD daily build streak day 5: nightly-20261126 expected, dev208 +67 commits]** vLLM 0.34.1rc1 RC development remains at high pace. Plan NVFP4 benchmark suite on nightly-20261126 eval target. Watch for v0.34.1 stable drop.
+2. **[NEW INFORMATIONAL — Dory-1.5 in SVD regular builds (PR 69214)]** First appearance. Commit `78d9857` (Nov 25) adds vLLM PR 69214 for Dory-1.5 to regular lane. Investigate: (a) what is Dory-1.5 — speculative decode draft model, optimizer, or other; (b) is it compatible with current MTP=2 config; (c) any performance implication. No action until scope understood.
+3. **[FINAL DAY — PR #40099 Gemma4 auto-close ~Nov 28, ~1 day]** Expected auto-close tomorrow. If auto-closed without merge, Gemma4 structured output experiment gate is dead (requires fresh champion or manual re-implementation). No production urgency — structured outputs work via current vLLM.
+4. **[PRODUCTION ADVISORY — Kernel 7.0 regressions]** DO NOT upgrade to DGX OS 7.6 / kernel 7.0. Production 6.17.0-1021 safe as-is.
+5. **[CARRY-FORWARD — DGPP 0.2.0, t/390064]** Custom C++ inference for DGX Spark announced Entry 252. Investigate scope at next manual check.
+6. **[CARRY-FORWARD ACTION — OTA2610]** Unverified snippet "available since Sept 28 for Founders Edition" — no official thread confirmed. Plan physical-access maintenance window per Entry 219.
+7. **[CARRY-FORWARD — Driver 590.x memory leak on GB10]** Community anecdotal (Entry 239). No new corroboration.
+8. **[RESOLVED DEADLINE — Qwen4 open weights]** Nov 25 deadline passed without release. Low urgency framing maintained. When 27B DENSE appears: NOT a 35B-A3B MoE production drop-in.
+
+### Proposed SPARK_BASELINE.md changes
+
+| Field | Current (Entry 252) | Proposed |
+|-------|---------------------|---------|
+| `Last recon` | 2026-11-26 (Entry 252) | 2026-11-27 (Entry 253) |
+| `arena_top_fp8_qwen35_tok_s` | Stojanovic count 235/updateTime Nov 19/perf 80.27; Poveda count 144/updateTime Nov 25/perf 118.91; Atlas count 179/updateTime Nov 15/perf 218.85 — 30.4-week streak | Entry 253 — all 3 docs direct-confirmed UNCHANGED (Stojanovic 80.27/count 235/Nov 19; Poveda 118.91/count 144/Nov 25 UNCHANGED; Atlas 218.85/count 179/Nov 15 UNCHANGED). **30.5-week FP8 streak** |
+| `svd_last_checked_date` | 2026-11-26 (Entry 252) — nightly-20261125 (dev141/0.34.1rc1, FI 0.7.6) | 2026-11-27 (Entry 253) — **⚠ TRIGGER FIRED: nightly-20261126 expected** (prebuilt-vllm-current published 2026-11-26T14:31Z; vLLM **0.34.1rc1.dev208+ge81eed245.d20261126.cu130** +67 commits; FlashInfer **0.7.6** same minor; 5th consecutive daily build; **NEW: Dory-1.5 PR 69214 in regular lane** commit `78d9857` 2026-11-25; new Arm C/D eval target: nightly-20261126) |
+| `forum_last_checked_date` | 2026-11-26 (Entry 252) EGRESS_BLOCKED day 47; ceiling t/390064 | 2026-11-27 (Entry 253) EGRESS_BLOCKED day **48**; ceiling **t/390064 UNCHANGED** |
+
+_No changes were made to the running Spark system. This entry is report-and-recommend only._
